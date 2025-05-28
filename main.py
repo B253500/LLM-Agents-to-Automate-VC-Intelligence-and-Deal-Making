@@ -5,7 +5,7 @@ Usage:
 """
 
 import sys
-from textwrap import indent
+from textwrap import indent  # noqa: F401
 
 from core.schemas import StartupProfile
 from agents.deck_agent import run_crew as run_pitch_deck_crew
