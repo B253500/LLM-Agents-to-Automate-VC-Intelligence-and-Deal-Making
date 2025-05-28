@@ -9,13 +9,18 @@ class Competitor(BaseModel):
 
 
 class StartupProfile(BaseModel):
-    startup_id: str = Field(..., description="Deterministic slug/hash")
+    # Filled in after parsing, so keep it optional during validation
+    startup_id: str | None = Field(
+        default=None, description="Deterministic slug/hash added later"
+    )
+
+    # Basic identifiers
     name: Optional[str] = None
     sector: Optional[str] = None
     website: Optional[str] = None
     funding_stage: Optional[str] = None
 
-    # Fields to be filled gradually
+    # Populated by specialised agents (Phase 2+)
     tech_maturity: Optional[str] = None
     moat_strength: Optional[str] = None
     founder_fit_score: Optional[float] = None
