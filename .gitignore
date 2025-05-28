@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv/
+env/
+venv/
+
+# Environment variables
+.env
+
+# VSCode and PyCharm settings
+.vscode/
+.idea/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# ChromaDB or LangChain cache
+.chroma/
+lc_cache/
+cache/
+
+# Test results and coverage
+htmlcov/
+coverage.xml
+*.cover
+.cache/
+pytest_cache/
+
+# OS files
+.DS_Store
+Thumbs.db
+
