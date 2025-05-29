@@ -1,6 +1,5 @@
 from chromadb import PersistentClient
 from pathlib import Path
-from typing import List
 
 ROOT = Path(".chroma")
 ROOT.mkdir(exist_ok=True)
@@ -17,8 +16,13 @@ def add_doc(startup_id: str, text: str) -> None:
     )
 
 
-def query_doc(startup_id: str, question: str, k: int = 4) -> List[str]:
+def query_doc(startup_id: str | None, question: str, k: int = 4):
+    """Return k document snippets, or [] if no id yet."""
+    if not startup_id:  # ← guard against None/empty
+        return []
     res = collection.query(
-        query_texts=[question], n_results=k, where={"sid": startup_id}
+        query_texts=[question],
+        n_results=k,
+        where={"sid": startup_id},
     )
     return res["documents"][0] if res["documents"] else []
