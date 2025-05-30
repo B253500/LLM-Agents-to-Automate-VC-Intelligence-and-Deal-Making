@@ -21,7 +21,7 @@ from core.vector_store import add_doc
 # Config
 # ---------------------------------------------------------------------
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")  # loads OPENAI_API_KEY
-LLM = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
+llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.2)
 
 SYSTEM = (
     "You are a VC analyst. Extract the following JSON keys from the text: {keys}. "
@@ -51,7 +51,7 @@ def run_pitch_deck_chain(pdf_path: str) -> StartupProfile:
     # 2  Build and invoke the prompt
     keys = list(StartupProfile.model_fields.keys())[:6]  # basic subset
     prompt = PROMPT.format(keys=", ".join(keys), deck=deck)
-    response = LLM.invoke(prompt)
+    response = llm.invoke(prompt)
     txt = response.content.strip()
 
     # 3  Robust JSON extraction: grab text between first `{` and last `}`
@@ -64,6 +64,12 @@ def run_pitch_deck_chain(pdf_path: str) -> StartupProfile:
     # 4  Unwrap {"StartupProfile": {...}} if the model nested it
     if "StartupProfile" in raw and isinstance(raw["StartupProfile"], dict):
         raw = raw["StartupProfile"]
+    # --- ADD THIS BLOCK ---
+    # Coerce startup_id to string if present
+    if "startup_id" in raw:
+        raw["startup_id"] = str(raw["startup_id"])
+    # Or, always assign your own deterministic ID:
+    # raw["startup_id"] = str(raw.get("startup_id", ""))
 
     # 5  Validate into Pydantic model (startup_id may still be None)
     profile = StartupProfile(**raw)

@@ -4,7 +4,7 @@ from langchain_openai import ChatOpenAI
 from core.schemas import StartupProfile
 from chains.financial_analysis_chain import run_financial_analysis_chain
 
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
+llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.2)
 
 
 def build_financial_analysis_agent(profile: StartupProfile):

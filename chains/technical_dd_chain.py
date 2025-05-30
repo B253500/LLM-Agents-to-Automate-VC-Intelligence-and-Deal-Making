@@ -21,7 +21,7 @@ from core.vector_store import query_doc
 # Config
 # ------------------------------------------------------------------
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
-LLM = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
+llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.2)
 
 SYSTEM = """\
 You are a senior CTO performing technical due-diligence for VC deals.
@@ -45,7 +45,7 @@ def run_technical_dd_chain(profile: StartupProfile) -> StartupProfile:
     context = "\n---\n".join(chunks) if chunks else "No additional context provided."
 
     # 2 LLM call
-    response = LLM.invoke(PROMPT.format(context=context))
+    response = llm.invoke(PROMPT.format(context=context))
     raw = response.content.strip()
 
     # 3 Robust JSON extraction: take text between first '{' and last '}'

@@ -4,7 +4,7 @@ from langchain_openai import ChatOpenAI
 from core.schemas import StartupProfile
 from chains.risk_assessment_chain import run_risk_assessment_chain
 
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
+llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.2)
 
 
 def build_risk_assessment_agent(profile: StartupProfile):

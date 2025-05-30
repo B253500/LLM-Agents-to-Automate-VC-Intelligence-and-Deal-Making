@@ -15,7 +15,7 @@ from core.schemas import StartupProfile
 from core.vector_store import query_doc
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
-LLM = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
+llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.2)
 
 SYSTEM = """\
 You are a market-research analyst.
@@ -32,7 +32,7 @@ PROMPT = ChatPromptTemplate.from_messages(
 def run_market_sizing_chain(profile: StartupProfile) -> StartupProfile:
     context = "\n".join(query_doc(profile.startup_id, "market size or sector", k=4))
 
-    raw = LLM.invoke(PROMPT.format(context=context)).content.strip()
+    raw = llm.invoke(PROMPT.format(context=context)).content.strip()
     first, last = raw.find("{"), raw.rfind("}")
     data = json.loads(raw[first : last + 1])
 

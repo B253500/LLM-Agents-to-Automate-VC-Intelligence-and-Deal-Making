@@ -14,7 +14,7 @@ from langchain.prompts import ChatPromptTemplate
 from core.schemas import StartupProfile
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
-LLM = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
+llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.2)
 
 SYSTEM = """\
 You are an investment-risk officer.
@@ -29,7 +29,7 @@ PROMPT = ChatPromptTemplate.from_messages(
 
 
 def run_risk_assessment_chain(profile: StartupProfile) -> StartupProfile:
-    txt = LLM.invoke(PROMPT.format(profile=profile.model_dump_json())).content.strip()
+    txt = llm.invoke(PROMPT.format(profile=profile.model_dump_json())).content.strip()
     first, last = txt.find("{"), txt.rfind("}")
     data = json.loads(txt[first : last + 1])
 

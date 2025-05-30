@@ -3,7 +3,7 @@ from langchain_openai import ChatOpenAI
 from core.schemas import StartupProfile
 from chains.technical_dd_chain import run_technical_dd_chain
 
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
+llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.2)
 
 
 def build_technical_dd_agent(profile: StartupProfile):

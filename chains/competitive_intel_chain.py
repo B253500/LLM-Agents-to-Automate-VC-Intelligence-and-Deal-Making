@@ -15,7 +15,7 @@ from core.schemas import StartupProfile, Competitor
 from core.vector_store import query_doc
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
-LLM = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
+llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.2)
 
 SYSTEM = """\
 You are a VC analyst mapping the competitive landscape.
@@ -35,7 +35,7 @@ def run_competitive_intel_chain(profile: StartupProfile) -> StartupProfile:
         or "No competitive info."
     )
 
-    txt = LLM.invoke(PROMPT.format(context=ctx)).content.strip()
+    txt = llm.invoke(PROMPT.format(context=ctx)).content.strip()
     first, last = txt.find("{"), txt.rfind("}")
     data = json.loads(txt[first : last + 1])
 

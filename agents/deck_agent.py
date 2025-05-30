@@ -8,7 +8,7 @@ from langchain_openai import ChatOpenAI
 
 from chains.pitch_deck_chain import run_pitch_deck_chain
 
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
+llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.2)
 
 
 def build_deck_agent(pdf_path: str):

@@ -19,7 +19,7 @@ from core.vector_store import query_doc
 # Config
 # ------------------------------------------------------------------
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
-LLM = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
+llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.2)
 
 SYSTEM = """\
 You are an experienced VC partner evaluating founders.
@@ -41,7 +41,7 @@ def run_founder_profiling_chain(profile: StartupProfile) -> StartupProfile:
     )
     context = "\n---\n".join(context_snips) or "No founder info provided."
 
-    raw = LLM.invoke(PROMPT.format(context=context)).content.strip()
+    raw = llm.invoke(PROMPT.format(context=context)).content.strip()
 
     # Robust JSON slice
     first, last = raw.find("{"), raw.rfind("}")
