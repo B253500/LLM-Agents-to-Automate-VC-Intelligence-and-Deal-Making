@@ -1,5 +1,6 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing import List, Optional
+from pydantic import BaseModel, Field
 
 
 class Competitor(BaseModel):
@@ -9,11 +10,11 @@ class Competitor(BaseModel):
 
 
 class StartupProfile(BaseModel):
+    founder_name: str | None = None
     # Filled in after parsing, so keep it optional during validation
     startup_id: str | None = Field(
         default=None, description="Deterministic slug/hash added later"
     )
-
     # Basic identifiers
     name: Optional[str] = None
     sector: Optional[str] = None

@@ -6,8 +6,20 @@ chromadb>=0.5
 tiktoken
 pdfplumber
 python-dotenv
-reportlab         # only if you auto-generate the sample PDF
+reportlab         
 pytest
 ruff
 black
+fastapi
+uvicorn
+python-multipart
+openai>=1.14
+google-cloud-vision
+google-cloud-storage
+aiohttp
+requests
+python-dotenv
+pdfminer.six
+mammoth
+html-to-docx
 

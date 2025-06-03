@@ -1,19 +1,12 @@
-"""
-LangChain chain that:
-1. Reads a PDF pitch-deck
-2. Prompts GPT-4o-mini to extract key metadata
-3. Returns a validated `StartupProfile`
-"""
-
 from hashlib import sha1
 from pathlib import Path
 import json
+import re
 
 import pdfplumber
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
-
 from core.schemas import StartupProfile
 from core.vector_store import add_doc
 
@@ -21,13 +14,19 @@ from core.vector_store import add_doc
 # Config
 # ---------------------------------------------------------------------
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")  # loads OPENAI_API_KEY
-llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.2)
+llm = ChatOpenAI(model="gpt-4", temperature=0.2)
 
-SYSTEM = (
-    "You are a VC analyst. Extract the following JSON keys from the text: {keys}. "
-    "Return ONLY valid JSON."
-)
-HUMAN = "Pitch-deck text (truncated to 5 000 characters):\n```markdown\n{deck}\n```"
+SYSTEM = """
+You are a top-tier VC investment analyst. Extract the following fields as JSON:
+- name
+- founder_name
+- sector
+- website
+- funding_stage
+If not explicitly stated, return "unknown". Do NOT hallucinate or infer.
+Return ONLY valid JSON.
+"""
+HUMAN = "Pitch-deck text (first 5000 characters):\n```markdown\n{deck}\n```"
 PROMPT = ChatPromptTemplate.from_messages([("system", SYSTEM), ("human", HUMAN)])
 
 
@@ -41,51 +40,62 @@ def pdf_to_text(path: Path) -> str:
     return "\n".join(pages)
 
 
+def extract_common_term(text: str, pdf_path: str) -> str:
+    # Use regex to find frequent capitalized brand mentions
+    matches = re.findall(r"\b([A-Z][a-z]+(?:\s[A-Z][a-z]+)*)\b", text)
+    if matches:
+        freq = {name: matches.count(name) for name in set(matches)}
+        sorted_names = sorted(freq.items(), key=lambda x: x[1], reverse=True)
+        likely_term = sorted_names[0][0]
+        return likely_term
+    return Path(pdf_path).stem.replace("_", " ").replace("-", " ").title()
+
+
 # ---------------------------------------------------------------------
 # Main chain function
 # ---------------------------------------------------------------------
 def run_pitch_deck_chain(pdf_path: str) -> StartupProfile:
-    # 1  Extract raw text from the PDF (truncate to keep token-cost down)
-    deck = pdf_to_text(Path(pdf_path))[:5000]
+    deck_text = pdf_to_text(Path(pdf_path))
+    truncated_text = deck_text[:5000]
 
-    # 2  Build and invoke the prompt
-    keys = list(StartupProfile.model_fields.keys())[:6]  # basic subset
-    prompt = PROMPT.format(keys=", ".join(keys), deck=deck)
+    prompt = PROMPT.format(deck=truncated_text)
     response = llm.invoke(prompt)
     txt = response.content.strip()
 
-    # 3  Robust JSON extraction: grab text between first `{` and last `}`
-    first_curly, last_curly = txt.find("{"), txt.rfind("}")
-    if first_curly == -1 or last_curly == -1 or last_curly < first_curly:
-        raise ValueError("No JSON object found in LLM response")
-    json_str = txt[first_curly : last_curly + 1]
-    raw = json.loads(json_str)
+    # Extract JSON from LLM output
+    first, last = txt.find("{"), txt.rfind("}")
+    if first == -1 or last == -1 or last < first:
+        print("[Warning] No JSON object found, falling back to extraction")
+        fallback_name = extract_common_term(truncated_text, pdf_path)
+        profile = StartupProfile(name=fallback_name)
+    else:
+        try:
+            json_str = txt[first : last + 1]
+            raw = json.loads(json_str)
 
-    # 4  Unwrap {"StartupProfile": {...}} if the model nested it
-    if "StartupProfile" in raw and isinstance(raw["StartupProfile"], dict):
-        raw = raw["StartupProfile"]
-    # --- ADD THIS BLOCK ---
-    # Coerce startup_id to string if present
-    if "startup_id" in raw:
-        raw["startup_id"] = str(raw["startup_id"])
-    # Or, always assign your own deterministic ID:
-    # raw["startup_id"] = str(raw.get("startup_id", ""))
+            if not raw.get("name") or raw.get("name").lower() == "unknown":
+                raw["name"] = extract_common_term(truncated_text, pdf_path)
 
-    # 5  Validate into Pydantic model (startup_id may still be None)
-    profile = StartupProfile(**raw)
+            if (
+                not raw.get("founder_name")
+                or raw.get("founder_name").lower() == "unknown"
+            ):
+                raw["founder_name"] = "unknown"
 
-    # 6  Ensure `name` exists (fallback to alt keys)
-    if profile.name is None:
-        for alt in ("CompanyName", "company_name", "Company"):
-            if isinstance(raw.get(alt), str) and raw[alt].strip():
-                profile.name = raw[alt].strip()
-                break
+            profile = StartupProfile(**raw)
+        except Exception as e:
+            print(f"[Error] Failed to parse LLM output: {e}")
+            fallback_name = extract_common_term(truncated_text, pdf_path)
+            profile = StartupProfile(name=fallback_name)
 
-    # 7  Compute deterministic ID (hash name or deck text)
-    src_for_hash = profile.name if profile.name else deck[:40]
-    profile.startup_id = sha1(src_for_hash.encode()).hexdigest()[:10]
+    # Fallback if still missing
+    if not profile.name or profile.name.lower() == "unknown":
+        profile.name = extract_common_term(truncated_text, pdf_path)
 
-    # 8  Persist deck text to Chroma for later RAG
-    add_doc(profile.startup_id, deck)
+    # Assign deterministic ID
+    profile.startup_id = sha1(profile.name.encode()).hexdigest()[:10]
+
+    # Store the full deck in Chroma
+    add_doc(profile.startup_id, deck_text)
 
     return profile

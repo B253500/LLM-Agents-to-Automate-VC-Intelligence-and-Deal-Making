@@ -13,6 +13,7 @@ from langchain.prompts import ChatPromptTemplate
 
 from core.schemas import StartupProfile
 from core.vector_store import query_doc
+from core.hybrid_context import get_hybrid_context
 
 # ------------------------------------------------------------------
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
@@ -33,23 +34,22 @@ PROMPT = ChatPromptTemplate.from_messages(
 
 
 def run_financial_analysis_chain(profile: StartupProfile) -> StartupProfile:
-    context = (
-        "\n".join(query_doc(profile.startup_id, "financials or revenue or burn", k=4))
-        or "No explicit financial data."
+    context = get_hybrid_context(
+        profile, "funding OR revenue OR burn OR valuation", 3, 3
     )
-
     txt = llm.invoke(PROMPT.format(context=context)).content.strip()
     first, last = txt.find("{"), txt.rfind("}")
-    data = json.loads(txt[first : last + 1])
-
-    profile.cash_burn_12m = float(data.get("cash_burn_12m", 0))
-    profile.runway_months = float(data.get("runway_months", 0))
-    profile.implied_valuation = float(data.get("implied_valuation", 0))
-
-    # Fallback ID if profile was empty
+    if first == -1 or last == -1:
+        return profile
+    try:
+        data = json.loads(txt[first : last + 1])
+        profile.cash_burn_12m = float(data.get("cash_burn_12m", 0))
+        profile.runway_months = float(data.get("runway_months", 0))
+        profile.implied_valuation = float(data.get("implied_valuation", 0))
+    except:
+        pass
     if not profile.startup_id:
         profile.startup_id = sha1((profile.name or context[:40]).encode()).hexdigest()[
             :10
         ]
-
     return profile

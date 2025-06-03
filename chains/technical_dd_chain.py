@@ -1,25 +1,13 @@
-"""
-Technical Due-Diligence chain
-
-1. Pulls relevant deck text from Chroma
-2. Prompts GPT-4o-mini to rate tech maturity & moat
-3. Updates the StartupProfile
-"""
-
 import json
 from hashlib import sha1
 from pathlib import Path
-
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 
 from core.schemas import StartupProfile
-from core.vector_store import query_doc
+from core.hybrid_context import get_hybrid_context
 
-# ------------------------------------------------------------------
-# Config
-# ------------------------------------------------------------------
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.2)
 
@@ -36,32 +24,27 @@ PROMPT = ChatPromptTemplate.from_messages(
 )
 
 
-# ------------------------------------------------------------------
-# Chain
-# ------------------------------------------------------------------
 def run_technical_dd_chain(profile: StartupProfile) -> StartupProfile:
-    # 1 Gather context (deck text snippets)
-    chunks = query_doc(profile.startup_id, "technology stack or architecture", k=4)
-    context = "\n---\n".join(chunks) if chunks else "No additional context provided."
-
-    # 2 LLM call
-    response = llm.invoke(PROMPT.format(context=context))
-    raw = response.content.strip()
-
-    # 3 Robust JSON extraction: take text between first '{' and last '}'
-    first, last = raw.find("{"), raw.rfind("}")
-    if first == -1 or last == -1 or last < first:
-        raise ValueError("Could not locate JSON in LLM response")
-    json_str = raw[first : last + 1]
-    data = json.loads(json_str)
-
-    # 4 Populate profile
-    profile.tech_maturity = data.get("tech_maturity")
-    profile.moat_strength = data.get("moat_strength")
-
-    # 5 Guarantee deterministic ID (if missing)
+    context = get_hybrid_context(
+        profile, "technology stack OR product OR patents OR infrastructure", 3, 3
+    )
+    txt = llm.invoke(PROMPT.format(context=context)).content.strip()
+    first, last = txt.find("{"), txt.rfind("}")
+    if first == -1 or last == -1:
+        return profile
+    try:
+        data = json.loads(txt[first : last + 1])
+        # Flatten dicts if needed
+        if isinstance(data.get("tech_maturity"), dict):
+            data["tech_maturity"] = str(data["tech_maturity"])
+        if isinstance(data.get("moat_strength"), dict):
+            data["moat_strength"] = str(data["moat_strength"])
+        profile.tech_maturity = data.get("tech_maturity")
+        profile.moat_strength = data.get("moat_strength")
+    except:
+        pass
     if not profile.startup_id:
-        src = profile.name or context[:40]
-        profile.startup_id = sha1(src.encode()).hexdigest()[:10]
-
+        profile.startup_id = sha1((profile.name or context[:40]).encode()).hexdigest()[
+            :10
+        ]
     return profile
