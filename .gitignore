@@ -37,3 +37,4 @@ pytest_cache/
 .DS_Store
 Thumbs.db
 
+cloud-credentials.json
