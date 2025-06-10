@@ -1,4 +1,6 @@
-import subprocess, json, asyncio
+import subprocess
+import json
+import asyncio
 
 
 async def run_cli(opportunity: str, trace_id: str):

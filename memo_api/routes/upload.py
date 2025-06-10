@@ -1,6 +1,9 @@
 from fastapi import APIRouter, UploadFile, File, Form
 from typing import List
-import uuid, os, tempfile, shutil
+import uuid
+import os
+import tempfile
+import shutil
 
 from memo_api.services import ocr
 

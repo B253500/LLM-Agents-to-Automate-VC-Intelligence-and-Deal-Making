@@ -1,4 +1,6 @@
-import os, requests, asyncio, aiohttp
+import os
+import asyncio
+import aiohttp
 
 BASE = "https://nubela.co/proxycurl/api/v2/linkedin"
 HEAD = {"Authorization": f"Bearer {os.getenv('PROXYCURL_API_KEY', '')}"}

@@ -12,7 +12,6 @@ from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 
 from core.schemas import StartupProfile
-from core.vector_store import query_doc
 from core.hybrid_context import get_hybrid_context
 
 # ------------------------------------------------------------------

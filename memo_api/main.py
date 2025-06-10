@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from memo_api.routes import upload, memo, health, pdf_memo
+from memo_api.routes import upload, memo, health
 
 app = FastAPI(title="VC Memo API")
 
