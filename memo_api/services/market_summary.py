@@ -13,7 +13,7 @@ PROMPT = """You are a market research expert…
 async def summarize(text: str, trace_id: str) -> str:
     # We remove headers=… since the OpenAI client doesn't accept that parameter.
     r = client.chat.completions.create(
-        model="gpt-4o",
+        model="gpt-3.5-turbo",
         messages=[
             {"role": "system", "content": PROMPT},
             {"role": "user", "content": f"Company description:\n{text}"},
