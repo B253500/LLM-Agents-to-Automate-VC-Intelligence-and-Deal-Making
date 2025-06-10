@@ -45,7 +45,8 @@ def run_financial_analysis_chain(profile: StartupProfile) -> StartupProfile:
         profile.cash_burn_12m = float(data.get("cash_burn_12m", 0))
         profile.runway_months = float(data.get("runway_months", 0))
         profile.implied_valuation = float(data.get("implied_valuation", 0))
-    except:
+    except (ValueError, TypeError) as e:
+        print(f"Error processing financial data: {e}")
         pass
     if not profile.startup_id:
         profile.startup_id = sha1((profile.name or context[:40]).encode()).hexdigest()[

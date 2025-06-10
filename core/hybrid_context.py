@@ -31,7 +31,6 @@ def get_hybrid_context(profile, topic, k_local=3, k_web=2):
     from core.vector_store import query_doc
 
     name = getattr(profile, "name", "") or ""
-    ceo = getattr(profile, "founder_name", "") or getattr(profile, "ceo", "") or ""
     local = query_doc(getattr(profile, "startup_id", None), topic, k=k_local)
     # Google web context
     search_query = f"{name} {topic}"

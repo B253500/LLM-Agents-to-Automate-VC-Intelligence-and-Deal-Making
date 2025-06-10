@@ -36,7 +36,8 @@ def run_market_sizing_chain(profile: StartupProfile) -> StartupProfile:
         profile.TAM = float(data.get("TAM", 0))
         profile.SAM = float(data.get("SAM", 0))
         profile.SOM = float(data.get("SOM", 0))
-    except:
+    except (ValueError, TypeError) as e:
+        print(f"Error processing market sizing data: {e}")
         pass
     if not profile.startup_id:
         profile.startup_id = sha1((profile.name or context[:40]).encode()).hexdigest()[

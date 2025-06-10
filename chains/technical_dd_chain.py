@@ -41,7 +41,8 @@ def run_technical_dd_chain(profile: StartupProfile) -> StartupProfile:
             data["moat_strength"] = str(data["moat_strength"])
         profile.tech_maturity = data.get("tech_maturity")
         profile.moat_strength = data.get("moat_strength")
-    except:
+    except (ValueError, TypeError) as e:
+        print(f"Error processing technical due diligence data: {e}")
         pass
     if not profile.startup_id:
         profile.startup_id = sha1((profile.name or context[:40]).encode()).hexdigest()[

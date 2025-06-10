@@ -34,7 +34,8 @@ def run_competitive_intel_chain(profile: StartupProfile) -> StartupProfile:
         profile.top_competitors = [
             Competitor(**c) for c in data.get("top_competitors", [])[:3]
         ]
-    except:
+    except (ValueError, TypeError, KeyError) as e:
+        print(f"Error processing competitors: {e}")
         pass
     if not profile.startup_id:
         profile.startup_id = sha1((profile.name or ctx[:40]).encode()).hexdigest()[:10]

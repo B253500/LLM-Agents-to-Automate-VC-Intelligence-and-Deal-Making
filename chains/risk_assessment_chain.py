@@ -37,7 +37,8 @@ def run_risk_assessment_chain(profile: StartupProfile) -> StartupProfile:
         data = json.loads(txt[first : last + 1])
         profile.risk_flags = data.get("risk_flags", [])
         profile.risk_score = float(data.get("risk_score", 0.0))
-    except:
+    except (ValueError, TypeError) as e:
+        print(f"Error processing risk assessment data: {e}")
         pass
     if not profile.startup_id:
         profile.startup_id = sha1((profile.name or "risk").encode()).hexdigest()[:10]
