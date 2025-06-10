@@ -1,11 +1,26 @@
-from chromadb import PersistentClient
+from chromadb import Client, Settings
 from pathlib import Path
+import os
 
-ROOT = Path(".chroma")
+# Get the ChromaDB directory from environment variable or use default
+CHROMA_DB_DIR = os.getenv("CHROMA_DB_DIR", ".chroma")
+ROOT = Path(CHROMA_DB_DIR)
 ROOT.mkdir(exist_ok=True)
 
-client = PersistentClient(path=str(ROOT))
-collection = client.get_or_create_collection("startup_docs")
+# Initialize ChromaDB with proper settings
+client = Client(
+    Settings(
+        anonymized_telemetry=False,
+        allow_reset=True,
+        is_persistent=True,
+        persist_directory=str(ROOT),
+    )
+)
+
+# Create or get the collection with proper configuration
+collection = client.get_or_create_collection(
+    name="startup_docs", metadata={"hnsw:space": "cosine"}
+)
 
 
 def add_doc(startup_id: str, text: str) -> None:

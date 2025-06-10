@@ -1,11 +1,10 @@
 import os
-import json
-import uuid
-from google.cloud import vision_v1, storage
+from google.cloud import vision, storage
+import pdfplumber
 
 # ─── Change here: load credentials from your JSON key ───
 CREDS_PATH = os.path.join(os.getcwd(), "cloud-credentials.json")
-client = vision_v1.ImageAnnotatorClient.from_service_account_file(CREDS_PATH)
+client = vision.ImageAnnotatorClient.from_service_account_file(CREDS_PATH)
 gcs = storage.Client.from_service_account_json(CREDS_PATH)
 
 # The GCS bucket you created (or will create) for OCR
@@ -15,48 +14,23 @@ BATCH = 100
 
 async def process_pdfs(paths):
     """
-    Given a list of local PDF file paths, upload each to GCS,
-    run asyncBatchAnnotateFiles, pull down the JSON results,
-    extract text, clean up, and return the concatenated text.
+    Given a list of local PDF file paths, extract text using pdfplumber
+    and return the concatenated text.
     """
     if not paths:
         return ""
 
-    bucket = gcs.bucket(BUCKET)
     full_text = ""
 
-    for local_path in paths:
-        # 1. Upload PDF to GCS
-        blob_name = f"temp/{uuid.uuid4()}.pdf"
-        bucket.blob(blob_name).upload_from_filename(
-            local_path, content_type="application/pdf"
-        )
-
-        # 2. Request async batch OCR
-        dest_prefix = f"ocr-results/{uuid.uuid4()}-"
-        req = {
-            "input_config": {
-                "gcs_source": {"uri": f"gs://{BUCKET}/{blob_name}"},
-                "mime_type": "application/pdf",
-            },
-            "features": [{"type_": vision_v1.Feature.Type.DOCUMENT_TEXT_DETECTION}],
-            "output_config": {
-                "gcs_destination": {"uri": f"gs://{BUCKET}/{dest_prefix}"},
-                "batch_size": BATCH,
-            },
-        }
-
-        # Kick off and wait for completion
-        op = client.async_batch_annotate_files(requests=[req])
-        op.result(timeout=300)
-
-        # 3. Download results from GCS, extract text, then delete blobs
-        for res_blob in bucket.list_blobs(prefix=dest_prefix):
-            j = json.loads(res_blob.download_as_text())
-            for r in j.get("responses", []):
-                if "fullTextAnnotation" in r:
-                    full_text += r["fullTextAnnotation"]["text"] + "\n\n"
-            res_blob.delete()
-        bucket.blob(blob_name).delete()
+    for pdf_path in paths:
+        try:
+            with pdfplumber.open(pdf_path) as pdf:
+                for page in pdf.pages:
+                    text = page.extract_text()
+                    if text:
+                        full_text += text + "\n\n"
+        except Exception as e:
+            print(f"Error processing {pdf_path}: {str(e)}")
+            continue
 
     return full_text

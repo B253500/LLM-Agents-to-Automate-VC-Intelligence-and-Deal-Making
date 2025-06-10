@@ -1,6 +1,6 @@
 """
 CrewAI wrapper that hands off the heavy work to the LangChain pitch-deck chain.
-Only the callback’s return value is surfaced to the caller.
+Only the callback's return value is surfaced to the caller.
 """
 
 from crewai import Agent, Task, Crew

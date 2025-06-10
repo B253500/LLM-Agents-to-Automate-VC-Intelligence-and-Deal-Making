@@ -14,12 +14,12 @@ fastapi
 uvicorn
 python-multipart
 openai>=1.14
-google-cloud-vision
-google-cloud-storage
 aiohttp
 requests
 python-dotenv
 pdfminer.six
 mammoth
 html-to-docx
+crewai-tools>=0.0.1
+pydantic>=2.0.0
 

@@ -10,7 +10,7 @@ llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.2)
 def build_founder_profiling_agent(profile: StartupProfile):
     partner = Agent(
         role="Founder-profiling partner",
-        goal="Evaluate founders’ track-record and fit.",
+        goal="Evaluate founders' track-record and fit.",
         backstory="20-year VC who focuses on team quality.",
         verbose=True,
         llm=llm,
