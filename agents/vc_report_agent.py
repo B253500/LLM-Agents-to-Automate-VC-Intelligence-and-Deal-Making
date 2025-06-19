@@ -21,9 +21,21 @@ import json
 import logging
 import time
 import re
+from sentence_transformers import CrossEncoder
+import pdfplumber
 
 # Set up logging
 logger = logging.getLogger(__name__)
+
+# Add RerankerAgent class
+class RerankerAgent:
+    def __init__(self, model_name="cross-encoder/ms-marco-MiniLM-L-6-v2"):
+        self.model = CrossEncoder(model_name)
+    def rerank(self, question, docs, top_k=4):
+        pairs = [[question, doc.page_content] for doc in docs]
+        scores = self.model.predict(pairs)
+        reranked = sorted(zip(docs, scores), key=lambda x: x[1], reverse=True)
+        return [doc for doc, score in reranked[:top_k]]
 
 class VCReportAgent:
     def __init__(self, openai_api_key: str, report_path: str):
@@ -33,6 +45,7 @@ class VCReportAgent:
         self.vector_store = None
         self.qa_chain = None
         self.llm = ChatOpenAI(temperature=0, model="gpt-4o", openai_api_key=openai_api_key)
+        self.reranker = RerankerAgent()  # Add reranker
         self._initialize_agent()
 
     def _extract_keywords(self, question: str) -> Set[str]:
@@ -58,70 +71,73 @@ class VCReportAgent:
         
         return keywords
 
-    def _get_relevant_documents(self, question: str, k: int = 5) -> List[Any]:
-        """Get relevant documents using both semantic and keyword search."""
-        # Get keywords from question
+    def _get_relevant_documents(self, question: str, k: int = 10) -> List[Any]:
+        """Get relevant documents using both semantic and keyword search, then rerank."""
         keywords = self._extract_keywords(question)
-        
-        # Reduce search results to avoid rate limits
-        if 'cagr' in question.lower() or 'growth' in question.lower():
-            k = 5  # Reduced from 10 to 5
-        else:
-            k = 3  # Reduced from 5 to 3
-        
-        # Perform semantic search
-        semantic_docs = self.vector_store.similarity_search(question, k=k)
-        
-        # If we have keywords, also search for them
+        # Always retrieve more for reranking
+        k_retrieve = max(10, k)
+        semantic_docs = self.vector_store.similarity_search(question, k=k_retrieve)
         keyword_docs = []
         if keywords:
             for keyword in keywords:
                 try:
-                    docs = self.vector_store.similarity_search(keyword, k=2)  # Reduced from 3 to 2
+                    docs = self.vector_store.similarity_search(keyword, k=2)
                     keyword_docs.extend(docs)
                 except Exception as e:
                     logger.warning(f"Error searching for keyword {keyword}: {str(e)}")
-        
-        # For CAGR questions, also search for temporal data
         if 'cagr' in question.lower():
             try:
-                # Search for year-specific data
-                year_docs = self.vector_store.similarity_search("2020 2021 2022 2023 2024 2025", k=3)  # Reduced from 5 to 3
+                year_docs = self.vector_store.similarity_search("2020 2021 2022 2023 2024 2025", k=3)
                 keyword_docs.extend(year_docs)
             except Exception as e:
                 logger.warning(f"Error searching for temporal data: {str(e)}")
-        
-        # Combine and deduplicate documents
         all_docs = semantic_docs + keyword_docs
         seen_content = set()
         unique_docs = []
-        
         for doc in all_docs:
-            # Create a hash of the content to check for duplicates
-            content_hash = hash(doc.page_content[:100])  # Use first 100 chars as a simple hash
+            content_hash = hash(doc.page_content[:100])
             if content_hash not in seen_content:
                 seen_content.add(content_hash)
                 unique_docs.append(doc)
-        
-        # Return top k unique documents
-        return unique_docs[:k]
+        # Rerank and select top k
+        top_docs = self.reranker.rerank(question, unique_docs, top_k=4)
+        # Debug: print top reranked chunks
+        print("\n\n--- Top Reranked Chunks for Debug ---\n")
+        for i, doc in enumerate(top_docs):
+            print(f"Chunk {i+1} (first 500 chars):\n{doc.page_content[:500]}\n")
+        return top_docs
 
     def _initialize_agent(self):
-        """Initialize the agent with document processing and retrieval."""
-        # Load documents
+        """Initialize the agent with document processing and retrieval, including table extraction."""
         documents = []
         for pdf_file in self.reports_dir.glob("*.pdf"):
             try:
+                # 1. Extract text as before
                 loader = UnstructuredPDFLoader(str(pdf_file))
                 docs = loader.load()
-                # Add source information to metadata
                 for doc in docs:
                     doc.metadata["source"] = str(pdf_file.name)
                 documents.extend(docs)
+                print(f"\n\n--- Extracted Chunks from {pdf_file.name} ---\n")
+                for i, doc in enumerate(docs):
+                    print(f"Chunk {i+1} (first 500 chars):\n{doc.page_content[:500]}\n")
+                # 2. Extract tables and add as text chunks
+                with pdfplumber.open(str(pdf_file)) as pdf:
+                    for page_num, page in enumerate(pdf.pages, 1):
+                        tables = page.extract_tables()
+                        for t_idx, table in enumerate(tables, 1):
+                            # Convert table to readable string (CSV-like)
+                            table_str = "\n".join([", ".join([cell if cell is not None else "" for cell in row]) for row in table])
+                            table_doc = Document(
+                                page_content=f"Extracted table from {pdf_file.name}, page {page_num}, table {t_idx}:\n{table_str}",
+                                metadata={"source": str(pdf_file.name), "page": page_num, "type": "table"}
+                            )
+                            documents.append(table_doc)
+                            # Debug print
+                            print(f"[Table] {pdf_file.name} page {page_num} table {t_idx} (first 500 chars):\n{table_str[:500]}\n")
             except Exception as e:
-                logger.error(f"Error loading {pdf_file}: {str(e)}")
+                logger.error(f"Error loading or extracting tables from {pdf_file}: {str(e)}")
                 continue
-
         if not documents:
             raise ValueError("No documents found in the report directory")
 

@@ -6,6 +6,7 @@ from agents.vc_report_agent import VCReportAgent
 from fpdf import FPDF
 import json
 from typing import Dict, Any
+import pdfplumber
 
 # Load environment variables
 load_dotenv()
@@ -156,5 +157,23 @@ def main():
     # Generate PDF report
     generate_pdf_report(results)
 
+def extract_tables_from_vc_reports():
+    reports_dir = "data/vc_reports"
+    for filename in os.listdir(reports_dir):
+        if filename.endswith(".pdf"):
+            pdf_path = os.path.join(reports_dir, filename)
+            print(f"\n--- Tables from {filename} ---\n")
+            try:
+                with pdfplumber.open(pdf_path) as pdf:
+                    for page_num, page in enumerate(pdf.pages, 1):
+                        tables = page.extract_tables()
+                        for t_idx, table in enumerate(tables, 1):
+                            print(f"Page {page_num}, Table {t_idx}:")
+                            for row in table:
+                                print(row)
+                            print()
+            except Exception as e:
+                print(f"Error processing {filename}: {e}")
+
 if __name__ == "__main__":
-    main() 
+    extract_tables_from_vc_reports() 
