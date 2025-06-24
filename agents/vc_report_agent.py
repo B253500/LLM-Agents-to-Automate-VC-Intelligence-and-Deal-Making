@@ -179,11 +179,11 @@ Important:
 10. Make all mathematical expressions human-readable in plain text
 11. Always perform the actual calculations when asked for CAGR, percentages, or other math
 12. If you find data for different time periods, calculate CAGR for each period mentioned
-
-Context: {context}
-
-Question: {question}
-
+        
+        Context: {context}
+        
+        Question: {question}
+        
 Answer:"""
                 
                 # Get response from LLM
@@ -228,7 +228,7 @@ Answer:"""
         try:
             with get_openai_callback() as cb:
                 # Get answer using the simpler QA chain
-                result = self.qa_chain({"query": question})
+        result = self.qa_chain({"query": question})
                 
                 # Clean up any LaTeX math in the answer
                 cleaned_answer = self._clean_math_formulas(result["result"])
@@ -258,7 +258,7 @@ Answer:"""
                             source_info["page"] = doc.metadata["page"]
                         sources.append(source_info)
                 
-                return {
+        return {
                     "answer": cleaned_answer,
                     "sources": sources,
                     "validation": {

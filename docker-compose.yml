@@ -1,9 +1,12 @@
 version: "3.1"
 services:
   n8n:
-    image: n8nio/n8n:latest
+    build: .
     ports:
       - "5678:5678"
+    volumes:
+      - ./n8n_data:/home/node/.n8n
+      - ./:/home/node/project
     environment:
       - N8N_BASIC_AUTH_ACTIVE=true
       - N8N_BASIC_AUTH_USER=<your-user>
@@ -11,6 +14,4 @@ services:
       - N8N_HOST=0.0.0.0
       - N8N_PORT=5678
       - GENERIC_TIMEZONE=Asia/Almaty
-    volumes:
-      - ./n8n_data:/home/node/.n8n
 
