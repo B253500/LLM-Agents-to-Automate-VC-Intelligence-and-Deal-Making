@@ -1,9 +1,3 @@
-# download_reports.py - Playwright script for Crunchbase, Beauhurst & PitchBook
-# Requirements:
-#   python >=3.7
-#   pip install playwright
-#   playwright install
-
 import re
 import json
 from pathlib import Path
@@ -18,6 +12,7 @@ from fpdf import FPDF
 import glob
 import random
 import string
+import os
 
 # Download directory
 DOWNLOAD_DIR = Path(__file__).parent / "data" / "vc_reports"
@@ -33,17 +28,42 @@ GMAIL_PASSWORD = "YOUR_APP_PASSWORD_HERE"  # Use an App Password if 2FA is enabl
 BEAUHURST_EMAIL_DOMAIN = "@beauhurst.com"
 EMAIL_CHECK_INTERVAL = 60  # seconds
 
+DOWNLOADED_REPORTS_FILE = "downloaded_reports.txt"
+MAPPING_FILE = Path(__file__).parent / "downloaded_reports.json"
+
+def load_downloaded_reports():
+    if not os.path.exists(DOWNLOADED_REPORTS_FILE):
+        return set()
+    with open(DOWNLOADED_REPORTS_FILE, "r") as f:
+        return set(line.strip() for line in f)
+
+def save_downloaded_report(report_id):
+    with open(DOWNLOADED_REPORTS_FILE, "a") as f:
+        f.write(report_id + "\n")
+
+def load_downloaded_mapping():
+    if MAPPING_FILE.exists():
+        with open(MAPPING_FILE, "r") as f:
+            return json.load(f)
+    return {}
+
+def save_downloaded_mapping(mapping):
+    with open(MAPPING_FILE, "w") as f:
+        json.dump(mapping, f, indent=2)
+
 def fill_beauhurst_form(page):
     try:
-        # Try to find the form by generic HubSpot selector or by specific known ID
+        # Add all known form IDs for robust detection
         form_selectors = [
             "form[id^='hsForm_']",
-            "#hsForm_257d39dc-7a23-4ea9-9fea-aad43090d226_1"
+            "#hsForm_257d39dc-7a23-4ea9-9fea-aad43090d226_1",
+            "#hsForm_d6c1adf0-2bee-44a2-b628-63275657f2a8_1",
+            "#hsForm_154937a5-8bb5-4e38-82be-311ba862058b_1"
         ]
         form_context = None
         for selector in form_selectors:
             try:
-                page.wait_for_selector(selector, timeout=10000)
+                page.wait_for_selector(selector, timeout=20000)
                 form_context = page
                 break
             except Exception:
@@ -66,37 +86,24 @@ def fill_beauhurst_form(page):
             print("No HubSpot form found on page or in iframes (tried selectors: %s)" % form_selectors)
             return False
 
-        # Fill visible required fields first
-        first_name = form_context.query_selector("input[name='firstname']")
-        last_name = form_context.query_selector("input[name='lastname']")
-        email_field = form_context.query_selector("input[name='email']")
-        job_title = form_context.query_selector("input[name='jobtitle']")
-        industry = form_context.query_selector("select[name='demo_form_industries']")
-        submit_btns = form_context.query_selector_all("input[type='submit'], button[type='submit']")
-        submit_btn = None
-        for btn in submit_btns:
-            if btn.is_visible() and btn.is_enabled():
-                value = btn.get_attribute("value")
-                text = btn.inner_text() if hasattr(btn, 'inner_text') else ''
-                btn_text = (value or text or '').lower()
-                if 'book demo' in btn_text or 'book a demo' in btn_text:
-                    continue
-                submit_btn = btn
-                print("Submit button value:", value or text)
-                break
-
+        # --- Progressive reveal: fill only always-visible fields first ---
         filled = False
-        if first_name:
+        # 1. First name
+        first_name = form_context.query_selector("input[name='firstname']")
+        if first_name and first_name.is_visible() and first_name.is_enabled():
             first_name.fill("Aza")
             filled = True
-        if last_name:
+        # 2. Last name
+        last_name = form_context.query_selector("input[name='lastname']")
+        if last_name and last_name.is_visible() and last_name.is_enabled():
             last_name.fill("Kan")
             filled = True
-        # Try primary email first, fallback if error message appears
+        # 3. Email (try both emails)
+        email_field = form_context.query_selector("input[name='email']")
         email_to_try = ["ak.somnium@gmail.com", "a.kanatuly@sms.ed.ac.uk"]
         email_filled = False
         for email in email_to_try:
-            if email_field:
+            if email_field and email_field.is_visible() and email_field.is_enabled():
                 email_field.fill(email)
                 filled = True
                 email_field.press('Tab')
@@ -120,18 +127,26 @@ def fill_beauhurst_form(page):
         if not email_filled:
             print("Could not find a valid email to use for this form.")
             return False
-        if job_title:
+
+        # --- Wait for hidden fields to appear after filling the above ---
+        # 4. Job title
+        job_title = None
+        try:
+            page.wait_for_selector("input[name='jobtitle']", timeout=2000, state='visible')
+            job_title = form_context.query_selector("input[name='jobtitle']")
+        except Exception:
+            job_title = form_context.query_selector("input[name='jobtitle']")
+        if job_title and job_title.is_visible() and job_title.is_enabled():
             job_title.fill("student")
             filled = True
-        # --- Handle forms where industry and other fields are hidden until others are filled ---
-        # Wait for industry select to appear if it was hidden
-        if not industry:
-            try:
-                page.wait_for_selector("select[name='demo_form_industries']", timeout=3000)
-                industry = form_context.query_selector("select[name='demo_form_industries']")
-            except Exception:
-                pass
-        if industry:
+        # 5. Industry (select)
+        industry = None
+        try:
+            page.wait_for_selector("select[name='demo_form_industries']", timeout=2000, state='visible')
+            industry = form_context.query_selector("select[name='demo_form_industries']")
+        except Exception:
+            industry = form_context.query_selector("select[name='demo_form_industries']")
+        if industry and industry.is_visible() and industry.is_enabled():
             options = industry.query_selector_all('option')
             selected = False
             for opt in options:
@@ -148,31 +163,53 @@ def fill_beauhurst_form(page):
                 if value:
                     industry.select_option(value)
                     filled = True
-        # --- Fill any other visible input or select fields randomly ---
+        # 6. Company, phone, company_size (wait for and fill if visible)
+        for field_name in ['company', 'phone', 'demo_form_company_size']:
+            try:
+                page.wait_for_selector(f"input[name='{field_name}'], select[name='{field_name}']", timeout=1000, state='visible')
+            except Exception:
+                pass
+            inp = form_context.query_selector(f"input[name='{field_name}']")
+            sel = form_context.query_selector(f"select[name='{field_name}']")
+            if inp and inp.is_visible() and inp.is_enabled():
+                rand_val = ''.join(random.choices(string.ascii_letters, k=8))
+                inp.fill(rand_val)
+                filled = True
+            if sel and sel.is_visible() and sel.is_enabled():
+                options = sel.query_selector_all('option')
+                valid_options = [opt for opt in options if opt.get_attribute('value')]
+                if valid_options:
+                    random_opt = random.choice(valid_options)
+                    value = random_opt.get_attribute('value')
+                    sel.select_option(value)
+                    filled = True
+        # --- Fill any other visible input or select fields randomly (as before) ---
         all_inputs = form_context.query_selector_all("input[type='text']")
         for inp in all_inputs:
             name = inp.get_attribute('name')
-            if name not in ['firstname', 'lastname', 'email', 'jobtitle']:
-                try:
-                    rand_val = ''.join(random.choices(string.ascii_letters, k=8))
-                    inp.fill(rand_val)
-                    filled = True
-                except Exception:
-                    continue
+            if name not in ['firstname', 'lastname', 'email', 'jobtitle', 'company', 'phone', 'demo_form_company_size']:
+                if inp.is_visible() and inp.is_enabled():
+                    try:
+                        rand_val = ''.join(random.choices(string.ascii_letters, k=8))
+                        inp.fill(rand_val)
+                        filled = True
+                    except Exception:
+                        continue
         all_selects = form_context.query_selector_all("select")
         for sel in all_selects:
             name = sel.get_attribute('name')
-            if name != 'demo_form_industries':
-                try:
-                    options = sel.query_selector_all('option')
-                    valid_options = [opt for opt in options if opt.get_attribute('value')]
-                    if valid_options:
-                        random_opt = random.choice(valid_options)
-                        value = random_opt.get_attribute('value')
-                        sel.select_option(value)
-                        filled = True
-                except Exception:
-                    continue
+            if name not in ['demo_form_industries', 'demo_form_company_size']:
+                if sel.is_visible() and sel.is_enabled():
+                    try:
+                        options = sel.query_selector_all('option')
+                        valid_options = [opt for opt in options if opt.get_attribute('value')]
+                        if valid_options:
+                            random_opt = random.choice(valid_options)
+                            value = random_opt.get_attribute('value')
+                            sel.select_option(value)
+                            filled = True
+                    except Exception:
+                        continue
         # --- Check and tick any visible checkboxes (e.g. marketing consent) ---
         checkboxes = form_context.query_selector_all("input[type='checkbox']")
         for cb in checkboxes:
@@ -198,6 +235,19 @@ def fill_beauhurst_form(page):
             except Exception as e:
                 print(f"Could not check a checkbox: {e}")
                 continue
+        # --- Submit ---
+        submit_btns = form_context.query_selector_all("input[type='submit'], button[type='submit']")
+        submit_btn = None
+        for btn in submit_btns:
+            if btn.is_visible() and btn.is_enabled():
+                value = btn.get_attribute("value")
+                text = btn.inner_text() if hasattr(btn, 'inner_text') else ''
+                btn_text = (value or text or '').lower()
+                if 'book demo' in btn_text or 'book a demo' in btn_text:
+                    continue
+                submit_btn = btn
+                print("Submit button value:", value or text)
+                break
         if filled and submit_btn:
             print("Submitting Beauhurst report request form...")
             submit_btn.click()
@@ -567,28 +617,26 @@ def save_report_info(info, source):
     
     return False
 
-def save_webpage_as_pdf(page, download_dir, report_title):
-    # Clean the report title for filename
-    safe_title = re.sub(r'[^\w\s-]', '', report_title)
-    safe_title = re.sub(r'[-\s]+', '_', safe_title).strip('_').lower()
+def save_webpage_as_pdf(page, download_dir, safe_title, detail_url=None):
+    safe_title = re.sub(r'[^0-9\w\s-]', '', safe_title)
+    safe_title = re.sub(r'[\W\s-]+', '_', safe_title).strip('_').lower()
     pdf_path = download_dir / f"{safe_title}.pdf"
-    # Optionally, set viewport size for better layout
     page.set_viewport_size({"width": 1280, "height": 1800})
-    # Scroll through the page in increments to trigger lazy loading
     scroll_steps = 10
-    for i in range(scroll_steps + 1):
-        page.evaluate(f"window.scrollTo(0, document.body.scrollHeight * {i / scroll_steps})")
-        page.wait_for_timeout(400)
-    # Wait for SVG, canvas, or chart elements to appear (if any)
+    for i in range(scroll_steps):
+        page.evaluate(f"if (document.body) {{ window.scrollTo(0, document.body.scrollHeight * {i / scroll_steps}); }}")
+        page.wait_for_timeout(100)
     try:
         page.wait_for_selector("svg, canvas, .chart, .highcharts-container", timeout=5000)
     except Exception:
-        pass  # If not found, continue anyway
-    # Wait a bit more for all images/charts to load
+        pass
     page.wait_for_timeout(2000)
-    # Save as PDF
     page.pdf(path=str(pdf_path), format="A4", print_background=True)
     print(f"Saved webpage as PDF: {pdf_path}")
+    if detail_url:
+        mapping = load_downloaded_mapping()
+        mapping[detail_url] = pdf_path.name
+        save_downloaded_mapping(mapping)
 
 def already_have_report(report_title, download_dir):
     safe_title = report_title.replace(' ', '_').replace('/', '_')
@@ -712,60 +760,51 @@ def accept_cookies(page):
     return True
 
 def fill_pitchbook_form_and_download(page):
-    accept_cookies(page)
     try:
-        page.wait_for_selector("form#reportDownloadForm", timeout=7000)
-    except Exception:
-        print("No PitchBook download form found.")
-        return False
-
-    # Fill only required fields
-    page.fill("input[name='FirstName']", "Aza")
-    page.fill("input[name='LastName']", "Kan")
-    page.fill("input[name='Email']", "ak.somnium@gmail.com")
-
-    # Wait for the agreement checkbox to be enabled and visible
-    try:
-        page.wait_for_selector("input[name='agree']:not([disabled])", timeout=2000)
-        page.check("input[name='agree']")
-    except Exception:
-        try:
-            page.click("label[for='agree']")
-        except Exception:
-            print("Could not check agreement box.")
-
-    # Trigger form validation by blurring the last input
-    try:
-        page.locator("input[name='Email']").evaluate("el => el.blur()")
-        page.wait_for_timeout(500)
-    except Exception:
-        pass
-
-    # Submit the form
-    try:
-        page.click("input[type='submit']")
-        page.wait_for_timeout(2000)
-    except Exception:
-        print("Form submission did not trigger navigation, continuing...")
-
-    # Wait for the 'Download report' button to become visible and enabled
-    try:
-        page.wait_for_selector("a.report__btn:has-text('Download report'):not([disabled])", timeout=7000, state='visible')
-        download_btn = page.query_selector("a.report__btn:has-text('Download report')")
-        if download_btn and download_btn.is_visible():
+        print("Filling PitchBook form: First name Aza, Last name Kan, email ak.somnium@gmail.com")
+        page.fill("input[name='FirstName']", "Aza")
+        page.fill("input[name='LastName']", "Kan")
+        page.fill("input[name='Email']", "ak.somnium@gmail.com")
+        # Check the 'I agree' checkbox if present, robustly
+        agree_checkbox = page.query_selector("input[name='agree']")
+        if agree_checkbox and not agree_checkbox.is_checked():
+            try:
+                agree_checkbox.check()
+            except Exception:
+                # Fallback: set checked via JS and dispatch change event
+                page.evaluate("el => el.checked = true", agree_checkbox)
+                page.evaluate("el => el.dispatchEvent(new Event('change', {bubbles: true}))", agree_checkbox)
+            page.wait_for_timeout(500)
+        # Find and click the Download report button
+        download_btn = (
+            page.query_selector(
+                "input[type='submit'][value*='Download report'], "
+                "button[type='submit']:has-text('Download report'), "
+                "button:has-text('Download report'), "
+                "a:has-text('Download report'), "
+                "input[type='submit'][value*='Download'], "
+                "button:has-text('Download')"
+            )
+        )
+        if download_btn and download_btn.is_visible() and download_btn.is_enabled():
+            print("Clicking Download report button...")
             download_btn.click()
-            page.wait_for_timeout(1000)
+            page.wait_for_timeout(2000)
         else:
-            print("Download report button not found or not visible.")
+            print("Could not find Download report button. Printing form HTML for debugging:")
+            form_html = page.content()
+            with open("debug_pitchbook_form.html", "w", encoding="utf-8") as f:
+                f.write(form_html)
             return False
-    except Exception as e:
-        print(f"Failed to find/click Download report button: {e}")
-        return False
-
-    # Now look for the actual PDF download button
-    try:
+        # Wait for Download PDF button to appear
+        try:
+            page.wait_for_selector("a[href$='.pdf'], a:has-text('Download PDF'), button:has-text('Download PDF')", timeout=5000, state='visible')
+        except Exception:
+            print("Download PDF button did not appear in time.")
+            return False
         pdf_btn = page.query_selector("a[href$='.pdf'], a:has-text('Download PDF'), button:has-text('Download PDF')")
-        if pdf_btn and pdf_btn.is_visible():
+        if pdf_btn and pdf_btn.is_visible() and pdf_btn.is_enabled():
+            print("Clicking Download PDF button...")
             href = pdf_btn.get_attribute('href')
             if href and href.lower().endswith('.pdf'):
                 _fetch_and_save(page, href)
@@ -782,22 +821,37 @@ def fill_pitchbook_form_and_download(page):
                 return True
         else:
             print("No Download PDF button found after clicking Download report.")
+            return False
     except Exception as e:
-        print(f"Failed to download PitchBook report: {e}")
-    return False
+        print(f"Failed to fill PitchBook form and download: {e}")
+        return False
 
 def download_pdf_from_detail(page, detail_url):
-    try:
-        page.goto(detail_url, timeout=NAV_TIMEOUT, wait_until="domcontentloaded")
-    except PlaywrightError as e:
-        print(f"⚠️ Failed to load {detail_url}: {e}")
-        return
-    # Check if report already exists (by filename)
+    mapping = load_downloaded_mapping()
+    # Check mapping before any page interaction
+    if detail_url in mapping:
+        mapped_val = mapping[detail_url]
+        if mapped_val == 'email_sent':
+            print(f"✓ Report already requested by email for {detail_url}, skipping form.")
+            return
+        pdf_path = DOWNLOAD_DIR / mapped_val
+        if pdf_path.exists():
+            print(f"✓ Report already exists (mapping): {pdf_path.name}, skipping.")
+            return
+        else:
+            # Remove stale mapping if file is missing
+            del mapping[detail_url]
+            save_downloaded_mapping(mapping)
     safe_title = re.sub(r'[^0-9\w\s-]', '', detail_url.rstrip('/').split('/')[-1])
     safe_title = re.sub(r'[-\s]+', '_', safe_title).strip('_').lower()
     pdf_path = DOWNLOAD_DIR / f"{safe_title}.pdf"
     if pdf_path.exists():
         print(f"✓ Report already exists: {pdf_path.name}, skipping.")
+        return
+    try:
+        page.goto(detail_url, timeout=NAV_TIMEOUT, wait_until="domcontentloaded")
+    except PlaywrightError as e:
+        print(f"⚠️ Failed to load {detail_url}: {e}")
         return
     # Skip book demo or similar pages (case-insensitive)
     if 'book-demo' in detail_url.lower() or 'book-a-demo' in detail_url.lower():
@@ -821,7 +875,7 @@ def download_pdf_from_detail(page, detail_url):
             if not href.startswith('http'):
                 href = page.url.rstrip('/') + href
             print(f"↓ Downloading PDF: {href}")
-            _fetch_and_save(page, href)
+            _fetch_and_save(page, href, detail_url)
             return True
         # Try any link or button with text "Download"
         button = page.query_selector('a:has-text("Download"), button:has-text("Download")')
@@ -829,7 +883,7 @@ def download_pdf_from_detail(page, detail_url):
             href = button.get_attribute('href')
             if href and href.lower().endswith('.pdf'):
                 print(f"↓ Downloading PDF: {href}")
-                _fetch_and_save(page, href)
+                _fetch_and_save(page, href, detail_url)
                 return True
             else:
                 try:
@@ -840,15 +894,15 @@ def download_pdf_from_detail(page, detail_url):
                     target = DOWNLOAD_DIR / fname
                     download.save_as(str(target))
                     print(f"↓ Downloaded Beauhurst PDF: {target}")
+                    mapping[detail_url] = fname
+                    save_downloaded_mapping(mapping)
                     return True
                 except Exception as e:
                     print(f"⚠️ Download button click failed: {e}")
         return False
-
     # First attempt to download
     if try_download():
         return
-
     # If no download link/button, check for HubSpot form and try to fill it
     if page.query_selector("form[id^='hsForm_']") or any(
         iframe.content_frame() and iframe.content_frame().query_selector("form[id^='hsForm_']")
@@ -856,9 +910,7 @@ def download_pdf_from_detail(page, detail_url):
     ):
         print("No download link/button found, but found a form. Attempting to fill the form...")
         if fill_beauhurst_form(page):
-            # Wait for possible confirmation message or content after form submission
             page.wait_for_timeout(4000)
-            # Check for confirmation message
             confirmation_texts = [
                 "your report is on the way",
                 "we've sent your report",
@@ -869,30 +921,40 @@ def download_pdf_from_detail(page, detail_url):
             page_content = page.content().lower()
             if any(msg in page_content for msg in confirmation_texts):
                 print("Form submitted: confirmation message detected. Report will be sent by email. Skipping download.")
+                mapping[detail_url] = 'email_sent'
+                save_downloaded_mapping(mapping)
                 return
-            # Otherwise, save the now-visible page as PDF (report likely revealed on page)
             print("Form filled, report appears to be revealed on page. Saving as PDF.")
-            save_webpage_as_pdf(page, DOWNLOAD_DIR, safe_title)
+            save_webpage_as_pdf(page, DOWNLOAD_DIR, safe_title, detail_url)
             return
-
     # If still nothing, log the HTML for debugging
     print("No download link/button or downloadable form found, saving page as PDF and logging HTML for debugging.")
     with open("debug_beauhurst_page.html", "w", encoding="utf-8") as f:
         f.write(page.content())
-    save_webpage_as_pdf(page, DOWNLOAD_DIR, safe_title)
+    save_webpage_as_pdf(page, DOWNLOAD_DIR, safe_title, detail_url)
+    # After successful download or email confirmation:
+    mapping[detail_url] = pdf_path.name
+    save_downloaded_mapping(mapping)
 
-def _fetch_and_save(page, url: str):
-    """Helper: fetch PDF via HTTP and save."""
+def _fetch_and_save(page, url: str, detail_url=None):
+    """Helper: fetch PDF via HTTP and save. Updates mapping if detail_url is provided."""
     fname = url.split('/')[-1].split('?')[0]
     target = DOWNLOAD_DIR / fname
+    mapping = load_downloaded_mapping()
     if target.exists():
         print(f"✓ Already have {fname}")
+        if detail_url:
+            mapping[detail_url] = fname
+            save_downloaded_mapping(mapping)
         return True
     print(f"↓ Downloading {fname}")
     try:
         resp = page.context.request.get(url, timeout=DOWNLOAD_TIMEOUT)
         with open(target, 'wb') as f:
             f.write(resp.body())
+        if detail_url:
+            mapping[detail_url] = fname
+            save_downloaded_mapping(mapping)
         return True
     except PlaywrightError:
         return False
@@ -918,7 +980,7 @@ def scrape_and_download_crunchbase(page):
     for url in urls:
         download_pdf_from_detail(page, url)
 
-def scrape_and_download_beauhurst(page, max_pages=21):
+def scrape_and_download_beauhurst(page, max_pages=10):
     print("=== Beauhurst Reports ===")
     base = "https://www.beauhurst.com"
     for i in range(1, max_pages + 1):
@@ -957,24 +1019,29 @@ def scrape_and_download_pitchbook(page):
         return
 
     try:
-        page.wait_for_selector("ul.report-center__feature, ul.report-center__list", timeout=30000)
+        page.wait_for_selector(".report-center__feature, .report-center__list", timeout=30000)
     except PlaywrightError:
         print("⚠️ Report list did not load in time")
         return
 
-    # Scroll to load more reports
-    for _ in range(5):
-        page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-        page.wait_for_timeout(2000)
+    # Click all 'See all' buttons to load more reports (optional, robust)
+    see_all_buttons = page.query_selector_all("a.btn-primary_teal, a:has-text('See all')")
+    for btn in see_all_buttons:
+        if btn.is_visible() and btn.is_enabled():
+            try:
+                btn.click()
+                page.wait_for_timeout(2000)
+            except Exception:
+                continue
 
+    # Use the broad selector to get all report links
     links = page.query_selector_all("a[href^='/news/reports/']")
-    detail_urls = []
+    detail_urls = set()
     for a in links:
         href = a.get_attribute('href')
         if href and href != '/news/reports':
             full = f"https://pitchbook.com{href}"
-            if full not in detail_urls:
-                detail_urls.append(full)
+            detail_urls.add(full)
 
     print(f"Found {len(detail_urls)} PitchBook reports")
     for du in detail_urls:
@@ -996,6 +1063,3 @@ def main():
 if __name__ == '__main__':
     main()
 
-# --- INSTRUCTIONS FOR GMAIL SETUP ---
-# To use Gmail IMAP, enable IMAP in your Gmail settings and use an App Password if 2FA is enabled.
-# See: https://support.google.com/mail/answer/7126229?hl=en
