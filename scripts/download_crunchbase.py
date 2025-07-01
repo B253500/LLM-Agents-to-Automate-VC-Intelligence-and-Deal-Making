@@ -25,7 +25,11 @@ def scrape_and_download_crunchbase(page):
 
     print(f"Found {len(urls)} Crunchbase reports")
     for url in urls:
-        download_pdf_from_detail(page, url)
+        try:
+            download_pdf_from_detail(page, url)
+        except Exception as e:
+            print(f"⚠️ Could not process detail page {url}: {e}")
+            continue
 
 def download_pdf_from_detail(page, detail_url):
     mapping = load_downloaded_mapping()

@@ -6,7 +6,7 @@ from core.download_utils import DOWNLOAD_DIR, NAV_TIMEOUT, load_downloaded_mappi
 import re
 
 # --- Beauhurst-specific scraping logic ---
-def scrape_and_download_beauhurst(page, max_pages=21):
+def scrape_and_download_beauhurst(page, max_pages=10):
     print("=== Beauhurst Reports ===")
     base = "https://www.beauhurst.com"
     for i in range(1, max_pages + 1):
@@ -14,9 +14,9 @@ def scrape_and_download_beauhurst(page, max_pages=21):
         print(f"Fetching report list page: {url}")
         try:
             page.goto(url, timeout=NAV_TIMEOUT, wait_until="domcontentloaded")
-        except PlaywrightError as e:
+        except Exception as e:
             print(f"⚠️ Could not load {url}: {e}")
-            break
+            continue
         cards = page.query_selector_all("a[href*='/research/']")
         report_links = []
         for a in cards:
@@ -30,8 +30,11 @@ def scrape_and_download_beauhurst(page, max_pages=21):
         print(f"Found {len(report_links)} report links on page {i}")
         for detail_url in report_links:
             print(f"Visiting detail page: {detail_url}")
-            download_pdf_from_detail(page, detail_url)
-            print(f"Would process: {detail_url}")
+            try:
+                download_pdf_from_detail(page, detail_url)
+            except Exception as e:
+                print(f"⚠️ Could not process detail page {detail_url}: {e}")
+                continue
 
 def download_pdf_from_detail(page, detail_url):
     mapping = load_downloaded_mapping()
