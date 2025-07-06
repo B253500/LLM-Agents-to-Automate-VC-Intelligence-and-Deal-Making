@@ -43,11 +43,11 @@ def scrape_and_download_pitchbook(page):
             print(f"⚠️ Error setting extra HTTP headers or loading listing: {e}")
             continue
         try:
-            page.wait_for_selector(".report-center__feature, .report-center__list", timeout=5000)
+            page.wait_for_selector(".report-center__feature, .report-center__list", timeout=10000)
             # For all but the first listing, wait for at least one real report link to appear
             if idx != 0:
                 try:
-                    page.wait_for_selector("a[href^='/news/reports/']:not([href='/news/reports'])", timeout=30000)
+                    page.wait_for_selector("a[href^='/news/reports/']:not([href='/news/reports'])", timeout=5000)
                 except PlaywrightError:
                     print("⚠️ No report links loaded in time on this listing.")
                     continue

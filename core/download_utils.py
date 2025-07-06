@@ -44,22 +44,36 @@ def _fetch_and_save(page, url: str, detail_url=None):
     except PlaywrightError:
         return False
 
-def save_webpage_as_pdf(page, download_dir, safe_title, detail_url=None):
+def save_webpage_as_pdf(page, download_dir, safe_title, detail_url=None, selector=None):
+    """
+    Save the current page as a PDF. If selector is provided, only the element matching that selector is saved as PDF.
+    """
     safe_title = re.sub(r'[^0-9\w\s-]', '', safe_title)
     safe_title = re.sub(r'[\W\s-]+', '_', safe_title).strip('_').lower()
     pdf_path = download_dir / f"{safe_title}.pdf"
     page.set_viewport_size({"width": 1280, "height": 1800})
-    scroll_steps = 10
-    for i in range(scroll_steps):
-        page.evaluate(f"if (document.body) {{ window.scrollTo(0, document.body.scrollHeight * {i / scroll_steps}); }}")
-        page.wait_for_timeout(100)
-    try:
-        page.wait_for_selector("svg, canvas, .chart, .highcharts-container", timeout=5000)
-    except Exception:
-        pass
-    page.wait_for_timeout(2000)
-    page.pdf(path=str(pdf_path), format="A4", print_background=True)
-    print(f"Saved webpage as PDF: {pdf_path}")
+    if selector:
+        # Wait for the element to appear
+        try:
+            element = page.wait_for_selector(selector, timeout=5000)
+            page.wait_for_timeout(1000)
+            element.pdf(path=str(pdf_path), format="A4", print_background=True)
+            print(f"Saved element ({selector}) as PDF: {pdf_path}")
+        except Exception as e:
+            print(f"[ERROR] Could not save element {selector} as PDF: {e}")
+            return
+    else:
+        scroll_steps = 10
+        for i in range(scroll_steps):
+            page.evaluate(f"if (document.body) {{ window.scrollTo(0, document.body.scrollHeight * {i / scroll_steps}); }}")
+            page.wait_for_timeout(100)
+        try:
+            page.wait_for_selector("svg, canvas, .chart, .highcharts-container", timeout=5000)
+        except Exception:
+            pass
+        page.wait_for_timeout(2000)
+        page.pdf(path=str(pdf_path), format="A4", print_background=True)
+        print(f"Saved webpage as PDF: {pdf_path}")
     if detail_url:
         mapping = load_downloaded_mapping()
         mapping[detail_url] = pdf_path.name
