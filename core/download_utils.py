@@ -2,6 +2,11 @@ import json
 import re
 from pathlib import Path
 from playwright.sync_api import Error as PlaywrightError
+import os
+import pdfplumber
+from google.cloud import vision
+import io
+from docx import Document
 
 DOWNLOAD_DIR = Path(__file__).parent.parent / "data" / "vc_reports"
 DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -78,3 +83,42 @@ def save_webpage_as_pdf(page, download_dir, safe_title, detail_url=None, selecto
         mapping = load_downloaded_mapping()
         mapping[detail_url] = pdf_path.name
         save_downloaded_mapping(mapping) 
+
+# OCR for images and scanned PDFs
+
+def extract_text_from_image(image_path):
+    client = vision.ImageAnnotatorClient()
+    with io.open(image_path, 'rb') as image_file:
+        content = image_file.read()
+    image = vision.Image(content=content)
+    response = client.document_text_detection(image=image)
+    return response.full_text_annotation.text if response.full_text_annotation else ""
+
+# DOCX extraction
+
+def extract_text_from_docx(docx_path):
+    doc = Document(docx_path)
+    return "\n".join([para.text for para in doc.paragraphs])
+
+# PDF extraction with OCR fallback
+
+def extract_text_from_pdf(pdf_path):
+    with pdfplumber.open(pdf_path) as pdf:
+        text = "\n".join([page.extract_text() or "" for page in pdf.pages])
+    if not text.strip():
+        # Fallback to OCR if no text was extracted
+        text = extract_text_from_image(pdf_path)
+    return text
+
+# General extraction dispatcher
+
+def extract_text(file_path):
+    ext = os.path.splitext(file_path)[1].lower()
+    if ext == ".pdf":
+        return extract_text_from_pdf(file_path)
+    elif ext == ".docx":
+        return extract_text_from_docx(file_path)
+    elif ext in [".png", ".jpg", ".jpeg"]:
+        return extract_text_from_image(file_path)
+    else:
+        raise ValueError("Unsupported file type") 

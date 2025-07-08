@@ -8,6 +8,20 @@ client = PersistentClient(path=str(ROOT))
 collection = client.get_or_create_collection("startup_docs")
 
 
+def clear_collection():
+    """Clear all documents from the collection to prevent contamination between runs."""
+    try:
+        # Get all document IDs and delete them
+        results = collection.get()
+        if results and results['ids']:
+            collection.delete(ids=results['ids'])
+            print("Vector store cleared for fresh run")
+        else:
+            print("Vector store was already empty")
+    except Exception as e:
+        print(f"Warning: Could not clear vector store: {e}")
+
+
 def add_doc(startup_id: str, text: str) -> None:
     collection.add(
         documents=[text],

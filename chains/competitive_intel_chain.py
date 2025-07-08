@@ -39,3 +39,21 @@ def run_competitive_intel_chain(profile: StartupProfile) -> StartupProfile:
     if not profile.startup_id:
         profile.startup_id = sha1((profile.name or ctx[:40]).encode()).hexdigest()[:10]
     return profile
+
+def run_competitive_intel_chain_with_text(full_text: str, profile: StartupProfile) -> StartupProfile:
+    """Run competitive intelligence using extracted text as context."""
+    context = full_text[:5000]  # Truncate if needed for prompt size
+    txt = llm.invoke(PROMPT.format(context=context)).content.strip()
+    first, last = txt.find("{"), txt.rfind("}")
+    if first == -1 or last == -1:
+        return profile
+    try:
+        data = json.loads(txt[first : last + 1])
+        profile.top_competitors = [
+            Competitor(**c) for c in data.get("top_competitors", [])[:3]
+        ]
+    except:
+        pass
+    if not profile.startup_id:
+        profile.startup_id = sha1((profile.name or context[:40]).encode()).hexdigest()[:10]
+    return profile

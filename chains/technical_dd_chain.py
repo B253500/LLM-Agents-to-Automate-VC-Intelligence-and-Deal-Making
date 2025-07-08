@@ -13,10 +13,17 @@ llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.2)
 
 SYSTEM = """\
 You are a senior CTO performing technical due-diligence for VC deals.
-Return JSON with exactly two keys:
-  tech_maturity  – one of ["prototype","beta","production","enterprise"]
-  moat_strength  – ≤25-word description of defensible IP / moat
-If you find no clues, set both values to "unknown".
+Analyze the startup's technology and provide technical assessment.
+
+Return JSON with:
+  tech_maturity  – one of ["prototype","beta","production","enterprise","unknown"]
+  moat_strength  – ≤25-word description of defensible IP / moat / competitive advantage
+  tech_stack     – brief description of key technologies used
+  scalability    – assessment of technical scalability
+  security       – brief security assessment if applicable
+
+If you cannot assess a field due to insufficient information, set it to null.
+Provide realistic assessments based on available information.
 """
 
 PROMPT = ChatPromptTemplate.from_messages(
@@ -39,12 +46,41 @@ def run_technical_dd_chain(profile: StartupProfile) -> StartupProfile:
             data["tech_maturity"] = str(data["tech_maturity"])
         if isinstance(data.get("moat_strength"), dict):
             data["moat_strength"] = str(data["moat_strength"])
-        profile.tech_maturity = data.get("tech_maturity")
-        profile.moat_strength = data.get("moat_strength")
+        
+        # Only set values if they are not null/None
+        if data.get("tech_maturity") is not None:
+            profile.tech_maturity = data.get("tech_maturity")
+        if data.get("moat_strength") is not None:
+            profile.moat_strength = data.get("moat_strength")
     except:
         pass
     if not profile.startup_id:
         profile.startup_id = sha1((profile.name or context[:40]).encode()).hexdigest()[
             :10
         ]
+    return profile
+
+def run_technical_dd_chain_with_text(full_text: str, profile: StartupProfile) -> StartupProfile:
+    """Run technical due diligence using extracted text as context."""
+    context = full_text[:5000]  # Truncate if needed for prompt size
+    txt = llm.invoke(PROMPT.format(context=context)).content.strip()
+    first, last = txt.find("{"), txt.rfind("}")
+    if first == -1 or last == -1:
+        return profile
+    try:
+        data = json.loads(txt[first : last + 1])
+        # Flatten dicts if needed
+        if isinstance(data.get("tech_maturity"), dict):
+            data["tech_maturity"] = str(data["tech_maturity"])
+        if isinstance(data.get("moat_strength"), dict):
+            data["moat_strength"] = str(data["moat_strength"])
+        # Only set values if they are not null/None
+        if data.get("tech_maturity") is not None:
+            profile.tech_maturity = data.get("tech_maturity")
+        if data.get("moat_strength") is not None:
+            profile.moat_strength = data.get("moat_strength")
+    except:
+        pass
+    if not profile.startup_id:
+        profile.startup_id = sha1((profile.name or context[:40]).encode()).hexdigest()[:10]
     return profile

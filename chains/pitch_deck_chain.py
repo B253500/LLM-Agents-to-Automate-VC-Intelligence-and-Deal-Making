@@ -54,8 +54,11 @@ def extract_common_term(text: str, pdf_path: str) -> str:
 # ---------------------------------------------------------------------
 # Main chain function
 # ---------------------------------------------------------------------
-def run_pitch_deck_chain(pdf_path: str) -> StartupProfile:
-    deck_text = pdf_to_text(Path(pdf_path))
+def run_pitch_deck_chain_with_text(deck_text: str, profile: StartupProfile = None) -> StartupProfile:
+    """Run pitch deck analysis using extracted text directly"""
+    if profile is None:
+        profile = StartupProfile()
+    
     truncated_text = deck_text[:5000]
 
     prompt = PROMPT.format(deck=truncated_text)
@@ -66,15 +69,15 @@ def run_pitch_deck_chain(pdf_path: str) -> StartupProfile:
     first, last = txt.find("{"), txt.rfind("}")
     if first == -1 or last == -1 or last < first:
         print("[Warning] No JSON object found, falling back to extraction")
-        fallback_name = extract_common_term(truncated_text, pdf_path)
-        profile = StartupProfile(name=fallback_name)
+        fallback_name = extract_common_term_from_text(truncated_text)
+        profile.name = fallback_name
     else:
         try:
             json_str = txt[first : last + 1]
             raw = json.loads(json_str)
 
             if not raw.get("name") or raw.get("name").lower() == "unknown":
-                raw["name"] = extract_common_term(truncated_text, pdf_path)
+                raw["name"] = extract_common_term_from_text(truncated_text)
 
             if (
                 not raw.get("founder_name")
@@ -82,15 +85,18 @@ def run_pitch_deck_chain(pdf_path: str) -> StartupProfile:
             ):
                 raw["founder_name"] = "unknown"
 
-            profile = StartupProfile(**raw)
+            # Update profile with extracted data
+            for key, value in raw.items():
+                if hasattr(profile, key):
+                    setattr(profile, key, value)
         except Exception as e:
             print(f"[Error] Failed to parse LLM output: {e}")
-            fallback_name = extract_common_term(truncated_text, pdf_path)
-            profile = StartupProfile(name=fallback_name)
+            fallback_name = extract_common_term_from_text(truncated_text)
+            profile.name = fallback_name
 
     # Fallback if still missing
     if not profile.name or profile.name.lower() == "unknown":
-        profile.name = extract_common_term(truncated_text, pdf_path)
+        profile.name = extract_common_term_from_text(truncated_text)
 
     # Assign deterministic ID
     profile.startup_id = sha1(profile.name.encode()).hexdigest()[:10]
@@ -99,3 +105,19 @@ def run_pitch_deck_chain(pdf_path: str) -> StartupProfile:
     add_doc(profile.startup_id, deck_text)
 
     return profile
+
+def extract_common_term_from_text(text: str) -> str:
+    """Extract likely company name from text (without PDF path)"""
+    # Use regex to find frequent capitalized brand mentions
+    matches = re.findall(r"\b([A-Z][a-z]+(?:\s[A-Z][a-z]+)*)\b", text)
+    if matches:
+        freq = {name: matches.count(name) for name in set(matches)}
+        sorted_names = sorted(freq.items(), key=lambda x: x[1], reverse=True)
+        likely_term = sorted_names[0][0]
+        return likely_term
+    return "Unknown Company"
+
+def run_pitch_deck_chain(pdf_path: str) -> StartupProfile:
+    """Legacy function that extracts text from PDF and calls the text-based version"""
+    deck_text = pdf_to_text(Path(pdf_path))
+    return run_pitch_deck_chain_with_text(deck_text)

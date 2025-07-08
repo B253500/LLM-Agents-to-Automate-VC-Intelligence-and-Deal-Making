@@ -43,3 +43,20 @@ def run_founder_profiling_chain(profile: StartupProfile) -> StartupProfile:
             :10
         ]
     return profile
+
+def run_founder_profiling_chain_with_text(full_text: str, profile: StartupProfile) -> StartupProfile:
+    """Run founder profiling using extracted text as context."""
+    context = full_text[:5000]  # Truncate if needed for prompt size
+    txt = llm.invoke(PROMPT.format(context=context)).content.strip()
+    first, last = txt.find("{"), txt.rfind("}")
+    if first == -1 or last == -1:
+        return profile
+    try:
+        data = json.loads(txt[first : last + 1])
+        profile.founder_fit_score = float(data.get("founder_fit_score", 0.3))
+        profile.prior_exits = int(data.get("prior_exits", 0))
+    except:
+        pass
+    if not profile.startup_id:
+        profile.startup_id = sha1((profile.name or context[:40]).encode()).hexdigest()[:10]
+    return profile
