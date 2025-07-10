@@ -7,6 +7,8 @@ import pdfplumber
 from google.cloud import vision
 import io
 from docx import Document
+import asyncio
+from memo_api.services import ocr
 
 DOWNLOAD_DIR = Path(__file__).parent.parent / "data" / "vc_reports"
 DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -102,20 +104,27 @@ def extract_text_from_docx(docx_path):
 
 # PDF extraction with OCR fallback
 
-def extract_text_from_pdf(pdf_path):
-    with pdfplumber.open(pdf_path) as pdf:
-        text = "\n".join([page.extract_text() or "" for page in pdf.pages])
-    if not text.strip():
-        # Fallback to OCR if no text was extracted
-        text = extract_text_from_image(pdf_path)
-    return text
+def extract_text_from_pdf(pdf_path, return_structured=False):
+    """
+    Extract text (and optionally structured OCR data) from a PDF using Google Cloud Vision OCR.
+    Args:
+        pdf_path (str): Path to the PDF file.
+        return_structured (bool): If True, return dict with text, tables, figures.
+    Returns:
+        str or dict: Extracted text, or dict with text/tables/figures.
+    """
+    print(f"[OCR] Extracting all text from {pdf_path} using Google Cloud Vision...")
+    result = asyncio.run(ocr.process_pdfs([pdf_path]))
+    if return_structured:
+        return result
+    return result["text"]
 
 # General extraction dispatcher
 
-def extract_text(file_path):
+def extract_text(file_path, return_structured=False):
     ext = os.path.splitext(file_path)[1].lower()
     if ext == ".pdf":
-        return extract_text_from_pdf(file_path)
+        return extract_text_from_pdf(file_path, return_structured=return_structured)
     elif ext == ".docx":
         return extract_text_from_docx(file_path)
     elif ext in [".png", ".jpg", ".jpeg"]:

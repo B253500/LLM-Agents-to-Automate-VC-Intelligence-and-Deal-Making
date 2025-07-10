@@ -9,6 +9,16 @@ class Competitor(BaseModel):
     differentiator: Optional[str] = None
 
 
+class Table(BaseModel):
+    page: int | None = None
+    rows: list[list[str]] = []
+    boundingBox: dict = {}
+
+class Figure(BaseModel):
+    page: int | None = None
+    boundingBox: dict = {}
+    blockType: str = ""
+
 class StartupProfile(BaseModel):
     founder_name: str | None = None
     # Filled in after parsing, so keep it optional during validation
@@ -35,3 +45,13 @@ class StartupProfile(BaseModel):
     implied_valuation: Optional[float] = None
     risk_flags: List[str] = []
     risk_score: Optional[float] = None
+    esg_summary: Optional[str] = None
+    business_model: Optional[str] = None
+    exit_strategy: Optional[str] = None
+    follow_up_questions: Optional[str] = None
+    tech_stack: Optional[str] = None  # Added for technical stack descriptions
+    product_description: Optional[str] = None  # Description of the core product/service
+
+    # New fields for structured data
+    tables: List[Table] = []
+    figures: List[Figure] = []
