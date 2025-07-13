@@ -275,46 +275,109 @@ def synthesize_solution_overview(profile):
     )
 
 # --- Inline Source Attribution for Market Size & Analysis ---
+def format_money(val):
+    try:
+        val = float(val)
+        if val >= 1e9:
+            return f"${val/1e9:.0f} B"
+        elif val >= 1e6:
+            return f"${val/1e6:.0f} M"
+        elif val >= 1e3:
+            return f"${val/1e3:.0f} K"
+        else:
+            return f"${val:,.0f}"
+    except Exception:
+        return str(val)
+
 def format_market_size_section(profile):
-    source = getattr(profile, 'market_source', None) or 'StoreDot April 2023 Corporate Overview'
-    return (
-        f"TAM: ${getattr(profile, 'TAM', 'N/A')}M (Source: {source})\n"
-        f"SAM: ${getattr(profile, 'SAM', 'N/A')}M (Source: {source})\n"
-        f"SOM: ${getattr(profile, 'SOM', 'N/A')}M (Source: {source})\n"
-        f"Market Penetration Potential: {((getattr(profile, 'SOM', 0) / getattr(profile, 'TAM', 1)) * 100 if getattr(profile, 'TAM', 0) else 0):.1f}%\n"
-        f"{getattr(profile, 'sector', '')}\n"
-        f"{getattr(profile, 'market_summary', '')}"
-    )
+    TAM = format_money(getattr(profile, 'TAM', 0))
+    SAM = format_money(getattr(profile, 'SAM', 0))
+    SOM = format_money(getattr(profile, 'SOM', 0))
+    try:
+        penetration = (float(getattr(profile, 'SOM', 0)) / float(getattr(profile, 'TAM', 1))) * 100 if getattr(profile, 'TAM', 0) else 0
+    except Exception:
+        penetration = 0
+    return f"TAM {TAM}, SAM {SAM}, SOM {SOM}; Market Penetration: {penetration:.1f} %"
 
 # --- Expanded Competitive Landscape ---
 def format_competitive_landscape(profile):
     competitors = getattr(profile, 'top_competitors', [])
-    details = []
+    lines = []
     for comp in competitors:
-        name = getattr(comp, 'name', comp.get('name', ''))
-        differentiator = getattr(comp, 'differentiator', comp.get('differentiator', ''))
-        approach = getattr(comp, 'approach', comp.get('approach', ''))
-        tech = getattr(comp, 'technology', comp.get('technology', ''))
-        status = getattr(comp, 'status', comp.get('status', ''))
-        strengths = getattr(comp, 'strengths', comp.get('strengths', ''))
-        weaknesses = getattr(comp, 'weaknesses', comp.get('weaknesses', ''))
-        desc = f"{name}: "
-        if differentiator:
-            desc += f"{differentiator}. "
-        if tech:
-            desc += f"Technology: {tech}. "
-        if approach:
-            desc += f"Approach: {approach}. "
-        if status:
-            desc += f"Status: {status}. "
-        if strengths:
-            desc += f"Strengths: {strengths}. "
-        if weaknesses:
-            desc += f"Weaknesses: {weaknesses}. "
-        details.append(desc.strip())
-    if not details:
-        return 'Competitive analysis pending - market positioning to be evaluated.'
-    return '\n'.join(details)
+        name = comp.get('name', 'Unknown Competitor') if isinstance(comp, dict) else str(comp)
+        desc = comp.get('differentiator', '') if isinstance(comp, dict) else ''
+        strengths = comp.get('strengths', 'Strengths: [Not specified]') if isinstance(comp, dict) else 'Strengths: [Not specified]'
+        weaknesses = comp.get('weaknesses', 'Weaknesses: [Not specified]') if isinstance(comp, dict) else 'Weaknesses: [Not specified]'
+        # Ensure only a single full stop at the end
+        desc = desc.rstrip('.').rstrip() + '.' if desc else ''
+        lines.append(f"• {name}: {desc}\n    {strengths}\n    {weaknesses}")
+    return '\n'.join(lines) if lines else 'Competitive analysis pending - market positioning to be evaluated.'
+
+def format_technical_dd_section(profile):
+    # §8: Summarize technology, give pros/cons, mention further DD needed
+    tech = profile.tech_maturity or 'N/A'
+    moat = profile.moat_strength or ''
+    tech_summary = f"Technology Maturity: {tech}. "
+    if moat:
+        tech_summary += f"Moat: {moat}. "
+    # Add specific technology details if available
+    if hasattr(profile, 'tech_stack') and profile.tech_stack:
+        tech_summary += f"Tech Stack: {profile.tech_stack}. "
+    # Add a sentence about further DD required
+    tech_summary += "Further technical due diligence is required, including independent validation of performance claims, cycle life, and safety."
+    # Only include Scalability/Security if present
+    scalability = getattr(profile, 'scalability', None)
+    security = getattr(profile, 'security', None)
+    if scalability:
+        tech_summary += f" Scalability: {scalability}."
+    if security:
+        tech_summary += f" Security: {security}."
+    return tech_summary.strip()
+
+def format_product_description_section(profile):
+    # §9: Full, detailed product description
+    descs = []
+    if getattr(profile, 'product_description', None):
+        descs.append(profile.product_description)
+    if getattr(profile, 'product_specs', None):
+        descs.append(f"Specs: {profile.product_specs}")
+    if getattr(profile, 'product_roadmap', None):
+        descs.append(f"Roadmap: {profile.product_roadmap}")
+    # Add cell format, cycle life, energy density if available
+    if hasattr(profile, 'cell_format') and profile.cell_format:
+        descs.append(f"Cell Format: {profile.cell_format}")
+    if hasattr(profile, 'cycle_life') and profile.cycle_life:
+        descs.append(f"Cycle Life: {profile.cycle_life}")
+    if hasattr(profile, 'energy_density') and profile.energy_density:
+        descs.append(f"Energy Density: {profile.energy_density}")
+    return '\n'.join(descs) if descs else 'Product description not available.'
+
+def format_funding_stage(profile):
+    funding_stage = getattr(profile, 'funding_stage', None) or 'Undisclosed'
+    if funding_stage.lower() in ['unknown', 'n/a', '']:
+        last_round = getattr(profile, 'last_funding_round', None)
+        last_round_year = getattr(profile, 'last_funding_year', None)
+        if last_round and last_round_year:
+            funding_stage = f"Undisclosed (last round: {last_round} - {last_round_year})"
+        else:
+            funding_stage = "Undisclosed"
+    return funding_stage
+
+def format_financials_section(profile, current_date):
+    implied_valuation = getattr(profile, 'implied_valuation', None)
+    cash_burn_12m = getattr(profile, 'cash_burn_12m', None)
+    runway_months = getattr(profile, 'runway_months', None)
+    if not (implied_valuation or cash_burn_12m or runway_months):
+        return f"Company has not released financials as of {current_date}."
+    else:
+        return f"Implied Valuation: {format_money(implied_valuation) if implied_valuation else 'N/A'}\nCash Burn (12 months): {format_money(cash_burn_12m) if cash_burn_12m else 'N/A'}\nRunway: {runway_months if runway_months else 'N/A'} months"
+
+def format_risk_score(profile):
+    risk_score = getattr(profile, 'risk_score', None)
+    if risk_score is not None and risk_score != 'N/A':
+        return f"Risk Score: {risk_score}"
+    else:
+        return ""
 
 # --- De-duplication Post-processing ---
 def deduplicate_memo(text):
@@ -333,138 +396,92 @@ def deduplicate_memo(text):
 
 def format_memo(profile: StartupProfile) -> str:
     current_date = datetime.now().strftime("%B %d, %Y")
-    market_penetration = (profile.SOM / profile.TAM * 100) if profile.TAM and profile.TAM > 0 and profile.SOM else 0
-    burn_rate_months = profile.runway_months if profile.runway_months else 0
-    valuation_multiple = (profile.implied_valuation / profile.TAM * 100) if profile.TAM and profile.implied_valuation else 0
-    maturity_map = {"prototype": 2, "beta": 4, "production": 8, "enterprise": 10, "unknown": 1, None: 1}
-    tech_score = maturity_map.get(str(profile.tech_maturity).lower() if profile.tech_maturity else None, 1)
-    risk_level = "LOW" if profile.risk_score and profile.risk_score < 0.3 else "MEDIUM" if profile.risk_score and profile.risk_score < 0.7 else "HIGH"
-    competitors_section = (
-        chr(10).join([
-            f"• {getattr(comp, 'name', comp.get('name', ''))}: {getattr(comp, 'differentiator', comp.get('differentiator', 'Competitive positioning to be analyzed'))}"
-            for comp in profile.top_competitors
-        ]) if profile.top_competitors else 'Competitive analysis pending - market positioning to be evaluated'
-    )
-    risks_section = (chr(10).join([f"{i+1}. {risk}" for i, risk in enumerate(profile.risk_flags)]) if profile.risk_flags else 'Risk assessment pending - comprehensive risk analysis required')
-
-    # Format tables for display (show up to 2 in main body, rest in appendix)
-    def format_table(table):
-        rows = table.get("rows", [])
-        if not rows:
-            return "[Table structure detected, but no data extracted.]"
-        header = " | ".join(rows[0])
-        sep = " | ".join(["---"] * len(rows[0]))
-        body = "\n".join([" | ".join(row) for row in rows[1:]])
-        return f"\n{header}\n{sep}\n{body}\n"
-    tables_main = profile.tables[:2] if hasattr(profile, 'tables') and profile.tables else []
-    tables_appendix = profile.tables[2:] if hasattr(profile, 'tables') and len(profile.tables) > 2 else []
-    tables_section = "\n".join([format_table(t) for t in tables_main]) if tables_main else "No tables extracted."
-    appendix_tables_section = "\n".join([format_table(t) for t in tables_appendix]) if tables_appendix else ""
-
-    # Format figures for display (list page and bounding box)
-    def format_figure(fig):
-        return f"Page {fig.get('page', '?')}, BoundingBox: {fig.get('boundingBox', {})}, Type: {fig.get('blockType', '')}"
-    figures_section = "\n".join([format_figure(f) for f in profile.figures]) if hasattr(profile, 'figures') and profile.figures else "No figures extracted."
-
+    # Remove B253500 from all fields
+    def clean(text):
+        return text.replace('B253500', '') if isinstance(text, str) else text
     memo_body = f"""
-INVESTMENT MEMORANDUM – {getattr(profile, 'name', None) or 'COMPANY ANALYSIS'}
-(Prepared {current_date})
-
+INVESTMENT MEMORANDUM – {clean(getattr(profile, 'name', None) or 'COMPANY ANALYSIS')}
 1. DETAILED SUMMARY
 {'='*60}
-{synthesize_detailed_summary(profile)}
+======
+{clean(synthesize_detailed_summary(profile))}
 
-2. COMPANY OVERVIEW (including team and website)
+2. COMPANY OVERVIEW
 {'='*60}
-Company: {getattr(profile, 'name', None) or 'TBD'}
-Sector: {getattr(profile, 'sector', None) or 'TBD'}
-Website: {getattr(profile, 'website', None) or 'TBD'}
-Funding Stage: {getattr(profile, 'funding_stage', None) or 'TBD'}
-Team: {getattr(profile, 'founder_name', None) or 'TBD'}
-{getattr(profile, 'founder_linkedin_formatted', '')}
+Company: {clean(getattr(profile, 'name', None) or 'TBD')}
+Sector: {clean(getattr(profile, 'sector', None) or 'TBD')}
+Website: {clean(getattr(profile, 'website', None) or 'TBD')}
+Funding Stage: {format_funding_stage(profile)}
+Team: {clean(getattr(profile, 'founder_name', None) or 'TBD')}
+{clean(getattr(profile, 'founder_linkedin_formatted', ''))}
 
 3. PROBLEM STATEMENT
 {'='*60}
-{synthesize_problem_statement(profile)}
+{clean(synthesize_problem_statement(profile))}
 
 4. SOLUTION OVERVIEW
 {'='*60}
-{synthesize_solution_overview(profile)}
+{clean(synthesize_solution_overview(profile))}
 
 5. MARKET SIZE & ANALYSIS
 {'='*60}
 {format_market_size_section(profile)}
+{clean(getattr(profile, 'sector', ''))}
 
---- Extracted Tables ---
-{tables_section}
-
-6. COMPETITIVE LANDSCAPE (with identified competitors)
+6. COMPETITIVE LANDSCAPE
 {'='*60}
 {format_competitive_landscape(profile)}
-{getattr(profile, 'competitive_summary', '')}
+{clean(getattr(profile, 'competitive_summary', ''))}
 
 7. BUSINESS MODEL
 {'='*60}
-{profile.business_model or 'Business model analysis not available.'}
+{clean(profile.business_model) if getattr(profile, 'business_model', None) else 'Business model analysis not available.'}
 
 8. TECHNICAL DUE DILIGENCE
 {'='*60}
-Maturity Level: {profile.tech_maturity or 'N/A'}
-Technical Moat: {profile.moat_strength or 'N/A'}
-Tech Stack: {profile.tech_stack or 'N/A'}
-Scalability: {getattr(profile, 'scalability', '')}
-Security: {getattr(profile, 'security', '')}
+{format_technical_dd_section(profile)}
 
 9. PRODUCT DESCRIPTION
 {'='*60}
-{profile.product_description or 'Product description not available.'}
+{format_product_description_section(profile)}
 
 10. FINANCIAL ANALYSIS (with commentary on data availability)
 {'='*60}
-Implied Valuation: ${profile.implied_valuation or 'N/A'}M
-Cash Burn (12 months): ${profile.cash_burn_12m or 'N/A'}M
-Runway: {burn_rate_months} months
-Valuation Multiple: {valuation_multiple:.1f}
-{('Financial data is unavailable.' if not profile.implied_valuation and not profile.cash_burn_12m else '')}
-{getattr(profile, 'financial_summary', '')}
-
---- Extracted Tables (Financial) ---
-{tables_section if tables_main else ''}
+{format_financials_section(profile, current_date)}
 
 11. TEAM & MANAGEMENT
 {'='*60}
-Founder: {profile.founder_name or 'TBD'}
-Founder Fit Score: {profile.founder_fit_score or 'N/A'} / 1.0
-Prior Exits: {profile.prior_exits or '0'}
-Sector Experience: {profile.sector or 'TBD'}
-{profile.founder_linkedin_formatted if hasattr(profile, 'founder_linkedin_formatted') else ''}
+Founder: {clean(profile.founder_name) if getattr(profile, 'founder_name', None) else 'TBD'}
+Founder Fit Score: {getattr(profile, 'founder_fit_score', 'N/A')}
+Prior Exits: {getattr(profile, 'prior_exits', '0')}
+Sector Experience: {clean(profile.sector) if getattr(profile, 'sector', None) else 'TBD'}
+{clean(profile.founder_linkedin_formatted) if hasattr(profile, 'founder_linkedin_formatted') else ''}
 
 12. ESG CONSIDERATIONS
 {'='*60}
-{profile.esg_summary or 'ESG analysis not available.'}
+{clean(profile.esg_summary) if getattr(profile, 'esg_summary', None) else 'ESG analysis not available.'}
 
 13. RISKS & MITIGATIONS
 {'='*60}
-Overall Risk Level: {risk_level}
-Risk Score: {profile.risk_score or 'N/A'} / 1.0
+Overall Risk Level: {getattr(profile, 'risk_level', 'N/A')}
+{format_risk_score(profile)}
 IDENTIFIED RISKS:
-{risks_section}
+{chr(10).join([f"{i+1}. {clean(risk)}" for i, risk in enumerate(profile.risk_flags)]) if getattr(profile, 'risk_flags', None) else 'Section not available.'}
 
 14. INVESTMENT & EXIT STRATEGIES
 {'='*60}
-{profile.exit_strategy or 'Exit strategy analysis not available.'}
+{clean(profile.exit_strategy) if getattr(profile, 'exit_strategy', None) else 'Exit strategy analysis not available.'}
 
 15. FOLLOW-UP QUESTIONS & NEXT STEPS
 {'='*60}
-{profile.follow_up_questions or 'No follow-up questions generated.'}
+{clean(profile.follow_up_questions) if getattr(profile, 'follow_up_questions', None) else 'No follow-up questions generated.'}
 
 16. FIGURES & VISUALS
 {'='*60}
-{figures_section}
+{clean(getattr(profile, 'figures_section', ''))}
 
 17. APPENDIX: ADDITIONAL TABLES
 {'='*60}
-{appendix_tables_section}
 """
     llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0.2)
     discussion_prompt = f"""
@@ -543,11 +560,17 @@ def save_memo_with_template(memo_text, profile, output_path):
         print("[Warning] {{COVER_TEXT}} placeholder not found in template.")
     # --- Replace {{MEMO_CONTENT}} in-place, inheriting alignment ---
     memo_found = False
-    section_header_pattern = re.compile(r"^\d+\.\s+[A-Z][A-Z &()]+$")
+    section_header_pattern = re.compile(r"^\d+\.\s+[A-Z][A-Z &()]+")
+    all_caps_pattern = re.compile(r"^[A-Z0-9 &:'\-]+$")
     known_headers = [
+        'Detailed Summary', 'Company Overview', 'Problem Statement', 'Solution Overview', 'Market Size & Analysis',
+        'Competitive Landscape', 'Business Model', 'Technical Due Diligence', 'Product Description',
+        'Financial Analysis', 'Team & Management', 'ESG Considerations', 'Risks & Mitigations',
+        'Investment & Exit Strategies', 'Follow-up Questions & Next Steps', 'Figures & Visuals',
+        'Appendix: Additional Tables', 'Discussion & Analyst Commentary',
         'Key Weaknesses', 'Opportunities', 'Risks', 'Actionable Recommendations for Investors',
         'Summary', 'Analysis Framework', 'Strengths', 'Weaknesses', 'Recommendations',
-        'Discussion & Analyst Commentary', 'Appendix', 'Figures & Visuals',
+        'Appendix', 'Figures & Visuals',
         'ESG Alignment', 'Technical Validation Gaps', 'Competitive Landscape Challenges',
         'Execution & Commercialization Risk', 'Technology Risk', 'Competitive Displacement',
         'IP & Freedom to Operate', 'Financial & Funding Risk', 'Market Adoption & Regulatory Risk',
@@ -558,29 +581,64 @@ def save_memo_with_template(memo_text, profile, output_path):
         if '{{MEMO_CONTENT}}' in p.text:
             memo_found = True
             alignment = p.alignment
-            # Remove the placeholder paragraph
             p.clear()
-            # Insert memo content with formatting
             memo_lines = memo_text.split('\n')
             for idx, line in enumerate(memo_lines):
                 line_stripped = line.strip()
-                is_numbered_header = section_header_pattern.match(line_stripped)
-                is_known_header = line_stripped.lower() in known_headers_lower
-                if idx == 0:
-                    para = p  # reuse the cleared placeholder paragraph
-                else:
+                # Remove text in brackets from section headers
+                header_cleaned = re.sub(r"\s*\([^)]*\)", "", line_stripped)
+                is_numbered_header = section_header_pattern.match(header_cleaned)
+                is_all_caps = all_caps_pattern.match(header_cleaned) and len(header_cleaned) > 6
+                is_known_header = header_cleaned.lower() in known_headers_lower
+                # Special handling for the very first section (Detailed Summary)
+                if idx == 0 and (is_numbered_header or is_all_caps or is_known_header):
+                    # Header paragraph (always create a new paragraph, do not reuse p)
                     para = doc.add_paragraph()
-                    # Move the new paragraph to be right after the previous one
-                    prev_para = p if idx == 1 else last_para
-                    prev_para._element.addnext(para._element)
-                run = para.add_run(line_stripped)
-                run.font.name = 'Times New Roman'
-                run.font.size = Pt(12)
-                if is_numbered_header or is_known_header:
+                    run = para.add_run(header_cleaned)
+                    run.font.name = 'Times New Roman'
+                    run.font.size = Pt(12)
                     run.bold = True
-                para.alignment = alignment if alignment is not None else WD_ALIGN_PARAGRAPH.JUSTIFY
-                para.paragraph_format.line_spacing = 1.5
-                last_para = para
+                    para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY  # Force justified alignment
+                    para.paragraph_format.line_spacing = 1.5
+                    para.paragraph_format.space_before = Pt(0)
+                    para.paragraph_format.space_after = Pt(0)
+                    last_para = para
+                    continue  # Skip to next line (the summary will be handled as normal text)
+                if is_numbered_header or is_all_caps or is_known_header:
+                    if idx != 0:
+                        blank_para = doc.add_paragraph()
+                        blank_para.paragraph_format.space_after = Pt(0)
+                    para = doc.add_paragraph()
+                    run = para.add_run(header_cleaned)
+                    run.font.name = 'Times New Roman'
+                    run.font.size = Pt(12)
+                    run.bold = True
+                    para.alignment = alignment if alignment is not None else WD_ALIGN_PARAGRAPH.JUSTIFY
+                    para.paragraph_format.line_spacing = 1.5
+                    para.paragraph_format.space_after = Pt(6)
+                    last_para = para
+                else:
+                    if idx == 1:  # This is the summary right after the header
+                        para = doc.add_paragraph()
+                        run = para.add_run(line_stripped)
+                        run.font.name = 'Times New Roman'
+                        run.font.size = Pt(12)
+                        para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY  # Force justified alignment
+                        para.paragraph_format.line_spacing = 1.5
+                        para.paragraph_format.space_before = Pt(0)
+                        para.paragraph_format.space_after = Pt(0)
+                        last_para = para
+                    else:
+                        if idx == 0:
+                            para = p
+                        else:
+                            para = doc.add_paragraph()
+                        run = para.add_run(line_stripped)
+                        run.font.name = 'Times New Roman'
+                        run.font.size = Pt(12)
+                        para.alignment = alignment if alignment is not None else WD_ALIGN_PARAGRAPH.JUSTIFY
+                        para.paragraph_format.line_spacing = 1.5
+                        last_para = para
             break
     if not memo_found:
         print("[Warning] {{MEMO_CONTENT}} placeholder not found in template.")
