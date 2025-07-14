@@ -11,19 +11,19 @@ from core.hybrid_context import get_hybrid_context
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.2)
 
-SYSTEM = """\
-You are a senior CTO performing technical due-diligence for VC deals.
-Analyze the startup's technology and provide technical assessment.
-
-Return JSON with:
-  tech_maturity  – one of ["prototype","beta","production","enterprise","unknown"]
-  moat_strength  – ≤25-word description of defensible IP / moat / competitive advantage
-  tech_stack     – brief description of key technologies used
-  scalability    – assessment of technical scalability
-  security       – brief security assessment if applicable
-
-If you cannot assess a field due to insufficient information, set it to null.
-Provide realistic assessments based on available information.
+SYSTEM = """
+You are a senior CTO performing technical due diligence for venture capital investment.
+For the given company, provide a detailed, critical analysis of the technology, including:
+- Technical feasibility and performance (with specific strengths and weaknesses)
+- Scalability and architecture
+- Integration complexity and dependencies
+- Security and data protection risks
+- Regulatory and compliance issues
+- Implementation complexity and testing requirements
+- Assumption risks and dependencies
+- What needs to be validated or further investigated
+Structure your answer with subheadings and bullet points for each area. Be specific, critical, and highlight both strengths and weaknesses. If information is missing, note it explicitly.
+Return a detailed, multi-paragraph, multi-bullet analysis suitable for a VC investment memo.
 """
 
 PROMPT = ChatPromptTemplate.from_messages(

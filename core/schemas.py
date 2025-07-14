@@ -51,6 +51,7 @@ class StartupProfile(BaseModel):
     follow_up_questions: Optional[str] = None
     tech_stack: Optional[str] = None  # Added for technical stack descriptions
     product_description: Optional[str] = None  # Description of the core product/service
+    executives: Optional[List[dict]] = []
 
     # New fields for structured data
     tables: List[Table] = []

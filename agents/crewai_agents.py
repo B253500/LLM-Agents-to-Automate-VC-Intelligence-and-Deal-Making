@@ -96,18 +96,16 @@ cagr_tool = Tool(
 
 # --- Website finder tool with disambiguation ---
 def find_company_website(company_name, founder_name=None, sector=None):
-    # Use all available info to disambiguate
-    query = f"Official website for {company_name}"
-    if founder_name:
-        query += f" founded by {founder_name}"
-    if sector:
-        query += f" in {sector} sector"
-    # Placeholder: In production, use a real web search or API
-    guess = f"https://{company_name.lower().replace(' ', '')}.com"
-    # Simulate a check for founder/sector in the result (in real use, parse the result)
-    if founder_name and founder_name.lower() not in guess.lower():
-        return f"{guess}\nWarning: Website could not be confidently matched to the founder/sector; manual review recommended."
-    return guess
+    # Compose a reasoning prompt for the LLM
+    prompt = (
+        f"You are a research analyst. Find the official website for the company '{company_name}'."
+        f"{' The founder is ' + founder_name + '.' if founder_name else ''}"
+        f"{' The sector is ' + sector + '.' if sector else ''}"
+        " Use Google or web search if needed. Return only the official website URL. If ambiguous, explain your reasoning."
+    )
+    llm = ChatOpenAI(model='gpt-4', api_key=os.getenv('OPENAI_API_KEY'))
+    result = llm.invoke(prompt).content.strip()
+    return result
 
 website_finder_tool = Tool(
     name="Company Website Finder",

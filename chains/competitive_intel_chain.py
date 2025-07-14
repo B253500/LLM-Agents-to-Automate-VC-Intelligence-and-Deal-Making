@@ -6,25 +6,33 @@ from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 from core.schemas import StartupProfile, Competitor
 from core.hybrid_context import get_hybrid_context
+import sys
+sys.path.append('.')  # Ensure root is in path for import
+from core.perplexity_utils import search_perplexity
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0.2)
 
 def web_search_competitive_context(company_name, sector):
-    # Placeholder: Integrate EXA, Perplexity, or other API here
-    # Return a string with web search results
-    return ""
+    """
+    Use Perplexity to get up-to-date product/technology descriptions for top competitors in the sector.
+    """
+    if not company_name and not sector:
+        return ""
+    query = f"List 3-4 direct competitors to {company_name or 'the company'} in the {sector or ''} sector. For each, provide a concise description of their main product, technology, and differentiator."
+    result = search_perplexity(query)
+    return result or ""
 
 SYSTEM = """
 You are a VC analyst mapping the competitive landscape.
 Analyze the company's sector and provide:
-- Up to 3 direct competitors (name, differentiator)
+- Up to 5 direct competitors (for each, return: name, website, total funding, product offering (concise description), traction (if available), and differentiator)
 - A concise summary of the competitive landscape
 - Key competitive threats and opportunities
 - Any recent news or changes (use web search context if available)
 - Attribute sources where possible
-Return JSON with a 'top_competitors' array and a 'summary' field.
-If unknown, return empty array.
+Return JSON with a 'top_competitors' array (each object: name, website, total_funding, product_offering, traction, differentiator) and a 'summary' field.
+If unknown, return empty array or null for fields.
 """
 
 PROMPT = ChatPromptTemplate.from_messages([
