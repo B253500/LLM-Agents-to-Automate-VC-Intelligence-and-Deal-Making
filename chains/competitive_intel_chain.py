@@ -25,14 +25,14 @@ def web_search_competitive_context(company_name, sector):
 
 SYSTEM = """
 You are a VC analyst mapping the competitive landscape.
-Analyze the company's sector and provide:
-- Up to 5 direct competitors (for each, return: name, website, total funding, product offering (concise description), traction (if available), and differentiator)
-- A concise summary of the competitive landscape
-- Key competitive threats and opportunities
-- Any recent news or changes (use web search context if available)
-- Attribute sources where possible
-Return JSON with a 'top_competitors' array (each object: name, website, total_funding, product_offering, traction, differentiator) and a 'summary' field.
-If unknown, return empty array or null for fields.
+For each of the top 3-5 direct competitors, return:
+- name
+- website (official URL, always try to find it)
+- total funding (if available)
+- product_offering (2-3 sentence description)
+- traction (major customers, partnerships, or market presence)
+- differentiator (what makes them unique)
+Use web search context if available. Return as a JSON array 'top_competitors'.
 """
 
 PROMPT = ChatPromptTemplate.from_messages([
@@ -80,3 +80,25 @@ Product: {getattr(profile, 'tech_stack', '')}
     if not profile.startup_id:
         profile.startup_id = sha1((profile.name or context[:40]).encode()).hexdigest()[:10]
     return profile
+
+def enrich_competitor_details(competitors):
+    enriched = []
+    for comp in competitors:
+        # Enrich website if missing
+        if not comp.get('website') and comp.get('name'):
+            query = f"What is the official website for {comp['name']} (battery technology company)?"
+            website = search_perplexity(query)
+            if website and 'http' in website:
+                # Extract first URL from response
+                import re
+                match = re.search(r"https?://[\w./-]+", website)
+                if match:
+                    comp['website'] = match.group(0)
+        # Enrich product_offering if missing
+        if not comp.get('product_offering') and comp.get('name'):
+            query = f"What is the main product or technology offering of {comp['name']} in battery technology?"
+            product = search_perplexity(query)
+            if product:
+                comp['product_offering'] = product.strip()
+        enriched.append(comp)
+    return enriched

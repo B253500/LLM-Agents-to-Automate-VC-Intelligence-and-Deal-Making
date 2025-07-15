@@ -30,6 +30,7 @@ from docx.shared import Inches, Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 import subprocess
 from core.perplexity_utils import search_perplexity
+from core.visual_utils import extract_images_from_pdf, generate_sample_market_chart
 
 CACHE_DIR = "extraction_cache"
 os.makedirs(CACHE_DIR, exist_ok=True)
@@ -88,6 +89,34 @@ def enrich_executives_with_perplexity(company_name, existing_execs):
                     if not any(e.get('name', '').lower() == name.lower() for e in execs):
                         execs.append({'name': name, 'role': role, 'linkedin': linkedin})
     return execs[:3]
+
+def enrich_executive_details_with_perplexity(company_name, executives):
+    enriched = []
+    for exec in executives:
+        name = exec.get('name', '').strip()
+        role = exec.get('role', '').strip()
+        linkedin = exec.get('linkedin', '').strip()
+        bio = exec.get('bio', '').strip() if 'bio' in exec else ''
+        # Enrich LinkedIn if missing
+        if not linkedin and name and company_name:
+            query = f"What is the LinkedIn profile URL for {name} at {company_name}?"
+            result = search_perplexity(query)
+            if result and 'linkedin.com/in/' in result:
+                import re
+                # Find LinkedIn URL in result
+                match = re.search(r"https?://[\w./-]*linkedin.com/in/[\w/_-]+", result)
+                if match:
+                    linkedin = match.group(0)
+        # Enrich bio if missing or generic
+        if (not bio or 'not available' in bio.lower() or 'unknown' in bio.lower()) and name and role and company_name:
+            query = f"Write a 2-3 sentence professional bio for {name}, {role} at {company_name}. Include notable past roles, companies, and achievements if available."
+            result = search_perplexity(query)
+            if result and len(result.split()) > 8:
+                bio = result.strip()
+        exec['linkedin'] = linkedin
+        exec['bio'] = bio
+        enriched.append(exec)
+    return enriched
 
 # Add product_description to StartupProfile if not present
 if not hasattr(StartupProfile, 'product_description'):
@@ -312,6 +341,8 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
             profile.website = run_website_finder(profile.name, profile.founder_name, profile.sector)
         except Exception as e:
             print(f"[Website Enrichment] Error: {e}")
+    if hasattr(profile, 'executives') and isinstance(profile.executives, list):
+        profile.executives = enrich_executive_details_with_perplexity(profile.name, profile.executives)
     return profile
 
 
@@ -445,7 +476,9 @@ def format_market_size_section(profile):
     if narrative:
         lines.append(narrative.strip())
     lines.append(f"TAM {TAM}, SAM {SAM}, SOM {SOM}; Market Penetration: {penetration:.1f} %")
-    lines.append(f"Discussion: {market_discussion}")
+    if market_discussion:
+        lines.append(market_discussion)
+    # Remove sector name at end (do not append)
     return '\n'.join(lines)
 
 # --- Expanded Competitive Landscape ---
@@ -833,10 +866,8 @@ Team: {clean(getattr(profile, 'founder_name', None) or 'TBD')}
 15. FOLLOW-UP QUESTIONS & NEXT STEPS
 {format_followup_section(profile)}
 
-16. FIGURES & VISUALS
+16. ADDITIONAL FIGURES & VISUALS
 {clean(getattr(profile, 'figures_section', ''))}
-
-17. APPENDIX: ADDITIONAL TABLES
 """
     llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0.2)
     discussion_prompt = f"""
@@ -932,6 +963,8 @@ def save_memo_with_template(memo_text, profile, output_path):
         # Add more as needed
     ]
     known_headers_lower = [h.lower() for h in known_headers]
+    # In save_memo_with_template, track page breaks and insert a blank paragraph after the 2nd page break
+    page_break_count = 0
     for i, p in enumerate(doc.paragraphs):
         if '{{MEMO_CONTENT}}' in p.text:
             memo_found = True
@@ -939,8 +972,9 @@ def save_memo_with_template(memo_text, profile, output_path):
             p.clear()
             memo_lines = memo_text.split('\n')
             for idx, line in enumerate(memo_lines):
-                line_stripped = line.strip()
-                line_stripped = line_stripped.replace('**', '')
+                line_stripped = line.strip().replace('**', '').replace('<HEADER>', '').strip()
+                if line_stripped == '•' or not line_stripped:
+                    continue
                 # Remove text in brackets from section headers
                 header_cleaned = re.sub(r"\s*\([^)]*\)", "", line_stripped)
                 # Remove dashes, asterisks, hashes, and extra symbols from headers and bullets
@@ -949,6 +983,46 @@ def save_memo_with_template(memo_text, profile, output_path):
                 is_numbered_header = section_header_pattern.match(header_cleaned)
                 is_all_caps = all_caps_pattern.match(header_cleaned) and len(header_cleaned) > 6
                 is_known_header = header_cleaned.lower() in known_headers_lower
+                # --- PATCH: Insert images/graphs after 'Figures & Visuals' header ---
+                if header_cleaned.lower() == 'figures & visuals':
+                    para = doc.add_paragraph()
+                    para.paragraph_format.space_before = Pt(12)
+                    run = para.add_run(header_cleaned)
+                    run.font.name = 'Times New Roman'
+                    run.font.size = Pt(12)
+                    run.bold = True
+                    para.alignment = alignment if alignment is not None else WD_ALIGN_PARAGRAPH.JUSTIFY
+                    para.paragraph_format.line_spacing = 1.5
+                    para.paragraph_format.space_after = Pt(6)
+                    para.paragraph_format.first_line_indent = Pt(0)
+                    last_para = para
+                    # Insert extracted images
+                    if hasattr(profile, 'extracted_image_paths') and profile.extracted_image_paths:
+                        for img_idx, img_path in enumerate(profile.extracted_image_paths):
+                            img_para = doc.add_paragraph()
+                            run = img_para.add_run()
+                            try:
+                                run.add_picture(img_path, width=Pt(320))  # ~4.5in wide
+                            except Exception as e:
+                                run.add_text(f"[Could not insert image: {img_path}]")
+                            # Caption
+                            caption = img_para.add_run(f"\nFigure {img_idx+1}: Extracted from pitch deck")
+                            caption.font.name = 'Times New Roman'
+                            caption.font.size = Pt(12)
+                            img_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    # Insert generated chart
+                    if hasattr(profile, 'market_chart_path') and profile.market_chart_path:
+                        chart_para = doc.add_paragraph()
+                        run = chart_para.add_run()
+                        try:
+                            run.add_picture(profile.market_chart_path, width=Pt(320))
+                        except Exception as e:
+                            run.add_text(f"[Could not insert chart: {profile.market_chart_path}]")
+                        caption = chart_para.add_run("\nFigure: Market Size Chart")
+                        caption.font.name = 'Times New Roman'
+                        caption.font.size = Pt(12)
+                        chart_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    continue
                 # Special handling for DISCUSSION & ANALYST COMMENTARY section headers
                 discussion_headers = [
                     'Analyst Commentary on StoreDot Investment Memo', 'Key Strengths', 'Key Weaknesses',
@@ -1086,6 +1160,18 @@ def save_memo_with_template(memo_text, profile, output_path):
                 para.paragraph_format.line_spacing = 1.5
                 para.paragraph_format.first_line_indent = Pt(0)
                 last_para = para
+                # In save_memo_with_template, track page breaks and insert a blank paragraph after the 2nd page break
+                if line_stripped == '<PAGE_BREAK>':
+                    doc.add_page_break()
+                    page_break_count += 1
+                    # Insert a blank paragraph after the 2nd page break (i.e., starting from the 3rd page)
+                    if page_break_count >= 2:
+                        blank_para = doc.add_paragraph()
+                        blank_para.add_run("")
+                        blank_para.paragraph_format.space_after = Pt(0)
+                        blank_para.paragraph_format.space_before = Pt(0)
+                        blank_para.paragraph_format.first_line_indent = Pt(0)
+                    continue
             break
     if not memo_found:
         print("[Warning] {{MEMO_CONTENT}} placeholder not found in template.")
@@ -1140,13 +1226,27 @@ def main():
         # Populate structured data
         profile.tables = tables
         profile.figures = figures
-        memo_text = format_memo(profile)
-        print(memo_text)
 
+        # --- Extract images from PDF and generate chart ---
         output_dir = "out"
         os.makedirs(output_dir, exist_ok=True)
         company_name = profile.name or "unknown_company"
         date_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        images_dir = os.path.join(output_dir, f"{company_name.replace(' ', '_')}_images_{date_str}")
+        extracted_image_paths = extract_images_from_pdf(file_path, images_dir)
+        # Example: Generate a sample market chart if market size data is available
+        market_chart_path = None
+        if hasattr(profile, "market_size_by_year") and profile.market_size_by_year:
+            chart_path = os.path.join(output_dir, f"{company_name.replace(' ', '_')}_market_chart_{date_str}.png")
+            generate_sample_market_chart(profile.market_size_by_year, chart_path)
+            market_chart_path = chart_path
+        # Attach visuals to profile for use in memo formatting
+        profile.extracted_image_paths = extracted_image_paths
+        profile.market_chart_path = market_chart_path
+
+        memo_text = format_memo(profile)
+        print(memo_text)
+
         docx_filename = f"memo_{company_name.replace(' ', '_')}_{date_str}.docx"
         docx_path = os.path.join(output_dir, docx_filename)
         save_memo_with_template(memo_text, profile, docx_path)

@@ -52,7 +52,11 @@ class StartupProfile(BaseModel):
     tech_stack: Optional[str] = None  # Added for technical stack descriptions
     product_description: Optional[str] = None  # Description of the core product/service
     executives: Optional[List[dict]] = []
+    prior_exit_details: Optional[List[dict]] = []
 
     # New fields for structured data
     tables: List[Table] = []
     figures: List[Figure] = []
+    # Visuals and charts for memo
+    extracted_image_paths: Optional[List[str]] = []
+    market_chart_path: Optional[str] = None
