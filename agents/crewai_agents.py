@@ -14,6 +14,7 @@ from chains.risk_assessment_chain import run_risk_assessment_chain
 from core.schemas import StartupProfile
 import json
 
+# Update environment variable lookups to use old names
 # Portkey, fallback to direct OpenAI if not available
 try:
     from portkey_ai import createHeaders, PORTKEY_GATEWAY_URL
@@ -22,11 +23,11 @@ except ImportError:
     PORTKEY_AVAILABLE = False
     print("Portkey not available, falling back to direct OpenAI usage")
 
-def get_portkey_llm(trace_id=None, span_id=None, agent_name=None):
+def vc_get_portkey_llm(trace_id=None, span_id=None, agent_name=None):
     if PORTKEY_AVAILABLE:
         headers = createHeaders(
             provider="openai",
-            api_key=os.getenv("PORTKEY_API_KEY"),
+            api_key=os.getenv("Portkey_KEY"),
             trace_id=trace_id,
         )
         if span_id:
@@ -38,7 +39,7 @@ def get_portkey_llm(trace_id=None, span_id=None, agent_name=None):
             model="gpt-4o",
             base_url=PORTKEY_GATEWAY_URL,
             default_headers=headers,
-            api_key=os.getenv("OPENAI_API_KEY")
+            api_key=os.getenv("OpenAI_KEY")
         )
     else:
         # Fallback to direct OpenAI usage
@@ -65,18 +66,18 @@ class CustomEXASearchTool(EXASearchTool):
 exa_search_tool = CustomEXASearchTool()
 
 # Market Size tool
-def estimate_market_size(data: str) -> str:
+def vc_estimate_market_size(data: str) -> str:
     return f"Estimated market size based on: {data}"
 
 market_size_tool = Tool(
     name="Market Size Estimator",
-    func=estimate_market_size,
+    func=vc_estimate_market_size,
     description="Estimates market size based on provided data."
 )
 
 # CAGR calculator tool
 
-def calculate_cagr(args: dict) -> float:
+def vc_calculate_cagr(args: dict) -> float:
     initial_value = args.get('initial_value')
     final_value = args.get('final_value')
     num_years = args.get('num_years')
@@ -90,7 +91,7 @@ def calculate_cagr(args: dict) -> float:
 
 cagr_tool = Tool(
     name="CAGR Calculator",
-    func=calculate_cagr,
+    func=vc_calculate_cagr,
     description="Calculates CAGR given a dictionary with keys 'initial_value', 'final_value', and 'num_years'."
 )
 
@@ -234,9 +235,9 @@ financial_research_crewai_tool = Tool(
 )
 
 # Agents
-def create_agent(role, goal, backstory, tools, trace_id=None, agent_name=None):
+def vc_create_agent(role, goal, backstory, tools, trace_id=None, agent_name=None):
     span_id = os.urandom(16).hex() if trace_id else None
-    llm = get_portkey_llm(trace_id, span_id, agent_name)
+    llm = vc_get_portkey_llm(trace_id, span_id, agent_name)
 
     return Agent(
         role=role,
@@ -250,8 +251,8 @@ def create_agent(role, goal, backstory, tools, trace_id=None, agent_name=None):
         max_execution_time=300
     )
 
-def get_market_analyst(trace_id=None):
-    return create_agent(
+def vc_get_market_analyst(trace_id=None):
+    return vc_create_agent(
         role='Market size Research Analyst',
         goal='Research and analyze the market size TAM of AI subsegment markets focusing on specialized market sizes and growth rates',
         backstory='Expert in doing research and calculating the market size TAM of specific subsegments of the AI market, and growth rates. Also search for sector-specific growth drivers. Known for providing granular market insights rather than general AI market statistics like the overall size of AI market which is irrelevant.',
@@ -260,8 +261,8 @@ def get_market_analyst(trace_id=None):
         agent_name='market_analyst'
     )
 
-def get_competitor_analyst(trace_id=None):
-    return create_agent(
+def vc_get_competitor_analyst(trace_id=None):
+    return vc_create_agent(
         role='AI Startup Intelligence Specialist',
         goal='Identify and analyze relevant AI startups within specific AI subsegment markets',
         backstory="""Expert in mapping competitive landscapes for specific AI verticals. 
@@ -271,8 +272,8 @@ def get_competitor_analyst(trace_id=None):
         agent_name='competitor_analyst'
     )
 
-def get_strategy_advisor(trace_id=None):
-    return create_agent(
+def vc_get_strategy_advisor(trace_id=None):
+    return vc_create_agent(
         role='Project Manager',
         goal='Efficiently manage the crew and ensure high-quality task completion with a focus on ensuring that the results are very specific and relevant and not generic and too zoom out',
         backstory="""You're an experienced project manager, skilled in overseeing complex projects and guiding teams to success. Your role is to coordinate the efforts of the crew members, ensuring that each task is completed on time and that the results are relevant and specific to the market.""",
@@ -282,7 +283,7 @@ def get_strategy_advisor(trace_id=None):
     )
 
 def get_website_finder_agent(trace_id=None):
-    return create_agent(
+    return vc_create_agent(
         role='Company Website Finder',
         goal='Find the official website for the company, using founder and sector for disambiguation.',
         backstory='Expert in web research and company validation.',
@@ -293,7 +294,7 @@ def get_website_finder_agent(trace_id=None):
 
 # --- CrewAI agent creators for classic tasks ---
 def get_technical_dd_agent(trace_id=None):
-    return create_agent(
+    return vc_create_agent(
         role='Technical Due Diligence Lead',
         goal='Assess technical maturity, product moat, and technology risks of the startup.',
         backstory='25-year CTO who has evaluated 500+ VC deals. Expert in technical due diligence, product evaluation, and technology risk assessment.',
@@ -303,7 +304,7 @@ def get_technical_dd_agent(trace_id=None):
     )
 
 def get_founder_profiling_agent(trace_id=None):
-    return create_agent(
+    return vc_create_agent(
         role='Founder-profiling Partner',
         goal="Evaluate founders' track-record, fit, and entrepreneurial experience.",
         backstory='20-year VC who focuses on team quality, founder-market fit, and leadership potential. Expert in assessing founder backgrounds and prior exits.',
@@ -313,7 +314,7 @@ def get_founder_profiling_agent(trace_id=None):
     )
 
 def get_market_sizing_agent(trace_id=None):
-    return create_agent(
+    return vc_create_agent(
         role='Market Sizing Analyst',
         goal='Analyze the market size and expected growth rate for the startup sector.',
         backstory='Expert in market research and sizing for startups.',
@@ -323,7 +324,7 @@ def get_market_sizing_agent(trace_id=None):
     )
 
 def get_financial_analysis_agent(trace_id=None):
-    return create_agent(
+    return vc_create_agent(
         role='Financial Analyst',
         goal='Estimate burn, runway, implied valuation, and analyze financial health of the startup.',
         backstory='Ex-investment-banker who crunches numbers for VC deals. Expert in financial modeling, cash flow analysis, and startup valuation.',
@@ -333,7 +334,7 @@ def get_financial_analysis_agent(trace_id=None):
     )
 
 def get_competitive_intel_agent(trace_id=None):
-    return create_agent(
+    return vc_create_agent(
         role='Competitive Intelligence Specialist',
         goal='Identify and analyze relevant competitors for the startup.',
         backstory='Expert in mapping competitive landscapes for startups.',
@@ -343,7 +344,7 @@ def get_competitive_intel_agent(trace_id=None):
     )
 
 def get_risk_assessment_agent(trace_id=None):
-    return create_agent(
+    return vc_create_agent(
         role='Risk Assessment Officer',
         goal='Identify red-flags, compute risk score, and assess overall risk profile of the startup.',
         backstory='Former credit-risk VP now in VC. Expert in risk modeling, red-flag detection, and startup risk assessment.',
@@ -353,7 +354,7 @@ def get_risk_assessment_agent(trace_id=None):
     )
 
 def get_financial_research_agent(trace_id=None):
-    return create_agent(
+    return vc_create_agent(
         role='Company Financial Researcher',
         goal='Find the latest available financial data for the company from the internet, using founder and sector for disambiguation.',
         backstory='Expert in web research and financial data extraction.',
@@ -363,7 +364,7 @@ def get_financial_research_agent(trace_id=None):
     )
 
 __all__ = [
-    'get_market_analyst', 'get_competitor_analyst', 'get_strategy_advisor', 'get_website_finder_agent',
+    'vc_get_market_analyst', 'vc_get_competitor_analyst', 'vc_get_strategy_advisor', 'get_website_finder_agent',
     'get_technical_dd_agent', 'get_founder_profiling_agent', 'get_market_sizing_agent',
     'get_financial_analysis_agent', 'get_competitive_intel_agent', 'get_risk_assessment_agent',
     'get_financial_research_agent'

@@ -2,7 +2,7 @@ import sys
 import json
 from crewai import Crew, Task, Process
 from dotenv import load_dotenv
-from agents.crewai_agents import get_market_analyst, get_competitor_analyst, get_strategy_advisor, get_website_finder_agent, get_financial_research_agent
+from agents.crewai_agents import vc_get_market_analyst, vc_get_competitor_analyst, vc_get_strategy_advisor, get_website_finder_agent, get_financial_research_agent
 from datetime import datetime
 import os
 from fpdf import FPDF
@@ -188,9 +188,9 @@ def run_deck_analysis(pdf_path, trace_id=None):
 # --- CrewAI orchestration ---
 def run_crewai_analysis(market_opportunity, trace_id):
     print(f"Analyzing market opportunity: {market_opportunity}")
-    market_analyst = get_market_analyst(trace_id)
-    competitor_analyst = get_competitor_analyst(trace_id)
-    strategy_advisor = get_strategy_advisor(trace_id)
+    market_analyst = vc_get_market_analyst(trace_id)
+    competitor_analyst = vc_get_competitor_analyst(trace_id)
+    strategy_advisor = vc_get_strategy_advisor(trace_id)
     market_task = Task(
         description=f"""Analyze the market size and expected growth rate for market of {market_opportunity}.
         1. Estimate the total market size and growth rate (CAGR). Avoid taking the overall size of the AI market and randomly assuming a percentage of that market goes towards the subsegment market; instead, search for data on the specific subsegment data directly.

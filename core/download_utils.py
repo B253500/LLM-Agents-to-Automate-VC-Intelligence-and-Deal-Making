@@ -1,13 +1,13 @@
 import json
 import re
-from pathlib import Path
-from playwright.sync_api import Error as PlaywrightError
 import os
 import pdfplumber
-from google.cloud import vision
 import io
-from docx import Document
 import asyncio
+from pathlib import Path
+from playwright.sync_api import Error as PlaywrightError
+from google.cloud import vision
+from docx import Document
 from memo_api.services import ocr
 
 DOWNLOAD_DIR = Path(__file__).parent.parent / "data" / "vc_reports"
@@ -16,7 +16,7 @@ MAPPING_FILE = Path(__file__).parent.parent / "downloaded_reports.json"
 NAV_TIMEOUT = 60000
 DOWNLOAD_TIMEOUT = 120000
 
-# --- Mapping helpers ---
+#  Mapping helpers 
 def load_downloaded_mapping():
     if MAPPING_FILE.exists():
         with open(MAPPING_FILE, "r") as f:
@@ -27,7 +27,7 @@ def save_downloaded_mapping(mapping):
     with open(MAPPING_FILE, "w") as f:
         json.dump(mapping, f, indent=2)
 
-# --- PDF download/save helpers ---
+# PDF download/save helpers 
 def _fetch_and_save(page, url: str, detail_url=None):
     """Helper: fetch PDF via HTTP and save. Updates mapping if detail_url is provided."""
     fname = url.split('/')[-1].split('?')[0]
