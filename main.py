@@ -30,6 +30,7 @@ from agents.founder_profiling_agent import build_founder_profiling_agent
 from agents.financial_analysis_agent import build_financial_analysis_agent
 from agents.risk_assessment_agent import build_risk_assessment_agent
 from agents.deck_agent import build_deck_agent
+from crewai import Crew, Agent, Task
 
 CACHE_DIR = "extraction_cache"
 os.makedirs(CACHE_DIR, exist_ok=True)
@@ -197,14 +198,13 @@ Context:
     response = llm.invoke(prompt)
     return response.content if hasattr(response, 'content') else response
 
-# Update run_all_sequential_with_text to use both chains and agents
-
-def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_path: str) -> StartupProfile:
-    print(f"🔍 Processing extracted text ({len(full_text)} characters)")
-    print(f"📄 Starting with fresh profile: {profile.name}")
-    # Deck extraction (chain + agent)
+# --- CrewAI multi-agent orchestration with NO agent-to-agent delegation ---
+def run_multi_agent_orchestration_with_text(text, profile, file_path):
+    import json
+    # --- Pitch Deck ---
     from chains.pitch_deck_chain import run_pitch_deck_chain_with_text as run_pitch_chain
-    profile = run_pitch_chain(full_text, profile, pdf_path=file_path)
+    profile = run_pitch_chain(text[:3000], profile, pdf_path=file_path)
+    from agents.deck_agent import build_deck_agent
     deck_agent, deck_task = build_deck_agent(file_path)
     deck_agent_output = deck_task.callback()
     try:
@@ -214,35 +214,10 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
                 setattr(profile, k, v)
     except Exception:
         pass
-    # --- Enrich executives from LinkedIn/Crunchbase if needed ---
-    execs = getattr(profile, 'executives', None) or []
-    founder = getattr(profile, 'founder_name', None)
-    # Only keep up to 3 key roles: founder/CEO, CFO, chairman, CTO (in that order)
-    key_roles = ['founder', 'ceo', 'chief executive officer', 'cfo', 'chief financial officer', 'chairman', 'cto', 'chief technology officer']
-    filtered_execs = []
-    seen = set()
-    if founder:
-        filtered_execs.append({'name': founder, 'role': 'Founder', 'linkedin': getattr(profile, 'founder_linkedin', '')})
-        seen.add(founder.lower())
-    for role in key_roles:
-        for exec in execs:
-            name = exec.get('name', '').strip()
-            role_str = exec.get('role', '').lower()
-            if name and role in role_str and name.lower() not in seen:
-                filtered_execs.append(exec)
-                seen.add(name.lower())
-            if len(filtered_execs) >= 3:
-                break
-        if len(filtered_execs) >= 3:
-            break
-    # If fewer than 3, enrich with Perplexity
-    if len(filtered_execs) < 3:
-        filtered_execs = enrich_executives_with_perplexity(profile.name, filtered_execs)
-    profile.executives = filtered_execs[:3]
-    print(f"📊 After pitch deck: Company={profile.name}, Founder={profile.founder_name}, Executives={len(getattr(profile, 'executives', []))}")
-    # Technical Due Diligence (chain + agent)
+    # --- Technical Due Diligence ---
     from chains.technical_dd_chain import run_technical_dd_chain
     profile = run_technical_dd_chain(profile)
+    from agents.technical_dd_agent import build_technical_dd_agent
     tech_agent, tech_task = build_technical_dd_agent(profile)
     tech_agent_output = tech_task.callback()
     try:
@@ -252,10 +227,10 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
                 setattr(profile, k, v)
     except Exception:
         pass
-    print(f"🔧 After tech DD: Maturity={profile.tech_maturity}, Moat={profile.moat_strength}")
-    # Founder Profiling (chain + agent)
+    # --- Founder Profiling ---
     from chains.founder_profiling_chain import run_founder_profiling_chain
     profile = run_founder_profiling_chain(profile)
+    from agents.founder_profiling_agent import build_founder_profiling_agent
     founder_agent, founder_task = build_founder_profiling_agent(profile)
     founder_agent_output = founder_task.callback()
     try:
@@ -265,10 +240,10 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
                 setattr(profile, k, v)
     except Exception:
         pass
-    print(f"👤 After founder profiling: Score={profile.founder_fit_score}")
-    # Market Sizing (chain + agent)
+    # --- Market Sizing ---
     from chains.market_sizing_chain import run_market_sizing_chain
     profile = run_market_sizing_chain(profile)
+    from agents.market_sizing_agent import build_market_sizing_agent
     market_agent, market_task = build_market_sizing_agent(profile)
     market_agent_output = market_task.callback()
     try:
@@ -278,10 +253,10 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
                 setattr(profile, k, v)
     except Exception:
         pass
-    print(f"📈 After market sizing: TAM={profile.TAM}, SAM={profile.SAM}, SOM={profile.SOM}")
-    # Financial Analysis (chain + agent)
+    # --- Financial Analysis ---
     from chains.financial_analysis_chain import run_financial_analysis_chain
     profile = run_financial_analysis_chain(profile)
+    from agents.financial_analysis_agent import build_financial_analysis_agent
     fin_agent, fin_task = build_financial_analysis_agent(profile)
     fin_agent_output = fin_task.callback()
     try:
@@ -291,10 +266,10 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
                 setattr(profile, k, v)
     except Exception:
         pass
-    print(f"💰 After financial analysis: Burn={profile.cash_burn_12m}, Runway={profile.runway_months}")
-    # Competitive Intelligence (chain + agent)
+    # --- Competitive Intelligence ---
     from chains.competitive_intel_chain import run_competitive_intel_chain
     profile = run_competitive_intel_chain(profile)
+    from agents.competitive_intel_agent import build_competitive_intel_agent
     comp_agent, comp_task = build_competitive_intel_agent(profile)
     comp_agent_output = comp_task.callback()
     try:
@@ -304,10 +279,10 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
                 setattr(profile, k, v)
     except Exception:
         pass
-    print(f"🏆 After competitive intel: {len(profile.top_competitors)} competitors found")
-    # Risk Assessment (chain + agent)
+    # --- Risk Assessment ---
     from chains.risk_assessment_chain import run_risk_assessment_chain
     profile = run_risk_assessment_chain(profile)
+    from agents.risk_assessment_agent import build_risk_assessment_agent
     risk_agent, risk_task = build_risk_assessment_agent(profile)
     risk_agent_output = risk_task.callback()
     try:
@@ -317,31 +292,15 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
                 setattr(profile, k, v)
     except Exception:
         pass
-    print(f"⚠️ After risk assessment: Score={profile.risk_score}, {len(profile.risk_flags)} flags")
-    # ESG, Business Model, Exit, Follow-up (chains only for now)
+    # --- ESG, Business Model, Exit, Follow-up (chains only) ---
     from chains.esg_chain import run_esg_chain_with_text
     from chains.business_model_chain import run_business_model_chain_with_text
     from chains.exit_strategy_chain import run_exit_strategy_chain_with_text
     from chains.follow_up_chain import run_follow_up_chain_with_text
-    profile = run_esg_chain_with_text(full_text, profile)
-    print(f"🌱 After ESG: {profile.esg_summary}")
-    profile = run_business_model_chain_with_text(full_text, profile)
-    print(f"💼 After business model: {profile.business_model}")
-    profile = run_exit_strategy_chain_with_text(full_text, profile)
-    print(f"🚪 After exit strategy: {profile.exit_strategy}")
-    profile = run_follow_up_chain_with_text(full_text, profile)
-    print(f"❓ After follow-up: {profile.follow_up_questions}")
-    # Product Description (enhanced)
-    profile.product_description = synthesize_product_description(profile)
-    # --- Website enrichment if missing ---
-    if not profile.website or profile.website.lower() in ['unknown', 'n/a', '']:
-        try:
-            from run_crewai_analysis import run_website_finder
-            profile.website = run_website_finder(profile.name, profile.founder_name, profile.sector)
-        except Exception as e:
-            print(f"[Website Enrichment] Error: {e}")
-    if hasattr(profile, 'executives') and isinstance(profile.executives, list):
-        profile.executives = enrich_executive_details_with_perplexity(profile.name, profile.executives)
+    profile = run_esg_chain_with_text(text, profile)
+    profile = run_business_model_chain_with_text(text, profile)
+    profile = run_exit_strategy_chain_with_text(text, profile)
+    profile = run_follow_up_chain_with_text(text, profile)
     return profile
 
 
@@ -1175,12 +1134,10 @@ def save_memo_with_template(memo_text, profile, output_path):
             break
     if not memo_found:
         print("[Warning] {{MEMO_CONTENT}} placeholder not found in template.")
-    # Save the new document
     doc.save(output_path)
     print(f"✅ DOCX memo generated from template and saved to {output_path}")
 
 
-# --- DOCX to PDF conversion ---
 def convert_docx_to_pdf(docx_path, output_dir=None):
     if output_dir is None:
         output_dir = os.path.dirname(docx_path)
@@ -1196,6 +1153,39 @@ def convert_docx_to_pdf(docx_path, output_dir=None):
         return None
 
 
+# --- Utility functions to extract relevant sections from the full text ---
+def get_technical_section(text):
+    # Implement logic to extract technical section from the full text
+    # For now, use a simple heuristic (can be improved)
+    import re
+    match = re.search(r'(Technical Due Diligence|Technology|Product|Solution)[\s\S]{0,1000}', text, re.IGNORECASE)
+    return match.group(0) if match else text[:2000]
+
+def get_founder_section(text):
+    import re
+    match = re.search(r'(Founder|Team|Management)[\s\S]{0,1000}', text, re.IGNORECASE)
+    return match.group(0) if match else text[:2000]
+
+def get_market_section(text):
+    import re
+    match = re.search(r'(Market|TAM|SAM|SOM|Opportunity)[\s\S]{0,1000}', text, re.IGNORECASE)
+    return match.group(0) if match else text[:2000]
+
+def get_financial_section(text):
+    import re
+    match = re.search(r'(Financial|Revenue|Profit|Loss|P&L|EBITDA|Cash Flow)[\s\S]{0,1000}', text, re.IGNORECASE)
+    return match.group(0) if match else text[:2000]
+
+def get_competitive_section(text):
+    import re
+    match = re.search(r'(Competitor|Competitive|Landscape|Comparison)[\s\S]{0,1000}', text, re.IGNORECASE)
+    return match.group(0) if match else text[:2000]
+
+def get_risk_section(text):
+    import re
+    match = re.search(r'(Risk|Mitigation|Threat|Challenge)[\s\S]{0,1000}', text, re.IGNORECASE)
+    return match.group(0) if match else text[:2000]
+
 def main():
     if len(sys.argv) < 2:
         print("Usage: python main.py <path_to_file1> [<path_to_file2> ...]")
@@ -1204,53 +1194,49 @@ def main():
     file_paths = sys.argv[1:]
     for file_path in file_paths:
         print(f"Extracting text and structured data from: {file_path}")
-        #  Caching logic --
+        from core.download_utils import extract_text, extract_text_from_image
+        from core.visual_utils import extract_images_from_pdf
+        from core.schemas import StartupProfile
+        import tempfile
+        # --- Caching logic ---
         extracted = load_from_cache(file_path)
-        if extracted is None:
-            try:
-                extracted = extract_text(file_path, return_structured=True)
-                save_to_cache(file_path, extracted)
-                print(f"[CACHE] Saved extraction for {file_path}")
-            except Exception as e:
-                print(f"Error extracting {file_path}: {e}")
-                continue
-        else:
+        if extracted is not None:
             print(f"[CACHE] Loaded extraction for {file_path}")
+        else:
+            extracted = extract_text(file_path, return_structured=True)
+            save_to_cache(file_path, extracted)
+            print(f"[CACHE] Saved extraction for {file_path}")
         text = extracted["text"]
         tables = extracted["tables"]
         figures = extracted["figures"]
-
-        clear_collection()
+        # No image extraction or OCR
+        # Print extraction stats
+        print("="*40)
+        print("[EXTRACTION STATS]")
+        print(f"Extracted text length: {len(text)}")
+        print(f"Number of tables: {len(tables)}")
+        print(f"Number of figures: {len(figures)}")
+        print(f"Extracted text preview: {text[:1000]}")
+        print("="*40)
         profile = StartupProfile()
-        profile = run_all_sequential_with_text(text, profile, file_path)
-        # Populate structured data
         profile.tables = tables
         profile.figures = figures
-
-        # --- Extract images from PDF and generate chart ---
-        # output_dir = "out"
-        # os.makedirs(output_dir, exist_ok=True)
-        # company_name = profile.name or "unknown_company"
-        # date_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-        # images_dir = os.path.join(output_dir, f"{company_name.replace(' ', '_')}_images_{date_str}")
-        # extracted_image_paths = extract_images_from_pdf(file_path, images_dir)
-        # Example: Generate a sample market chart if market size data is available
-        # market_chart_path = None
-        # if hasattr(profile, "market_size_by_year") and profile.market_size_by_year:
-        #     chart_path = os.path.join(output_dir, f"{company_name.replace(' ', '_')}_market_chart_{date_str}.png")
-        #     generate_sample_market_chart(profile.market_size_by_year, chart_path)
-        #     market_chart_path = chart_path
-        # Attach visuals to profile for use in memo formatting
-        # profile.extracted_image_paths = extracted_image_paths
-        # profile.market_chart_path = market_chart_path
-
+        # No visual_enrichment
+        # --- CrewAI multi-agent orchestration and memo generation ---
+        profile = run_multi_agent_orchestration_with_text(text, profile, file_path)
+        # Generate memo from enriched profile
         memo_text = format_memo(profile)
-        print(memo_text)
-
-        docx_filename = f"memo_{profile.name.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
+        with open("memo.txt", "w") as f:
+            f.write(memo_text)
+        # Save as Word and PDF
+        company_name = getattr(profile, 'name', 'unknown_company')
+        date_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        os.makedirs("out", exist_ok=True)
+        docx_filename = f"memo_{company_name.replace(' ', '_')}_{date_str}.docx"
         docx_path = os.path.join("out", docx_filename)
         save_memo_with_template(memo_text, profile, docx_path)
         convert_docx_to_pdf(docx_path)
+        print(f"Memo generated and saved to {docx_path} and {docx_path.replace('.docx', '.pdf')}")
 
 
 if __name__ == "__main__":
