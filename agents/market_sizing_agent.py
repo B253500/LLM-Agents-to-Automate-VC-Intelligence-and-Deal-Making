@@ -32,13 +32,21 @@ def build_market_sizing_agent(profile: StartupProfile, trace_id=None):
     )
 
     def _callback(*_):
+        # 1. Use EXA search tool for additional market context
+        exa_context = None
+        if profile.name or profile.sector:
+            query = f"Latest market size, growth rate, and trends for {profile.name or 'the company'} in the {profile.sector or ''} sector. Provide TAM, SAM, SOM if available, and cite sources."
+            exa_context = exa_search_tool.run(query)
+        # 2. Run the core market sizing chain (LLM-based extraction)
         updated = run_market_sizing_chain(profile)
+        # 3. Attach EXA context to profile
+        updated.exa_market_context = exa_context
         return updated.model_dump_json(indent=2)
 
     task = Task(
-        description="Analyze the market size and expected growth rate for the startup's sector. Estimate TAM, SAM, SOM, and provide supporting data and sources.",
+        description="Analyze the market size and expected growth rate for the startup's sector. Estimate TAM, SAM, SOM, and provide supporting data and sources, including EXA search enrichment.",
         agent=analyst,
-        expected_output="A detailed market analysis report including TAM, SAM, SOM, growth rates, and sources.",
+        expected_output="A detailed market analysis report including TAM, SAM, SOM, growth rates, sources, and EXA context.",
         callback=_callback,
     )
     return analyst, task

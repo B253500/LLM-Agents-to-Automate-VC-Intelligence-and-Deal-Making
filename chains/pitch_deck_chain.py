@@ -1,18 +1,16 @@
-from hashlib import sha1
-from pathlib import Path
 import json
 import re
-
 import pdfplumber
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 from core.schemas import StartupProfile
 from core.vector_store import add_doc
+from hashlib import sha1
+from pathlib import Path
 
-# ---------------------------------------------------------------------
-# Config
-# ---------------------------------------------------------------------
+# Configurations
+
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")  # loads OPENAI_API_KEY
 llm = ChatOpenAI(model="gpt-4", temperature=0.2)
 
@@ -31,9 +29,7 @@ HUMAN = "Pitch-deck text (first 5000 characters):\n```markdown\n{deck}\n```"
 PROMPT = ChatPromptTemplate.from_messages([("system", SYSTEM), ("human", HUMAN)])
 
 
-# ---------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------
 def pdf_to_text(path: Path) -> str:
     """Concatenate text from every page of a PDF."""
     with pdfplumber.open(path) as pdf:
@@ -42,22 +38,20 @@ def pdf_to_text(path: Path) -> str:
 
 
 def extract_common_term(text: str, pdf_path: str) -> str:
-    # Use regex to find frequent capitalized brand mentions
+    # Uses regex to find frequent capitalized brand mentions
     matches = re.findall(r"\b([A-Z][a-z]+(?:\s[A-Z][a-z]+)*)\b", text)
     if matches:
         freq = {name: matches.count(name) for name in set(matches)}
         sorted_names = sorted(freq.items(), key=lambda x: x[1], reverse=True)
         likely_term = sorted_names[0][0]
-        # Avoid generic terms
+        # Avoids generic terms
         if likely_term.lower() in ["all", "company", "unknown"]:
             return Path(pdf_path).stem.replace("_", " ").replace("-", " ").title()
         return likely_term
     return Path(pdf_path).stem.replace("_", " ").replace("-", " ").title()
 
 
-# ---------------------------------------------------------------------
 # Main chain function
-# ---------------------------------------------------------------------
 def run_pitch_deck_chain_with_text(deck_text: str, profile: StartupProfile = None, pdf_path: str = None) -> StartupProfile:
     """Run pitch deck analysis using extracted text directly"""
     if profile is None:
@@ -69,7 +63,7 @@ def run_pitch_deck_chain_with_text(deck_text: str, profile: StartupProfile = Non
     response = llm.invoke(prompt)
     txt = response.content.strip()
 
-    # Extract JSON from LLM output
+    # Extracts JSON from LLM output
     first, last = txt.find("{"), txt.rfind("}")
     if first == -1 or last == -1 or last < first:
         print("[Warning] No JSON object found, falling back to extraction")
@@ -90,7 +84,7 @@ def run_pitch_deck_chain_with_text(deck_text: str, profile: StartupProfile = Non
             ):
                 raw["founder_name"] = "unknown"
 
-            # Update profile with extracted data
+            # Updates profile with extracted data
             for key, value in raw.items():
                 if hasattr(profile, key) and value:
                     setattr(profile, key, value)
@@ -115,16 +109,16 @@ def run_pitch_deck_chain_with_text(deck_text: str, profile: StartupProfile = Non
         fallback_name = extract_common_term(truncated_text, pdf_path or "unknown.pdf")
         profile.name = fallback_name
 
-    # Assign deterministic ID
+    # Assigns deterministic ID
     profile.startup_id = sha1(profile.name.encode()).hexdigest()[:10]
 
-    # Store the full deck in Chroma
+    # Stores the full deck in Chroma
     add_doc(profile.startup_id, deck_text)
 
     return profile
 
 def extract_common_term_from_text(text: str, pdf_path: str) -> str:
-    # Use regex to find frequent capitalized brand mentions
+    # Uses regex to find frequent capitalized brand mentions
     matches = re.findall(r"\b([A-Z][a-z]+(?:\s[A-Z][a-z]+)*)\b", text)
     if matches:
         freq = {name: matches.count(name) for name in set(matches)}

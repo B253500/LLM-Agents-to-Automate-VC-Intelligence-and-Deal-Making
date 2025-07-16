@@ -53,6 +53,9 @@ class StartupProfile(BaseModel):
     product_description: Optional[str] = None  # Description of the core product/service
     executives: Optional[List[dict]] = []
     prior_exit_details: Optional[List[dict]] = []
+    founder_linkedin_data: Optional[dict] = None
+    founder_linkedin_formatted: Optional[str] = None
+    exa_market_context: Optional[str] = None
 
     # New fields for structured data
     tables: List[Table] = []
@@ -60,3 +63,13 @@ class StartupProfile(BaseModel):
     # Visuals and charts for memo
     extracted_image_paths: Optional[List[str]] = []
     market_chart_path: Optional[str] = None
+    # Visual enrichment results (e.g., OCR from graphs/tables)
+    visual_enrichment: Optional[List[dict]] = []
+    # Technical news enrichment
+    tech_news: Optional[str] = None
+    # Financial news enrichment
+    financial_news: Optional[str] = None
+    # Risk news enrichment
+    risk_news: Optional[str] = None
+    # Enriched top competitors (from agent enrichment)
+    enriched_top_competitors: Optional[list] = []

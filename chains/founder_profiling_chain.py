@@ -41,37 +41,8 @@ def run_founder_profiling_chain(profile: StartupProfile) -> StartupProfile:
     except:
         pass
     if not profile.startup_id:
-        profile.startup_id = sha1((profile.name or context[:40]).encode()).hexdigest()[
-            :10
-        ]
+        profile.startup_id = sha1((profile.name or context[:40]).encode()).hexdigest()[:10]
     return profile
-
-def get_linkedin_profile_proxycurl(founder_name, company_name=None):
-    api_key = os.getenv("PROXYCURL_API_KEY")
-    headers = {"Authorization": f"Bearer {api_key}"}
-    params = {
-        "first_name": founder_name.split()[0],
-        "last_name": founder_name.split()[-1],
-    }
-    if company_name:
-        params["company"] = company_name
-    url = "https://nubela.co/proxycurl/api/v2/linkedin/person"
-    response = requests.get(url, headers=headers, params=params)
-    if response.status_code == 200:
-        return response.json()
-    else:
-        print(f"Proxycurl error: {response.status_code} {response.text}")
-        return None
-
-def format_linkedin_profile(data):
-    if not data:
-        return "No LinkedIn profile found."
-    return f"""
-LinkedIn: {data.get('profile_url', 'N/A')}
-Headline: {data.get('headline', 'N/A')}
-Summary: {data.get('summary', 'N/A')}
-Current Position: {data.get('occupation', 'N/A')}
-"""
 
 
 def run_founder_profiling_chain_with_text(full_text: str, profile: StartupProfile) -> StartupProfile:
@@ -89,9 +60,4 @@ def run_founder_profiling_chain_with_text(full_text: str, profile: StartupProfil
         pass
     if not profile.startup_id:
         profile.startup_id = sha1((profile.name or context[:40]).encode()).hexdigest()[:10]
-    # After extracting founder name:
-    if profile.founder_name:
-        linkedin_data = get_linkedin_profile_proxycurl(profile.founder_name, profile.name)
-        profile.founder_linkedin_data = linkedin_data
-        profile.founder_linkedin_formatted = format_linkedin_profile(linkedin_data)
     return profile

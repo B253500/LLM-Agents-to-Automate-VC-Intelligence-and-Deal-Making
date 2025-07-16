@@ -1,5 +1,8 @@
 import sys
 import os
+import hashlib
+import json as pyjson
+import subprocess
 from datetime import datetime
 from core.download_utils import extract_text
 from chains.pitch_deck_chain import run_pitch_deck_chain
@@ -13,8 +16,13 @@ from core.schemas import StartupProfile
 from core.vector_store import clear_collection
 from fpdf import FPDF
 from langchain_openai import ChatOpenAI
+from docx import Document
+from docx.shared import Inches, Pt
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from core.perplexity_utils import search_perplexity
+from core.visual_utils import extract_images_from_pdf, generate_sample_market_chart
 
-# Add imports for CrewAI agents
+# Adding imports for CrewAI agents
 from agents.technical_dd_agent import build_technical_dd_agent
 from agents.market_sizing_agent import build_market_sizing_agent
 from agents.competitive_intel_agent import build_competitive_intel_agent
@@ -22,15 +30,6 @@ from agents.founder_profiling_agent import build_founder_profiling_agent
 from agents.financial_analysis_agent import build_financial_analysis_agent
 from agents.risk_assessment_agent import build_risk_assessment_agent
 from agents.deck_agent import build_deck_agent
-
-import hashlib
-import json as pyjson
-from docx import Document
-from docx.shared import Inches, Pt
-from docx.enum.text import WD_ALIGN_PARAGRAPH
-import subprocess
-from core.perplexity_utils import search_perplexity
-from core.visual_utils import extract_images_from_pdf, generate_sample_market_chart
 
 CACHE_DIR = "extraction_cache"
 os.makedirs(CACHE_DIR, exist_ok=True)
@@ -984,45 +983,46 @@ def save_memo_with_template(memo_text, profile, output_path):
                 is_all_caps = all_caps_pattern.match(header_cleaned) and len(header_cleaned) > 6
                 is_known_header = header_cleaned.lower() in known_headers_lower
                 # --- PATCH: Insert images/graphs after 'Figures & Visuals' header ---
-                if header_cleaned.lower() == 'figures & visuals':
-                    para = doc.add_paragraph()
-                    para.paragraph_format.space_before = Pt(12)
-                    run = para.add_run(header_cleaned)
-                    run.font.name = 'Times New Roman'
-                    run.font.size = Pt(12)
-                    run.bold = True
-                    para.alignment = alignment if alignment is not None else WD_ALIGN_PARAGRAPH.JUSTIFY
-                    para.paragraph_format.line_spacing = 1.5
-                    para.paragraph_format.space_after = Pt(6)
-                    para.paragraph_format.first_line_indent = Pt(0)
-                    last_para = para
-                    # Insert extracted images
-                    if hasattr(profile, 'extracted_image_paths') and profile.extracted_image_paths:
-                        for img_idx, img_path in enumerate(profile.extracted_image_paths):
-                            img_para = doc.add_paragraph()
-                            run = img_para.add_run()
-                            try:
-                                run.add_picture(img_path, width=Pt(320))  # ~4.5in wide
-                            except Exception as e:
-                                run.add_text(f"[Could not insert image: {img_path}]")
-                            # Caption
-                            caption = img_para.add_run(f"\nFigure {img_idx+1}: Extracted from pitch deck")
-                            caption.font.name = 'Times New Roman'
-                            caption.font.size = Pt(12)
-                            img_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                    # Insert generated chart
-                    if hasattr(profile, 'market_chart_path') and profile.market_chart_path:
-                        chart_para = doc.add_paragraph()
-                        run = chart_para.add_run()
-                        try:
-                            run.add_picture(profile.market_chart_path, width=Pt(320))
-                        except Exception as e:
-                            run.add_text(f"[Could not insert chart: {profile.market_chart_path}]")
-                        caption = chart_para.add_run("\nFigure: Market Size Chart")
-                        caption.font.name = 'Times New Roman'
-                        caption.font.size = Pt(12)
-                        chart_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                    continue
+                # (Removed: now handled by deck agent. If visuals are present in profile, insert as before.)
+                # if header_cleaned.lower() == 'figures & visuals':
+                #     para = doc.add_paragraph()
+                #     para.paragraph_format.space_before = Pt(12)
+                #     run = para.add_run(header_cleaned)
+                #     run.font.name = 'Times New Roman'
+                #     run.font.size = Pt(12)
+                #     run.bold = True
+                #     para.alignment = alignment if alignment is not None else WD_ALIGN_PARAGRAPH.JUSTIFY
+                #     para.paragraph_format.line_spacing = 1.5
+                #     para.paragraph_format.space_after = Pt(6)
+                #     para.paragraph_format.first_line_indent = Pt(0)
+                #     last_para = para
+                #     # Insert extracted images
+                #     if hasattr(profile, 'extracted_image_paths') and profile.extracted_image_paths:
+                #         for img_idx, img_path in enumerate(profile.extracted_image_paths):
+                #             img_para = doc.add_paragraph()
+                #             run = img_para.add_run()
+                #             try:
+                #                 run.add_picture(img_path, width=Pt(320))  # ~4.5in wide
+                #             except Exception as e:
+                #                 run.add_text(f"[Could not insert image: {img_path}]")
+                #             # Caption
+                #             caption = img_para.add_run(f"\nFigure {img_idx+1}: Extracted from pitch deck")
+                #             caption.font.name = 'Times New Roman'
+                #             caption.font.size = Pt(12)
+                #             img_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                #     # Insert generated chart
+                #     if hasattr(profile, 'market_chart_path') and profile.market_chart_path:
+                #         chart_para = doc.add_paragraph()
+                #         run = chart_para.add_run()
+                #         try:
+                #             run.add_picture(profile.market_chart_path, width=Pt(320))
+                #         except Exception as e:
+                #             run.add_text(f"[Could not insert chart: {profile.market_chart_path}]")
+                #         caption = chart_para.add_run("\nFigure: Market Size Chart")
+                #         caption.font.name = 'Times New Roman'
+                #         caption.font.size = Pt(12)
+                #         chart_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                #     continue
                 # Special handling for DISCUSSION & ANALYST COMMENTARY section headers
                 discussion_headers = [
                     'Analyst Commentary on StoreDot Investment Memo', 'Key Strengths', 'Key Weaknesses',
@@ -1204,7 +1204,7 @@ def main():
     file_paths = sys.argv[1:]
     for file_path in file_paths:
         print(f"Extracting text and structured data from: {file_path}")
-        # --- Caching logic ---
+        #  Caching logic --
         extracted = load_from_cache(file_path)
         if extracted is None:
             try:
@@ -1228,27 +1228,27 @@ def main():
         profile.figures = figures
 
         # --- Extract images from PDF and generate chart ---
-        output_dir = "out"
-        os.makedirs(output_dir, exist_ok=True)
-        company_name = profile.name or "unknown_company"
-        date_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-        images_dir = os.path.join(output_dir, f"{company_name.replace(' ', '_')}_images_{date_str}")
-        extracted_image_paths = extract_images_from_pdf(file_path, images_dir)
+        # output_dir = "out"
+        # os.makedirs(output_dir, exist_ok=True)
+        # company_name = profile.name or "unknown_company"
+        # date_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # images_dir = os.path.join(output_dir, f"{company_name.replace(' ', '_')}_images_{date_str}")
+        # extracted_image_paths = extract_images_from_pdf(file_path, images_dir)
         # Example: Generate a sample market chart if market size data is available
-        market_chart_path = None
-        if hasattr(profile, "market_size_by_year") and profile.market_size_by_year:
-            chart_path = os.path.join(output_dir, f"{company_name.replace(' ', '_')}_market_chart_{date_str}.png")
-            generate_sample_market_chart(profile.market_size_by_year, chart_path)
-            market_chart_path = chart_path
+        # market_chart_path = None
+        # if hasattr(profile, "market_size_by_year") and profile.market_size_by_year:
+        #     chart_path = os.path.join(output_dir, f"{company_name.replace(' ', '_')}_market_chart_{date_str}.png")
+        #     generate_sample_market_chart(profile.market_size_by_year, chart_path)
+        #     market_chart_path = chart_path
         # Attach visuals to profile for use in memo formatting
-        profile.extracted_image_paths = extracted_image_paths
-        profile.market_chart_path = market_chart_path
+        # profile.extracted_image_paths = extracted_image_paths
+        # profile.market_chart_path = market_chart_path
 
         memo_text = format_memo(profile)
         print(memo_text)
 
-        docx_filename = f"memo_{company_name.replace(' ', '_')}_{date_str}.docx"
-        docx_path = os.path.join(output_dir, docx_filename)
+        docx_filename = f"memo_{profile.name.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
+        docx_path = os.path.join("out", docx_filename)
         save_memo_with_template(memo_text, profile, docx_path)
         convert_docx_to_pdf(docx_path)
 

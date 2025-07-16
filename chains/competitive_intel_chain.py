@@ -8,20 +8,9 @@ from core.schemas import StartupProfile, Competitor
 from core.hybrid_context import get_hybrid_context
 import sys
 sys.path.append('.')  # Ensure root is in path for import
-from core.perplexity_utils import search_perplexity
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0.2)
-
-def web_search_competitive_context(company_name, sector):
-    """
-    Use Perplexity to get up-to-date product/technology descriptions for top competitors in the sector.
-    """
-    if not company_name and not sector:
-        return ""
-    query = f"List 3-4 direct competitors to {company_name or 'the company'} in the {sector or ''} sector. For each, provide a concise description of their main product, technology, and differentiator."
-    result = search_perplexity(query)
-    return result or ""
 
 SYSTEM = """
 You are a VC analyst mapping the competitive landscape.
@@ -41,8 +30,7 @@ PROMPT = ChatPromptTemplate.from_messages([
 
 def run_competitive_intel_chain_with_text(full_text: str, profile: StartupProfile) -> StartupProfile:
     context = full_text[:5000]
-    web_context = web_search_competitive_context(profile.name, profile.sector)
-    txt = llm.invoke(PROMPT.format(context=context, web_context=web_context)).content.strip()
+    txt = llm.invoke(PROMPT.format(context=context, web_context="")).content.strip()
     first, last = txt.find("{"), txt.rfind("}")
     if first == -1 or last == -1:
         return profile
@@ -57,6 +45,7 @@ def run_competitive_intel_chain_with_text(full_text: str, profile: StartupProfil
         profile.startup_id = sha1((profile.name or context[:40]).encode()).hexdigest()[:10]
     return profile
 
+# Remove Perplexity/EXA web search enrichment from the chain
 def run_competitive_intel_chain(profile: StartupProfile) -> StartupProfile:
     # Build a context string from the profile fields for competitive analysis
     context = f"""
@@ -80,25 +69,3 @@ Product: {getattr(profile, 'tech_stack', '')}
     if not profile.startup_id:
         profile.startup_id = sha1((profile.name or context[:40]).encode()).hexdigest()[:10]
     return profile
-
-def enrich_competitor_details(competitors):
-    enriched = []
-    for comp in competitors:
-        # Enrich website if missing
-        if not comp.get('website') and comp.get('name'):
-            query = f"What is the official website for {comp['name']} (battery technology company)?"
-            website = search_perplexity(query)
-            if website and 'http' in website:
-                # Extract first URL from response
-                import re
-                match = re.search(r"https?://[\w./-]+", website)
-                if match:
-                    comp['website'] = match.group(0)
-        # Enrich product_offering if missing
-        if not comp.get('product_offering') and comp.get('name'):
-            query = f"What is the main product or technology offering of {comp['name']} in battery technology?"
-            product = search_perplexity(query)
-            if product:
-                comp['product_offering'] = product.strip()
-        enriched.append(comp)
-    return enriched
