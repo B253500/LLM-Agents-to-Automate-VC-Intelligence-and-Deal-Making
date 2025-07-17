@@ -42,3 +42,24 @@ def build_risk_assessment_agent(profile: StartupProfile, trace_id=None):
         callback=_callback,
     )
     return officer, task
+
+
+def build_risk_chain_agent(profile):
+    def chain_callback(*_):
+        from chains.risk_assessment_chain import run_risk_assessment_chain
+        updated_profile = run_risk_assessment_chain(profile)
+        return updated_profile.model_dump()
+    agent = Agent(
+        role="Risk Assessment Extractor",
+        goal="Extract risk assessment data from the deck.",
+        backstory="A specialized agent for extracting risk assessment data from pitch decks.",
+        verbose=True
+    )
+    task = Task(
+        description="Extract risk assessment data from the deck.",
+        agent=agent,
+        callback=chain_callback,
+        args=[profile.model_dump()],
+        expected_output="Profile with risk assessment fields extracted."
+    )
+    return agent, task

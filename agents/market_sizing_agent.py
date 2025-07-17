@@ -52,3 +52,23 @@ def build_market_sizing_agent(profile: StartupProfile, trace_id=None):
         callback=_callback,
     )
     return analyst, task
+
+def build_market_chain_agent(profile):
+    def chain_callback(*_):
+        from chains.market_sizing_chain import run_market_sizing_chain
+        updated_profile = run_market_sizing_chain(profile)
+        return updated_profile.model_dump()
+    agent = Agent(
+        role="Market Sizing Extractor",
+        goal="Extract market sizing and growth data from the deck.",
+        backstory="A specialized agent for extracting market sizing and growth data from pitch decks.",
+        verbose=True
+    )
+    task = Task(
+        description="Extract market sizing and growth data from the deck.",
+        agent=agent,
+        callback=chain_callback,
+        args=[profile.model_dump()],
+        expected_output="Profile with market sizing fields extracted."
+    )
+    return agent, task

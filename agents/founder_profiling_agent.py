@@ -65,3 +65,24 @@ def build_founder_profiling_agent(profile: StartupProfile, trace_id=None):
         callback=_callback,
     )
     return partner, task
+
+
+def build_founder_chain_agent(profile):
+    def chain_callback(*_):
+        from chains.founder_profiling_chain import run_founder_profiling_chain
+        updated_profile = run_founder_profiling_chain(profile)
+        return updated_profile.model_dump()
+    agent = Agent(
+        role="Founder Extractor",
+        goal="Extract founder and team information from the deck.",
+        backstory="A specialized agent for extracting founder and team data from pitch decks.",
+        verbose=True
+    )
+    task = Task(
+        description="Extract founder and team information from the deck.",
+        agent=agent,
+        callback=chain_callback,
+        args=[profile.model_dump()],
+        expected_output="Profile with founder/team fields extracted."
+    )
+    return agent, task

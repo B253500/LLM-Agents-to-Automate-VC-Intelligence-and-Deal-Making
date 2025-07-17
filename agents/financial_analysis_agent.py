@@ -42,3 +42,24 @@ def build_financial_analysis_agent(profile: StartupProfile, trace_id=None):
         callback=_callback,
     )
     return fa, task
+
+
+def build_financial_chain_agent(profile):
+    def chain_callback(*_):
+        from chains.financial_analysis_chain import run_financial_analysis_chain
+        updated_profile = run_financial_analysis_chain(profile)
+        return updated_profile.model_dump()
+    agent = Agent(
+        role="Financial Analysis Extractor",
+        goal="Extract financial analysis data from the deck.",
+        backstory="A specialized agent for extracting financial analysis data from pitch decks.",
+        verbose=True
+    )
+    task = Task(
+        description="Extract financial analysis data from the deck.",
+        agent=agent,
+        callback=chain_callback,
+        args=[profile.model_dump()],
+        expected_output="Profile with financial analysis fields extracted."
+    )
+    return agent, task

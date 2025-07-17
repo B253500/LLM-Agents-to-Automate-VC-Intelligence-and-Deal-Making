@@ -222,10 +222,10 @@ def run_multi_agent_orchestration_with_text(text, profile, file_path):
     try:
         tech_agent_data = json.loads(tech_agent_output)
         for k, v in tech_agent_data.items():
-            if hasattr(profile, k) and v:
-                setattr(profile, k, v)
+                if hasattr(profile, k) and v:
+                    setattr(profile, k, v)
     except Exception:
-        pass
+            pass
     # --- Founder Profiling ---
     from chains.founder_profiling_chain import run_founder_profiling_chain
     profile = run_founder_profiling_chain(profile)
@@ -235,10 +235,10 @@ def run_multi_agent_orchestration_with_text(text, profile, file_path):
     try:
         founder_agent_data = json.loads(founder_agent_output)
         for k, v in founder_agent_data.items():
-            if hasattr(profile, k) and v:
-                setattr(profile, k, v)
+                if hasattr(profile, k) and v:
+                    setattr(profile, k, v)
     except Exception:
-        pass
+            pass
     # --- Market Sizing ---
     from chains.market_sizing_chain import run_market_sizing_chain
     profile = run_market_sizing_chain(profile)
@@ -248,10 +248,10 @@ def run_multi_agent_orchestration_with_text(text, profile, file_path):
     try:
         market_agent_data = json.loads(market_agent_output)
         for k, v in market_agent_data.items():
-            if hasattr(profile, k) and v:
-                setattr(profile, k, v)
+                if hasattr(profile, k) and v:
+                    setattr(profile, k, v)
     except Exception:
-        pass
+            pass
     # --- Financial Analysis ---
     from chains.financial_analysis_chain import run_financial_analysis_chain
     profile = run_financial_analysis_chain(profile)
@@ -261,10 +261,10 @@ def run_multi_agent_orchestration_with_text(text, profile, file_path):
     try:
         fin_agent_data = json.loads(fin_agent_output)
         for k, v in fin_agent_data.items():
-            if hasattr(profile, k) and v:
-                setattr(profile, k, v)
+                if hasattr(profile, k) and v:
+                    setattr(profile, k, v)
     except Exception:
-        pass
+            pass
     # --- Competitive Intelligence ---
     from chains.competitive_intel_chain import run_competitive_intel_chain
     profile = run_competitive_intel_chain(profile)
@@ -274,10 +274,10 @@ def run_multi_agent_orchestration_with_text(text, profile, file_path):
     try:
         comp_agent_data = json.loads(comp_agent_output)
         for k, v in comp_agent_data.items():
-            if hasattr(profile, k) and v:
-                setattr(profile, k, v)
+                if hasattr(profile, k) and v:
+                    setattr(profile, k, v)
     except Exception:
-        pass
+            pass
     # --- Risk Assessment ---
     from chains.risk_assessment_chain import run_risk_assessment_chain
     profile = run_risk_assessment_chain(profile)
@@ -287,10 +287,10 @@ def run_multi_agent_orchestration_with_text(text, profile, file_path):
     try:
         risk_agent_data = json.loads(risk_agent_output)
         for k, v in risk_agent_data.items():
-            if hasattr(profile, k) and v:
-                setattr(profile, k, v)
+                if hasattr(profile, k) and v:
+                    setattr(profile, k, v)
     except Exception:
-        pass
+            pass
     # --- ESG, Business Model, Exit, Follow-up (chains only) ---
     from chains.esg_chain import run_esg_chain_with_text
     from chains.business_model_chain import run_business_model_chain_with_text

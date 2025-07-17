@@ -1,5 +1,6 @@
 from crewai import Agent, Task
 from langchain_openai import ChatOpenAI
+from langchain.tools import Tool
 from core.schemas import StartupProfile
 from chains.technical_dd_chain import run_technical_dd_chain
 from core.perplexity_utils import search_perplexity
@@ -41,3 +42,24 @@ def build_technical_dd_agent(profile: StartupProfile, trace_id=None):
         callback=_callback,
     )
     return ctto, task
+
+
+def build_technical_chain_agent(profile):
+    def chain_callback(*_):
+        from chains.technical_dd_chain import run_technical_dd_chain
+        updated_profile = run_technical_dd_chain(profile)
+        return updated_profile.model_dump()
+    agent = Agent(
+        role="Technical DD Extractor",
+        goal="Extract technical due diligence data from the deck.",
+        backstory="A specialized agent for extracting technical due diligence data from pitch decks.",
+        verbose=True
+    )
+    task = Task(
+        description="Extract technical due diligence data from the deck.",
+        agent=agent,
+        callback=chain_callback,
+        args=[profile.model_dump()],
+        expected_output="Profile with technical DD fields extracted."
+    )
+    return agent, task

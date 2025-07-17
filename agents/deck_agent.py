@@ -79,6 +79,27 @@ def build_deck_agent(pdf_path: str, trace_id=None):
     return analyst, task
 
 
+def build_pitch_deck_chain_agent(profile, file_path):
+    def chain_callback(*_):
+        from chains.pitch_deck_chain import run_pitch_deck_chain
+        updated_profile = run_pitch_deck_chain(file_path)
+        return updated_profile.model_dump()
+    agent = Agent(
+        role="Pitch Deck Extractor",
+        goal="Extract fields from the pitch deck PDF.",
+        backstory="A specialized agent for extracting structured data from pitch decks.",
+        verbose=True
+    )
+    task = Task(
+        description="Extract fields from pitch deck PDF.",
+        agent=agent,
+        callback=chain_callback,
+        args=[profile.model_dump()],
+        expected_output="Profile with deck fields extracted."
+    )
+    return agent, task
+
+
 def run_crew(pdf_path: str, trace_id=None) -> str:
     """Run the crew and return the JSON string our callback produced."""
     agent, task = build_deck_agent(pdf_path, trace_id)
