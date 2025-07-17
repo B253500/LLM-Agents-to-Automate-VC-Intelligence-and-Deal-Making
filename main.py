@@ -21,8 +21,6 @@ from docx.shared import Inches, Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from core.perplexity_utils import search_perplexity
 from core.visual_utils import extract_images_from_pdf, generate_sample_market_chart
-
-# Adding imports for CrewAI agents
 from agents.technical_dd_agent import build_technical_dd_agent
 from agents.market_sizing_agent import build_market_sizing_agent
 from agents.competitive_intel_agent import build_competitive_intel_agent
@@ -31,6 +29,7 @@ from agents.financial_analysis_agent import build_financial_analysis_agent
 from agents.risk_assessment_agent import build_risk_assessment_agent
 from agents.deck_agent import build_deck_agent
 from crewai import Crew, Agent, Task
+import re
 
 CACHE_DIR = "extraction_cache"
 os.makedirs(CACHE_DIR, exist_ok=True)
@@ -771,12 +770,12 @@ def format_memo(profile: StartupProfile) -> str:
     def clean(text):
         return text.replace('B253500', '') if isinstance(text, str) else text
     memo_body = f"""
-INVESTMENT MEMORANDUM – {clean(getattr(profile, 'name', None) or 'COMPANY ANALYSIS')}
+INVESTMENT MEMORANDUM – {clean_company_name(getattr(profile, 'name', None)) or 'COMPANY ANALYSIS'}
 1. DETAILED SUMMARY
 {clean(synthesize_detailed_summary(profile))}
 
 2. COMPANY OVERVIEW
-Company: {clean(getattr(profile, 'name', None) or 'TBD')}
+Company: {clean_company_name(getattr(profile, 'name', None)) or 'TBD'}
 Sector: {clean(getattr(profile, 'sector', None) or 'TBD')}
 Website: {clean(getattr(profile, 'website', None) or 'TBD')}
 Funding Stage: {format_funding_stage(profile)}
@@ -1186,6 +1185,226 @@ def get_risk_section(text):
     match = re.search(r'(Risk|Mitigation|Threat|Challenge)[\s\S]{0,1000}', text, re.IGNORECASE)
     return match.group(0) if match else text[:2000]
 
+def clean_company_name(name):
+    if not name:
+        return name
+    return re.sub(r'[^A-Za-z0-9 ]+', '', name)
+
+def run_mermaid_style_crewai_orchestration(text, profile, file_path):
+    """
+    Implements the CrewAI orchestration as described in the provided Mermaid flowchart.
+    Each section is handled by a chain and an agent, with dependencies as per the diagram.
+    """
+    from crewai import Crew, Task, Process
+    # Build agents
+    deck_agent, deck_agent_task = build_deck_agent(file_path)
+    tech_agent, tech_agent_task = build_technical_dd_agent(profile)
+    founder_agent, founder_agent_task = build_founder_profiling_agent(profile)
+    market_agent, market_agent_task = build_market_sizing_agent(profile)
+    fin_agent, fin_agent_task = build_financial_analysis_agent(profile)
+    comp_agent, comp_agent_task = build_competitive_intel_agent(profile)
+    risk_agent, risk_agent_task = build_risk_assessment_agent(profile)
+    # Chain runner agent for chain-only tasks
+    from crewai import Agent
+    chain_runner_agent = Agent(
+        role="Chain Runner",
+        goal="Run classic chain logic for memo sections.",
+        backstory="A reliable automation agent that executes classic extraction/enrichment chains.",
+        verbose=False
+    )
+    # Define chain-only tasks (ESG, BM, Exit, Follow-Up)
+    from chains.esg_chain import run_esg_chain_with_text
+    from chains.business_model_chain import run_business_model_chain_with_text
+    from chains.exit_strategy_chain import run_exit_strategy_chain_with_text
+    from chains.follow_up_chain import run_follow_up_chain_with_text
+    def esg_chain_task(profile_dict):
+        from core.schemas import StartupProfile
+        profile = StartupProfile(**profile_dict)
+        updated_profile = run_esg_chain_with_text(text, profile)
+        return updated_profile.model_dump()
+    def bm_chain_task(profile_dict):
+        from core.schemas import StartupProfile
+        profile = StartupProfile(**profile_dict)
+        updated_profile = run_business_model_chain_with_text(text, profile)
+        return updated_profile.model_dump()
+    def exit_chain_task(profile_dict):
+        from core.schemas import StartupProfile
+        profile = StartupProfile(**profile_dict)
+        updated_profile = run_exit_strategy_chain_with_text(text, profile)
+        return updated_profile.model_dump()
+    def followup_chain_task(profile_dict):
+        from core.schemas import StartupProfile
+        profile = StartupProfile(**profile_dict)
+        updated_profile = run_follow_up_chain_with_text(text, profile)
+        return updated_profile.model_dump()
+    # Deck extraction
+    deck_chain = Task(
+        description="Extract fields from pitch deck PDF.",
+        agent=chain_runner_agent,
+        callback=deck_agent_task.callback,
+        args=[profile.model_dump()],
+        expected_output="Profile with deck fields extracted."
+    )
+    deck_agent_task_obj = Task(
+        description="Enrich and summarize the extracted pitch deck profile.",
+        agent=deck_agent,
+        callback=deck_agent_task.callback,
+        depends_on=[deck_chain],
+        args=[profile.model_dump()],
+        expected_output="Profile with deck enrichment."
+    )
+    # Founder profiling
+    founder_chain = Task(
+        description="Extract founder/team info from deck.",
+        agent=chain_runner_agent,
+        callback=founder_agent_task.callback,
+        depends_on=[deck_agent_task_obj],
+        args=[profile.model_dump()],
+        expected_output="Profile with founder/team fields extracted."
+    )
+    founder_agent_task_obj = Task(
+        description="Enrich and summarize the founder/team profile.",
+        agent=founder_agent,
+        callback=founder_agent_task.callback,
+        depends_on=[founder_chain],
+        args=[profile.model_dump()],
+        expected_output="Profile with founder/team enrichment."
+    )
+    # Technical due diligence
+    tech_chain = Task(
+        description="Extract technical DD from deck.",
+        agent=chain_runner_agent,
+        callback=tech_agent_task.callback,
+        depends_on=[deck_agent_task_obj],
+        args=[profile.model_dump()],
+        expected_output="Profile with technical DD fields extracted."
+    )
+    tech_agent_task_obj = Task(
+        description="Enrich and summarize the technical DD profile.",
+        agent=tech_agent,
+        callback=tech_agent_task.callback,
+        depends_on=[tech_chain],
+        args=[profile.model_dump()],
+        expected_output="Profile with technical DD enrichment."
+    )
+    # Market sizing
+    market_chain = Task(
+        description="Extract market sizing from deck.",
+        agent=chain_runner_agent,
+        callback=market_agent_task.callback,
+        depends_on=[deck_agent_task_obj],
+        args=[profile.model_dump()],
+        expected_output="Profile with market sizing fields extracted."
+    )
+    market_agent_task_obj = Task(
+        description="Enrich and summarize the market sizing profile.",
+        agent=market_agent,
+        callback=market_agent_task.callback,
+        depends_on=[market_chain],
+        args=[profile.model_dump()],
+        expected_output="Profile with market sizing enrichment."
+    )
+    # Financial analysis
+    fin_chain = Task(
+        description="Extract financials from deck.",
+        agent=chain_runner_agent,
+        callback=fin_agent_task.callback,
+        depends_on=[market_agent_task_obj],
+        args=[profile.model_dump()],
+        expected_output="Profile with financials fields extracted."
+    )
+    fin_agent_task_obj = Task(
+        description="Enrich and summarize the financials profile.",
+        agent=fin_agent,
+        callback=fin_agent_task.callback,
+        depends_on=[fin_chain],
+        args=[profile.model_dump()],
+        expected_output="Profile with financials enrichment."
+    )
+    # Competitive intelligence
+    comp_chain = Task(
+        description="Extract competitive intel from deck.",
+        agent=chain_runner_agent,
+        callback=comp_agent_task.callback,
+        depends_on=[market_agent_task_obj],
+        args=[profile.model_dump()],
+        expected_output="Profile with competitive intel fields extracted."
+    )
+    comp_agent_task_obj = Task(
+        description="Enrich and summarize the competitive intel profile.",
+        agent=comp_agent,
+        callback=comp_agent_task.callback,
+        depends_on=[comp_chain],
+        args=[profile.model_dump()],
+        expected_output="Profile with competitive intel enrichment."
+    )
+    # Risk assessment (depends on tech, fin, comp agents)
+    risk_chain = Task(
+        description="Extract risk assessment from deck.",
+        agent=chain_runner_agent,
+        callback=risk_agent_task.callback,
+        depends_on=[tech_agent_task_obj, fin_agent_task_obj, comp_agent_task_obj],
+        args=[profile.model_dump()],
+        expected_output="Profile with risk assessment fields extracted."
+    )
+    risk_agent_task_obj = Task(
+        description="Enrich and summarize the risk assessment profile.",
+        agent=risk_agent,
+        callback=risk_agent_task.callback,
+        depends_on=[risk_chain],
+        args=[profile.model_dump()],
+        expected_output="Profile with risk assessment enrichment."
+    )
+    # ESG, Business Model, Exit, Follow-Up
+    esg_chain = Task(
+        description="Extract ESG analysis from deck.",
+        agent=chain_runner_agent,
+        callback=esg_chain_task,
+        depends_on=[deck_agent_task_obj],
+        args=[profile.model_dump()],
+        expected_output="Profile with ESG analysis."
+    )
+    bm_chain = Task(
+        description="Extract business model analysis from deck.",
+        agent=chain_runner_agent,
+        callback=bm_chain_task,
+        depends_on=[deck_agent_task_obj],
+        args=[profile.model_dump()],
+        expected_output="Profile with business model analysis."
+    )
+    exit_chain = Task(
+        description="Extract exit strategy analysis from deck.",
+        agent=chain_runner_agent,
+        callback=exit_chain_task,
+        depends_on=[fin_agent_task_obj],
+        args=[profile.model_dump()],
+        expected_output="Profile with exit strategy analysis."
+    )
+    followup_chain = Task(
+        description="Extract follow-up questions and next steps from deck.",
+        agent=chain_runner_agent,
+        callback=followup_chain_task,
+        depends_on=[risk_agent_task_obj, esg_chain, bm_chain, exit_chain, founder_agent_task_obj],
+        args=[profile.model_dump()],
+        expected_output="Profile with follow-up questions and next steps."
+    )
+    # Orchestrate with CrewAI
+    tasks = [
+        deck_chain, deck_agent_task_obj,
+        founder_chain, founder_agent_task_obj,
+        tech_chain, tech_agent_task_obj,
+        market_chain, market_agent_task_obj,
+        fin_chain, fin_agent_task_obj,
+        comp_chain, comp_agent_task_obj,
+        risk_chain, risk_agent_task_obj,
+        esg_chain, bm_chain, exit_chain, followup_chain
+    ]
+    crew = Crew(tasks=tasks, process=Process.sequential)
+    result = crew.kickoff()
+    final_profile_dict = result.tasks_output[-1].output
+    return StartupProfile(**final_profile_dict)
+
+
 def main():
     if len(sys.argv) < 2:
         print("Usage: python main.py <path_to_file1> [<path_to_file2> ...]")
@@ -1216,7 +1435,9 @@ def main():
         print(f"Extracted text length: {len(text)}")
         print(f"Number of tables: {len(tables)}")
         print(f"Number of figures: {len(figures)}")
-        print(f"Extracted text preview: {text[:1000]}")
+        import re
+        clean_preview = re.sub(r'^[^A-Za-z0-9]+', '', text[:1000])
+        print(f"Extracted text preview: {clean_preview}")
         print("="*40)
         profile = StartupProfile()
         profile.tables = tables
@@ -1229,7 +1450,7 @@ def main():
         with open("memo.txt", "w") as f:
             f.write(memo_text)
         # Save as Word and PDF
-        company_name = getattr(profile, 'name', 'unknown_company')
+        company_name = clean_company_name(getattr(profile, 'name', 'unknown_company'))
         date_str = datetime.now().strftime("%Y%m%d_%H%M%S")
         os.makedirs("out", exist_ok=True)
         docx_filename = f"memo_{company_name.replace(' ', '_')}_{date_str}.docx"

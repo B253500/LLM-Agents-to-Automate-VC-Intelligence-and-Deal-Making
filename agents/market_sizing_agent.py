@@ -3,8 +3,10 @@ from langchain_openai import ChatOpenAI
 from crewai_tools import EXASearchTool
 from core.schemas import StartupProfile
 from chains.market_sizing_chain import run_market_sizing_chain
+import os
 
 exa_search_tool = EXASearchTool(
+    api_key=os.environ["EXA_API_KEY"],
     type='neural',
     use_autoprompt=True,
     category='company',

@@ -51,7 +51,9 @@ def vc_get_portkey_llm(trace_id=None, span_id=None, agent_name=None):
 # EXA Search tool
 class CustomEXASearchTool(EXASearchTool):
     def __init__(self):
+        import os
         super().__init__(
+            api_key=os.environ["EXA_API_KEY"],
             type='neural',
             use_autoprompt=True,
             category='company',

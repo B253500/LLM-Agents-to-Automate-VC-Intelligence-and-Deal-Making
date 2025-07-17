@@ -6,8 +6,10 @@ from core.schemas import StartupProfile
 from chains.competitive_intel_chain import run_competitive_intel_chain
 from core.perplexity_utils import search_perplexity
 import re
+import os
 
 exa_search_tool = EXASearchTool(
+    api_key=os.environ["EXA_API_KEY"],
     type='neural',
     use_autoprompt=True,
     category='company',
