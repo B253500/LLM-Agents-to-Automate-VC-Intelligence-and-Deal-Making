@@ -2,13 +2,6 @@ import sys
 import os
 from datetime import datetime
 from core.download_utils import extract_text
-from chains.pitch_deck_chain import run_pitch_deck_chain
-from chains.technical_dd_chain import run_technical_dd_chain
-from chains.founder_profiling_chain import run_founder_profiling_chain
-from chains.market_sizing_chain import run_market_sizing_chain
-from chains.financial_analysis_chain import run_financial_analysis_chain
-from chains.competitive_intel_chain import run_competitive_intel_chain
-from chains.risk_assessment_chain import run_risk_assessment_chain
 from core.schemas import StartupProfile
 from core.vector_store import clear_collection
 from fpdf import FPDF

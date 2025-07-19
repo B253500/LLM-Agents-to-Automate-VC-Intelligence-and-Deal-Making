@@ -20,13 +20,13 @@ class Figure(BaseModel):
     blockType: str = ""
 
 class StartupProfile(BaseModel):
-    founder_name: str | None = None
+    name: str = Field(None, alias="company_name")
+    founder_name: str = Field(None, alias="founders")
     # Filled in after parsing, so keep it optional during validation
     startup_id: str | None = Field(
         default=None, description="Deterministic slug/hash added later"
     )
     # Basic identifiers
-    name: Optional[str] = None
     sector: Optional[str] = None
     website: Optional[str] = None
     funding_stage: Optional[str] = None
@@ -73,3 +73,11 @@ class StartupProfile(BaseModel):
     risk_news: Optional[str] = None
     # Enriched top competitors (from agent enrichment)
     enriched_top_competitors: Optional[list] = []
+    # Raw extracted text from the PDF
+    raw_text: Optional[str] = None
+    # File path of the processed PDF
+    filepath: Optional[str] = None
+    figures_ocr: Optional[str] = None
+
+    class Config:
+        allow_population_by_field_name = True

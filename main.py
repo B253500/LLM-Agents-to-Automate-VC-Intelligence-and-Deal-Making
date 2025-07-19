@@ -3,15 +3,10 @@ import os
 import hashlib
 import json as pyjson
 import subprocess
+import tempfile
+import re
 from datetime import datetime
 from core.download_utils import extract_text
-from chains.pitch_deck_chain import run_pitch_deck_chain
-from chains.technical_dd_chain import run_technical_dd_chain
-from chains.founder_profiling_chain import run_founder_profiling_chain
-from chains.market_sizing_chain import run_market_sizing_chain
-from chains.financial_analysis_chain import run_financial_analysis_chain
-from chains.competitive_intel_chain import run_competitive_intel_chain
-from chains.risk_assessment_chain import run_risk_assessment_chain
 from core.schemas import StartupProfile
 from core.vector_store import clear_collection
 from fpdf import FPDF
@@ -28,8 +23,13 @@ from agents.founder_profiling_agent import build_founder_profiling_agent
 from agents.financial_analysis_agent import build_financial_analysis_agent
 from agents.risk_assessment_agent import build_risk_assessment_agent
 from agents.deck_agent import build_deck_agent
-from crewai import Crew, Agent, Task
-import re
+from agents.business_model_agent import build_business_model_chain_agent
+from agents.esg_agent import build_esg_chain_agent
+from agents.exit_strategy_agent import build_exit_chain_agent
+from agents.follow_up_agent import build_followup_chain_agent
+from crewai import Crew, Agent, Task, Process
+from dotenv import load_dotenv
+load_dotenv()
 
 CACHE_DIR = "extraction_cache"
 os.makedirs(CACHE_DIR, exist_ok=True)
@@ -121,19 +121,6 @@ def enrich_executive_details_with_perplexity(company_name, executives):
 if not hasattr(StartupProfile, 'product_description'):
     StartupProfile.product_description = None
 
-# Helper to merge chain and agent outputs
-import json
-def merge_outputs(chain_output, agent_output):
-    if not agent_output:
-        return chain_output
-    if not chain_output:
-        return agent_output
-    # If both are dicts, merge keys; if both are strings, concatenate
-    if isinstance(chain_output, dict) and isinstance(agent_output, dict):
-        merged = chain_output.copy()
-        merged.update(agent_output)
-        return merged
-    return f"{chain_output}\n{agent_output}"
 
 # --- Enhanced Product Description Extraction ---
 def synthesize_product_description(profile):
@@ -197,172 +184,166 @@ Context:
     response = llm.invoke(prompt)
     return response.content if hasattr(response, 'content') else response
 
-# --- CrewAI multi-agent orchestration with NO agent-to-agent delegation ---
-def run_multi_agent_orchestration_with_text(text, profile, file_path):
-    import json
-    # --- Pitch Deck ---
-    from chains.pitch_deck_chain import run_pitch_deck_chain_with_text as run_pitch_chain
-    profile = run_pitch_chain(text[:3000], profile, pdf_path=file_path)
-    from agents.deck_agent import build_deck_agent
-    deck_agent, deck_task = build_deck_agent(file_path)
-    deck_agent_output = deck_task.callback()
-    try:
-        deck_agent_data = json.loads(deck_agent_output)
-        for k, v in deck_agent_data.items():
-            if hasattr(profile, k) and v:
-                setattr(profile, k, v)
-    except Exception:
-        pass
-    # --- Technical Due Diligence ---
-    from chains.technical_dd_chain import run_technical_dd_chain
-    profile = run_technical_dd_chain(profile)
-    from agents.technical_dd_agent import build_technical_dd_agent
-    tech_agent, tech_task = build_technical_dd_agent(profile)
-    tech_agent_output = tech_task.callback()
-    try:
-        tech_agent_data = json.loads(tech_agent_output)
-        for k, v in tech_agent_data.items():
-                if hasattr(profile, k) and v:
-                    setattr(profile, k, v)
-    except Exception:
-            pass
-    # --- Founder Profiling ---
-    from chains.founder_profiling_chain import run_founder_profiling_chain
-    profile = run_founder_profiling_chain(profile)
-    from agents.founder_profiling_agent import build_founder_profiling_agent
-    founder_agent, founder_task = build_founder_profiling_agent(profile)
-    founder_agent_output = founder_task.callback()
-    try:
-        founder_agent_data = json.loads(founder_agent_output)
-        for k, v in founder_agent_data.items():
-                if hasattr(profile, k) and v:
-                    setattr(profile, k, v)
-    except Exception:
-            pass
-    # --- Market Sizing ---
-    from chains.market_sizing_chain import run_market_sizing_chain
-    profile = run_market_sizing_chain(profile)
-    from agents.market_sizing_agent import build_market_sizing_agent
-    market_agent, market_task = build_market_sizing_agent(profile)
-    market_agent_output = market_task.callback()
-    try:
-        market_agent_data = json.loads(market_agent_output)
-        for k, v in market_agent_data.items():
-                if hasattr(profile, k) and v:
-                    setattr(profile, k, v)
-    except Exception:
-            pass
-    # --- Financial Analysis ---
-    from chains.financial_analysis_chain import run_financial_analysis_chain
-    profile = run_financial_analysis_chain(profile)
-    from agents.financial_analysis_agent import build_financial_analysis_agent
-    fin_agent, fin_task = build_financial_analysis_agent(profile)
-    fin_agent_output = fin_task.callback()
-    try:
-        fin_agent_data = json.loads(fin_agent_output)
-        for k, v in fin_agent_data.items():
-                if hasattr(profile, k) and v:
-                    setattr(profile, k, v)
-    except Exception:
-            pass
-    # --- Competitive Intelligence ---
-    from chains.competitive_intel_chain import run_competitive_intel_chain
-    profile = run_competitive_intel_chain(profile)
-    from agents.competitive_intel_agent import build_competitive_intel_agent
-    comp_agent, comp_task = build_competitive_intel_agent(profile)
-    comp_agent_output = comp_task.callback()
-    try:
-        comp_agent_data = json.loads(comp_agent_output)
-        for k, v in comp_agent_data.items():
-                if hasattr(profile, k) and v:
-                    setattr(profile, k, v)
-    except Exception:
-            pass
-    # --- Risk Assessment ---
-    from chains.risk_assessment_chain import run_risk_assessment_chain
-    profile = run_risk_assessment_chain(profile)
-    from agents.risk_assessment_agent import build_risk_assessment_agent
-    risk_agent, risk_task = build_risk_assessment_agent(profile)
-    risk_agent_output = risk_task.callback()
-    try:
-        risk_agent_data = json.loads(risk_agent_output)
-        for k, v in risk_agent_data.items():
-                if hasattr(profile, k) and v:
-                    setattr(profile, k, v)
-    except Exception:
-            pass
-    # --- ESG, Business Model, Exit, Follow-up (chains only) ---
-    from chains.esg_chain import run_esg_chain_with_text
-    from chains.business_model_chain import run_business_model_chain_with_text
-    from chains.exit_strategy_chain import run_exit_strategy_chain_with_text
-    from chains.follow_up_chain import run_follow_up_chain_with_text
-    profile = run_esg_chain_with_text(text, profile)
-    profile = run_business_model_chain_with_text(text, profile)
-    profile = run_exit_strategy_chain_with_text(text, profile)
-    profile = run_follow_up_chain_with_text(text, profile)
-    return profile
-
-
-def run_pitch_deck_chain_with_text(full_text: str, profile: StartupProfile) -> StartupProfile:
-    from chains.pitch_deck_chain import run_pitch_deck_chain_with_text as run_pitch_chain
-    return run_pitch_chain(full_text, profile)
-
-
-def run_technical_dd_chain_with_text(full_text: str, profile: StartupProfile) -> StartupProfile:
-    return run_technical_dd_chain(profile)
-
-
-def run_founder_profiling_chain_with_text(full_text: str, profile: StartupProfile) -> StartupProfile:
-    return run_founder_profiling_chain(profile)
-
-
-def run_market_sizing_chain_with_text(full_text: str, profile: StartupProfile) -> StartupProfile:
-    return run_market_sizing_chain(profile)
-
-
-def run_financial_analysis_chain_with_text(full_text: str, profile: StartupProfile) -> StartupProfile:
-    return run_financial_analysis_chain(profile)
-
-
-def run_competitive_intel_chain_with_text(full_text: str, profile: StartupProfile) -> StartupProfile:
-    return run_competitive_intel_chain(profile)
-
-
-def run_risk_assessment_chain_with_text(full_text: str, profile: StartupProfile) -> StartupProfile:
-    return run_risk_assessment_chain(profile)
-
 
 # --- Enhanced Detailed Summary Paragraph ---
 def synthesize_detailed_summary(profile):
-    # Use all key fields to create a concise, non-repetitive summary (about 4 lines shorter)
-    summary_parts = []
-    summary_parts.append(f"StoreDot, founded by {getattr(profile, 'founder_name', 'an experienced entrepreneur')}, is a deep-tech battery technology company focused on enabling mass EV adoption through extreme fast charging (XFC) batteries.")
-    summary_parts.append(f"Their proprietary silicon-dominant anode lithium-ion technology allows EVs to charge 100 miles in 5-10 minutes, a significant improvement over current solutions.")
-    summary_parts.append(f"The business model centers on licensing scalable, drop-in compatible battery tech to OEMs and manufacturing partners, with commercial readiness targeted for 2025.")
-    summary_parts.append(f"StoreDot's go-to-market strategy leverages partnerships with over 15 OEMs and a strong patent portfolio (78 granted US patents), positioning the company as a critical enabler for overcoming charging anxiety and infrastructure limitations.")
-    summary_parts.append(f"Roadmap includes advancements toward semi-solid and post-lithium batteries by 2028 and 2032. No recent pivots reported; focus remains on commercializing 100in5 battery cells.")
-    return ' '.join(summary_parts[:4])  # Shorten by omitting the last line for brevity
+    """
+    Produce a 3–4 sentence overview based solely on whatever fields
+    have been populated in `profile`. No hard-coded company names.
+    """
+    name    = getattr(profile, 'name', None) or "The company"
+    founder = getattr(profile, 'founder_name', None)
+    sector  = getattr(profile, 'sector', None)
+    tech    = getattr(profile, 'technology', None) or getattr(profile, 'product_description', None)
+    model   = getattr(profile, 'business_model', None)
+    patents = getattr(profile, 'patents', None)
+    partners= getattr(profile, 'partnerships', None)
+
+    parts = []
+    # Lead sentence
+    lead = f"{name} is a {sector or ''} company"
+    if tech:
+        lead += f" leveraging {tech}"
+    lead += "."
+    parts.append(lead)
+
+    # Founder mention (if available)
+    if founder:
+        parts.append(f"It was founded by {founder}.")
+
+    # Business model
+    if model:
+        parts.append(f"Their business model centers on {model}.")
+
+    # Patent/IP / Partnerships
+    extras = []
+    if patents:
+        extras.append(f"{patents} patents")
+    if partners:
+        extras.append(f"partnerships with {partners}")
+    if extras:
+        parts.append("They currently hold " + " and ".join(extras) + ".")
+
+    # Return the first 3–4 sentences
+    return " ".join(parts[:4])
+
 
 # --- Enhanced Problem Statement and Solution Reasoning ---
-def synthesize_problem_statement(profile):
-    ps = getattr(profile, 'problem_statement', None)
-    if ps and len(ps.split()) > 10:
-        return ps
+def synthesize_problem_statement(profile) -> str:
+    """
+    Craft a short, 2-4-sentence statement of the pain-point the company is
+    addressing, using ONLY info that already exists in `profile`.
+
+    Behaviour
+    ---------
+    • If profile.problem_statement already looks good (≥10 words) → return it.
+    • Otherwise build one from whatever fields are available:
+        sector, customer_segment, pain_point, current_solution,
+        market_trend, negative_impact … (all optional).
+    • If we still can't build ≥2 sensible sentences, fall back to a
+      neutral, industry-agnostic paragraph.
+    """
+
+    # 1)  Re-use a supplied statement if it's long enough
+    raw = getattr(profile, "problem_statement", None)
+    if raw and len(raw.split()) >= 10:
+        return raw.strip()
+
+    # 2)  Assemble one from crumbs we already extracted
+    sector      = getattr(profile, "sector",            None) or "the market"
+    customer    = getattr(profile, "customer_segment",  None) \
+               or getattr(profile, "target_market",     None) \
+               or "customers"
+    pain        = getattr(profile, "pain_point",        None) \
+               or getattr(profile, "key_challenge",     None)
+    status_quo  = getattr(profile, "current_solution",  None)
+    trend       = getattr(profile, "market_trend",      None)
+    impact      = getattr(profile, "negative_impact",   None)
+
+    sents = []
+
+    # Who + what
+    if pain:
+        sents.append(
+            f"{customer.capitalize()} face {pain}, an issue {sector} has struggled with for years."
+        )
+    elif status_quo:
+        sents.append(
+            f"Within {sector}, {customer} still rely on {status_quo}, which is increasingly inadequate."
+        )
+
+    # Trend / context
+    if trend:
+        sents.append(
+            f"Shifts in the market – {trend} – are magnifying the urgency of this challenge."
+        )
+
+    # Impact / consequence
+    if impact:
+        sents.append(
+            f"As a result, organisations experience {impact}, limiting growth and profitability."
+        )
+
+    if len(sents) >= 2:
+        return " ".join(sents)
+
+    # 3)  Last-resort neutral fallback
     return (
-        "A major barrier to electric vehicle (EV) adoption is range anxiety—the fear that an EV cannot travel far enough on a single charge—and the inconvenience of slow charging speeds. "
-        "Current lithium-ion batteries require long charging times, making EVs less practical for daily commutes and long-distance travel. "
-        "This limits consumer confidence and slows the transition to sustainable transportation, despite growing demand for clean mobility solutions. Overcoming these challenges is essential for mass EV adoption and decarbonization."
+        "Target customers struggle with fragmented, outdated processes that raise costs, "
+        "consume valuable time, and restrict scalability. Despite clear demand for more efficient "
+        "alternatives, incumbent solutions have failed to keep pace – leaving a significant gap in the market."
     )
 
-def synthesize_solution_overview(profile):
-    sol = getattr(profile, 'solution_overview', None)
-    if sol and len(sol.split()) > 10:
-        return sol
+def synthesize_solution_overview(profile) -> str:
+    """
+    Produce a succinct, 3-5-sentence description of how the company solves
+    the above problem. 100 % data-driven – no baked-in industry language.
+
+    Logic
+    -----
+    • Honour an existing `solution_overview` if it's reasonably long.
+    • Otherwise compose a paragraph from fields like technology,
+      unique_features, benefits, compatibility_notes, roadmap, etc.
+    • Final fallback: a neutral paragraph that says the company introduces
+      a novel, data-driven platform/service to address the pain-point.
+    """
+
+    # 1)  Use the user-supplied overview if present
+    raw = getattr(profile, "solution_overview", None)
+    if raw and len(raw.split()) >= 10:
+        return raw.strip()
+
+    # 2)  Build one from profile crumbs
+    name          = getattr(profile, "name",                "The company")
+    tech          = getattr(profile, "technology",          None) \
+                 or getattr(profile, "product_description", None) \
+                 or "a novel technology"
+    features      = getattr(profile, "unique_features",     None)
+    benefits      = getattr(profile, "benefits",            None)
+    compatibility = getattr(profile, "compatibility_notes", None)
+    roadmap       = getattr(profile, "product_roadmap",     None)
+
+    sents = [
+        f"{name} introduces {tech} that directly tackles the above pain-point."
+    ]
+
+    if features:
+        sents.append(f"Key differentiators include {features}.")
+    if compatibility:
+        sents.append(f"The solution is compatible with {compatibility}, easing adoption.")
+    if benefits:
+        sents.append(f"Customers gain {benefits}.")
+    if roadmap:
+        sents.append(f"The roadmap outlines: {roadmap}.")
+
+    # If that got us >2 sentences, great
+    if len(sents) >= 2:
+        return " ".join(sents[:5])
+
+    # 3)  Neutral fallback
     return (
-        "StoreDot’s ultra-fast charging batteries leverage proprietary silicon-dominant anode technology to enable EVs to recharge 100 miles in 5-10 minutes. "
-        "This breakthrough makes EVs as convenient as refueling conventional cars, directly addressing range anxiety and slow charging. "
-        "The technology is compatible with existing lithium-ion manufacturing lines, allowing rapid industry adoption and scalability. "
-        "By removing a key barrier to EV adoption, StoreDot positions itself at the forefront of battery innovation and the transition to clean mobility."
+        f"{name} delivers an end-to-end platform that streamlines workflows, "
+        "reduces operating friction, and unlocks new revenue opportunities for its target customers."
     )
 
 # --- Inline Source Attribution for Market Size & Analysis ---
@@ -775,7 +756,7 @@ INVESTMENT MEMORANDUM – {clean_company_name(getattr(profile, 'name', None)) or
 {clean(synthesize_detailed_summary(profile))}
 
 2. COMPANY OVERVIEW
-Company: {clean_company_name(getattr(profile, 'name', None)) or 'TBD'}
+Company: {clean(getattr(profile, 'name', None)) or 'TBD'}
 Sector: {clean(getattr(profile, 'sector', None) or 'TBD')}
 Website: {clean(getattr(profile, 'website', None) or 'TBD')}
 Funding Stage: {format_funding_stage(profile)}
@@ -835,7 +816,7 @@ MEMO:
 """
     discussion = llm.invoke(discussion_prompt).content.strip()
     # De-duplication post-processing
-    return deduplicate_memo(f"{memo_body}\n18. DISCUSSION & ANALYST COMMENTARY\n{discussion}\n\n---\nGenerated by VC Analysis System on {current_date}\nData Sources: Company documents, market research, competitive intelligence, technical analysis\nAnalysis Framework: Multi-agent AI system with specialized domain expertise\n")
+    return deduplicate_memo(f"{memo_body}\n17. DISCUSSION & ANALYST COMMENTARY\n{discussion}\n\n---\nGenerated by VC Analysis System on {current_date}\nData Sources: Company documents, market research, competitive intelligence, technical analysis\nAnalysis Framework: Multi-agent AI system with specialized domain expertise\n")
 
 
 def save_memo_as_pdf(text: str, output_path: str):
@@ -983,7 +964,7 @@ def save_memo_with_template(memo_text, profile, output_path):
                 #     continue
                 # Special handling for DISCUSSION & ANALYST COMMENTARY section headers
                 discussion_headers = [
-                    'Analyst Commentary on StoreDot Investment Memo', 'Key Strengths', 'Key Weaknesses',
+                    'Analyst Commentary on Investment Memo', 'Key Strengths', 'Key Weaknesses',
                     'Opportunities', 'Risks', 'Actionable Recommendations for Investors', 'Summary'
                 ]
                 # --- PATCH: Always use '•' for bullets in section 18 and its subheaders ---
@@ -1190,220 +1171,128 @@ def clean_company_name(name):
         return name
     return re.sub(r'[^A-Za-z0-9 ]+', '', name)
 
-def run_mermaid_style_crewai_orchestration(text, profile, file_path):
+def run_crewai_hierarchical_orchestration(text, profile, file_path, deck_payload):
     """
-    Implements the CrewAI orchestration as described in the provided Mermaid flowchart.
-    Each section is handled by a chain and an agent, with dependencies as per the diagram.
+    Use CrewAI hierarchical mode: each agent/task produces an independent output.
+    At the end, merge all outputs into a single profile dictionary.
     """
-    from crewai import Crew, Task, Process
-    # Build agents
-    deck_agent, deck_agent_task = build_deck_agent(file_path)
-    tech_agent, tech_agent_task = build_technical_dd_agent(profile)
-    founder_agent, founder_agent_task = build_founder_profiling_agent(profile)
-    market_agent, market_agent_task = build_market_sizing_agent(profile)
-    fin_agent, fin_agent_task = build_financial_analysis_agent(profile)
-    comp_agent, comp_agent_task = build_competitive_intel_agent(profile)
-    risk_agent, risk_agent_task = build_risk_assessment_agent(profile)
-    # Chain runner agent for chain-only tasks
-    from crewai import Agent
-    chain_runner_agent = Agent(
-        role="Chain Runner",
-        goal="Run classic chain logic for memo sections.",
-        backstory="A reliable automation agent that executes classic extraction/enrichment chains.",
-        verbose=False
-    )
-    # Define chain-only tasks (ESG, BM, Exit, Follow-Up)
-    from chains.esg_chain import run_esg_chain_with_text
-    from chains.business_model_chain import run_business_model_chain_with_text
-    from chains.exit_strategy_chain import run_exit_strategy_chain_with_text
-    from chains.follow_up_chain import run_follow_up_chain_with_text
-    def esg_chain_task(profile_dict):
-        from core.schemas import StartupProfile
-        profile = StartupProfile(**profile_dict)
-        updated_profile = run_esg_chain_with_text(text, profile)
-        return updated_profile.model_dump()
-    def bm_chain_task(profile_dict):
-        from core.schemas import StartupProfile
-        profile = StartupProfile(**profile_dict)
-        updated_profile = run_business_model_chain_with_text(text, profile)
-        return updated_profile.model_dump()
-    def exit_chain_task(profile_dict):
-        from core.schemas import StartupProfile
-        profile = StartupProfile(**profile_dict)
-        updated_profile = run_exit_strategy_chain_with_text(text, profile)
-        return updated_profile.model_dump()
-    def followup_chain_task(profile_dict):
-        from core.schemas import StartupProfile
-        profile = StartupProfile(**profile_dict)
-        updated_profile = run_follow_up_chain_with_text(text, profile)
-        return updated_profile.model_dump()
-    # Deck extraction
-    deck_chain = Task(
-        description="Extract fields from pitch deck PDF.",
-        agent=chain_runner_agent,
-        callback=deck_agent_task.callback,
-        args=[profile.model_dump()],
-        expected_output="Profile with deck fields extracted."
-    )
-    deck_agent_task_obj = Task(
-        description="Enrich and summarize the extracted pitch deck profile.",
-        agent=deck_agent,
-        callback=deck_agent_task.callback,
-        depends_on=[deck_chain],
-        args=[profile.model_dump()],
-        expected_output="Profile with deck enrichment."
-    )
-    # Founder profiling
-    founder_chain = Task(
-        description="Extract founder/team info from deck.",
-        agent=chain_runner_agent,
-        callback=founder_agent_task.callback,
-        depends_on=[deck_agent_task_obj],
-        args=[profile.model_dump()],
-        expected_output="Profile with founder/team fields extracted."
-    )
-    founder_agent_task_obj = Task(
-        description="Enrich and summarize the founder/team profile.",
-        agent=founder_agent,
-        callback=founder_agent_task.callback,
-        depends_on=[founder_chain],
-        args=[profile.model_dump()],
-        expected_output="Profile with founder/team enrichment."
-    )
-    # Technical due diligence
-    tech_chain = Task(
-        description="Extract technical DD from deck.",
-        agent=chain_runner_agent,
-        callback=tech_agent_task.callback,
-        depends_on=[deck_agent_task_obj],
-        args=[profile.model_dump()],
-        expected_output="Profile with technical DD fields extracted."
-    )
-    tech_agent_task_obj = Task(
-        description="Enrich and summarize the technical DD profile.",
-        agent=tech_agent,
-        callback=tech_agent_task.callback,
-        depends_on=[tech_chain],
-        args=[profile.model_dump()],
-        expected_output="Profile with technical DD enrichment."
-    )
-    # Market sizing
-    market_chain = Task(
-        description="Extract market sizing from deck.",
-        agent=chain_runner_agent,
-        callback=market_agent_task.callback,
-        depends_on=[deck_agent_task_obj],
-        args=[profile.model_dump()],
-        expected_output="Profile with market sizing fields extracted."
-    )
-    market_agent_task_obj = Task(
-        description="Enrich and summarize the market sizing profile.",
-        agent=market_agent,
-        callback=market_agent_task.callback,
-        depends_on=[market_chain],
-        args=[profile.model_dump()],
-        expected_output="Profile with market sizing enrichment."
-    )
-    # Financial analysis
-    fin_chain = Task(
-        description="Extract financials from deck.",
-        agent=chain_runner_agent,
-        callback=fin_agent_task.callback,
-        depends_on=[market_agent_task_obj],
-        args=[profile.model_dump()],
-        expected_output="Profile with financials fields extracted."
-    )
-    fin_agent_task_obj = Task(
-        description="Enrich and summarize the financials profile.",
-        agent=fin_agent,
-        callback=fin_agent_task.callback,
-        depends_on=[fin_chain],
-        args=[profile.model_dump()],
-        expected_output="Profile with financials enrichment."
-    )
-    # Competitive intelligence
-    comp_chain = Task(
-        description="Extract competitive intel from deck.",
-        agent=chain_runner_agent,
-        callback=comp_agent_task.callback,
-        depends_on=[market_agent_task_obj],
-        args=[profile.model_dump()],
-        expected_output="Profile with competitive intel fields extracted."
-    )
-    comp_agent_task_obj = Task(
-        description="Enrich and summarize the competitive intel profile.",
-        agent=comp_agent,
-        callback=comp_agent_task.callback,
-        depends_on=[comp_chain],
-        args=[profile.model_dump()],
-        expected_output="Profile with competitive intel enrichment."
-    )
-    # Risk assessment (depends on tech, fin, comp agents)
-    risk_chain = Task(
-        description="Extract risk assessment from deck.",
-        agent=chain_runner_agent,
-        callback=risk_agent_task.callback,
-        depends_on=[tech_agent_task_obj, fin_agent_task_obj, comp_agent_task_obj],
-        args=[profile.model_dump()],
-        expected_output="Profile with risk assessment fields extracted."
-    )
-    risk_agent_task_obj = Task(
-        description="Enrich and summarize the risk assessment profile.",
-        agent=risk_agent,
-        callback=risk_agent_task.callback,
-        depends_on=[risk_chain],
-        args=[profile.model_dump()],
-        expected_output="Profile with risk assessment enrichment."
-    )
-    # ESG, Business Model, Exit, Follow-Up
-    esg_chain = Task(
-        description="Extract ESG analysis from deck.",
-        agent=chain_runner_agent,
-        callback=esg_chain_task,
-        depends_on=[deck_agent_task_obj],
-        args=[profile.model_dump()],
-        expected_output="Profile with ESG analysis."
-    )
-    bm_chain = Task(
-        description="Extract business model analysis from deck.",
-        agent=chain_runner_agent,
-        callback=bm_chain_task,
-        depends_on=[deck_agent_task_obj],
-        args=[profile.model_dump()],
-        expected_output="Profile with business model analysis."
-    )
-    exit_chain = Task(
-        description="Extract exit strategy analysis from deck.",
-        agent=chain_runner_agent,
-        callback=exit_chain_task,
-        depends_on=[fin_agent_task_obj],
-        args=[profile.model_dump()],
-        expected_output="Profile with exit strategy analysis."
-    )
-    followup_chain = Task(
-        description="Extract follow-up questions and next steps from deck.",
-        agent=chain_runner_agent,
-        callback=followup_chain_task,
-        depends_on=[risk_agent_task_obj, esg_chain, bm_chain, exit_chain, founder_agent_task_obj],
-        args=[profile.model_dump()],
-        expected_output="Profile with follow-up questions and next steps."
-    )
-    # Orchestrate with CrewAI
-    tasks = [
-        deck_chain, deck_agent_task_obj,
-        founder_chain, founder_agent_task_obj,
-        tech_chain, tech_agent_task_obj,
-        market_chain, market_agent_task_obj,
-        fin_chain, fin_agent_task_obj,
-        comp_chain, comp_agent_task_obj,
-        risk_chain, risk_agent_task_obj,
-        esg_chain, bm_chain, exit_chain, followup_chain
-    ]
-    crew = Crew(tasks=tasks, process=Process.sequential)
-    result = crew.kickoff()
-    final_profile_dict = result.tasks_output[-1].output
-    return StartupProfile(**final_profile_dict)
+    # Build all agents (ignore their Task wrappers for now)
+    deck_agent, deck_task      = build_deck_agent(deck_payload)
+    founder_agent, founder_task= build_founder_profiling_agent(deck_payload)
+    market_agent, market_task  = build_market_sizing_agent(profile)
+    tech_agent, tech_task      = build_technical_dd_agent(profile)
+    bm_agent, bm_task          = build_business_model_chain_agent(profile, text, deck_payload)
+    esg_agent, esg_task        = build_esg_chain_agent(profile, text, deck_payload)
+    fin_agent, fin_task        = build_financial_analysis_agent(profile)
+    comp_agent, comp_task      = build_competitive_intel_agent(profile)
+    exit_agent, exit_task      = build_exit_chain_agent(profile, text, deck_payload)
+    risk_agent, risk_task      = build_risk_assessment_agent(profile)
+    followup_agent, followup_task = build_followup_chain_agent(profile, text, deck_payload)
 
+    # Extract the initial context once
+    deck_text = extract_text(file_path)
+
+    # Define CrewAI tasks (independent, no depends_on, context embedded in description)
+    tasks = [
+        Task(description=(
+            f"Extract fields from the following pitch deck text and return ONLY a valid JSON object with these keys: company_name, sector, founders, product_description, market_size, key_financials, competitors, business_model, esg_considerations, risks, exit_strategy. If a field is missing, use an empty string or null. Do NOT include any explanation, commentary, or markdown. The first character of your response must be '{{'.\n\nPitch deck text:\n{deck_text[:5000]}"
+        ), agent=deck_agent, expected_output="Profile dict from deck agent", async_execution=False),
+        Task(description=(
+            f"Extract founder/team info from the following pitch deck text and return ONLY a valid JSON object with these keys: company_name, founders, key_team_members (as a list of dicts with name, role, background), founder_backgrounds, and any relevant team details. If a field is missing, use an empty string or null. Do NOT include any explanation, commentary, or markdown. The first character of your response must be '{{'.\n\nPitch deck text:\n{deck_text[:5000]}"
+        ), agent=founder_agent, expected_output="Profile dict from founder profiling agent", async_execution=False),
+        Task(description=(
+            f"Extract market sizing from the following pitch deck text and return ONLY a valid JSON object with these keys: market_size, TAM, SAM, SOM, growth_rate, sources. If a field is missing, use an empty string or null. Do NOT include any explanation, commentary, or markdown. The first character of your response must be '{{'.\n\nPitch deck text:\n{deck_text[:5000]}"
+        ), agent=market_agent, expected_output="Profile dict from market sizing agent", async_execution=False),
+        Task(description=(
+            f"Extract technical due diligence from the following pitch deck text and return ONLY a valid JSON object with these keys: technical_feasibility, performance, scalability, architecture, integration_complexity, security, regulatory_issues, implementation_complexity, risks, dependencies. If a field is missing, use an empty string or null. Do NOT include any explanation, commentary, or markdown. The first character of your response must be '{{'.\n\nPitch deck text:\n{deck_text[:5000]}"
+        ), agent=tech_agent, expected_output="Profile dict from technical DD agent", async_execution=False),
+        Task(description=(
+            f"Extract business model from the following pitch deck text and return ONLY a valid JSON object with these keys: business_model, revenue_streams, pricing_strategy, scalability, sustainability. If a field is missing, use an empty string or null. Do NOT include any explanation, commentary, or markdown. The first character of your response must be '{{'.\n\nPitch deck text:\n{deck_text[:5000]}"
+        ), agent=bm_agent, expected_output="Profile dict from business model agent", async_execution=False),
+        Task(description=(
+            f"Extract ESG analysis from the following pitch deck text and return ONLY a valid JSON object with these keys: esg_considerations, environmental, social, governance. If a field is missing, use an empty string or null. Do NOT include any explanation, commentary, or markdown. The first character of your response must be '{{'.\n\nPitch deck text:\n{deck_text[:5000]}"
+        ), agent=esg_agent, expected_output="Profile dict from ESG agent", async_execution=False),
+        Task(description=(
+            f"Extract financials from the following pitch deck text and return ONLY a valid JSON object with these keys: key_financials, revenue, burn, runway, valuation, funding_sought, financial_summary. If a field is missing, use an empty string or null. Do NOT include any explanation, commentary, or markdown. The first character of your response must be '{{'.\n\nPitch deck text:\n{deck_text[:5000]}"
+        ), agent=fin_agent, expected_output="Profile dict from financial analysis agent", async_execution=False),
+        Task(description=(
+            f"Extract competitive intel from the following pitch deck text and return ONLY a valid JSON object with these keys: competitors (as a list of dicts with name, website, funding, product_offering, traction, differentiator). If a field is missing, use an empty string or null. Do NOT include any explanation, commentary, or markdown. The first character of your response must be '{{'.\n\nPitch deck text:\n{deck_text[:5000]}"
+        ), agent=comp_agent, expected_output="Profile dict from competitive intel agent", async_execution=False),
+        Task(description=(
+            f"Extract exit strategy from the following pitch deck text and return ONLY a valid JSON object with these keys: exit_strategy, likely_acquirers, IPO_potential, recommended_exit_timeline. If a field is missing, use an empty string or null. Do NOT include any explanation, commentary, or markdown. The first character of your response must be '{{'.\n\nPitch deck text:\n{deck_text[:5000]}"
+        ), agent=exit_agent, expected_output="Profile dict from exit strategy agent", async_execution=False),
+        Task(description=(
+            f"Extract risk assessment from the following pitch deck text and return ONLY a valid JSON object with these keys: risk_flags (array), risk_score (float), risk_summary. If a field is missing, use an empty string or null. Do NOT include any explanation, commentary, or markdown. The first character of your response must be '{{'.\n\nPitch deck text:\n{deck_text[:5000]}"
+        ), agent=risk_agent, expected_output="Profile dict from risk assessment agent", async_execution=False),
+        Task(description=(
+            f"Extract follow-up questions and next steps from the following pitch deck text and return ONLY a valid JSON object with these keys: follow_up_questions (array), next_steps. If a field is missing, use an empty string or null. Do NOT include any explanation, commentary, or markdown. The first character of your response must be '{{'.\n\nPitch deck text:\n{deck_text[:5000]}"
+        ), agent=followup_agent, expected_output="Profile dict from follow-up agent", async_execution=False),
+    ]
+
+    # Create the Crew
+    from langchain_openai import ChatOpenAI
+    manager_llm = ChatOpenAI(model="gpt-4o", temperature=0)
+    crew = Crew(
+        agents=[deck_agent, founder_agent, market_agent, tech_agent, bm_agent, esg_agent, fin_agent, comp_agent, exit_agent, risk_agent, followup_agent],
+        tasks=tasks,
+        verbose=True,
+        process=Process.hierarchical,
+        manager_llm=manager_llm
+    )
+
+    print("Crew created, starting hierarchical analysis...")
+    result = crew.kickoff()
+    print("Analysis completed")
+
+    # Merge all outputs into a single profile dict (flatten nested dicts)
+    profile_dict = profile.model_dump()
+    for i, task_output in enumerate(result.tasks_output):
+        output = getattr(task_output, 'raw', task_output)
+        if isinstance(output, dict):
+            for k, v in output.items():
+                profile_dict[k] = v
+        elif isinstance(output, str):
+            # Optionally handle string outputs if any agent returns plain text
+            print(f"[WARNING] Agent output for task {i} is a string, not a dict: {output[:100]}")
+    print("[DEBUG] Final merged profile before memo generation:", profile_dict)
+
+    # After merging outputs, extract company_name robustly for filename
+    company_name = None
+    if 'company_name' in profile_dict and profile_dict['company_name']:
+        company_name = profile_dict['company_name']
+    elif 'name' in profile_dict and profile_dict['name']:
+        company_name = profile_dict['name']
+    else:
+        for k in ['company_name', 'name']:
+            for v in profile_dict.values():
+                if isinstance(v, dict) and k in v and v[k]:
+                    company_name = v[k]
+                    break
+            if company_name:
+                break
+    if not company_name:
+        company_name = 'UnknownCompany'
+    print(f"[DEBUG] Using company_name for filename: {company_name}")
+    date_str = datetime.now().strftime("%Y%m%d")
+    # Ensure company_name is always a string before using .replace()
+    if not company_name or not isinstance(company_name, str):
+        company_name = 'UnknownCompany'
+    docx_filename = f"memo_{company_name.replace(' ', '_')}_{date_str}.docx"
+
+    # Print the merged profile for debugging
+    print("[DEBUG] Final merged profile:", profile_dict)
+
+    # Try to generate and save the memo, handle errors gracefully
+    try:
+        # Replace this with your actual memo generation logic
+        # For example, generate_word_memo(profile_dict, docx_filename)
+        print(f"[INFO] Memo would be generated and saved as: {docx_filename}")
+        # Uncomment and implement your actual memo generation here
+        # generate_word_memo(profile_dict, docx_filename)
+    except Exception as e:
+        print(f"[ERROR] Failed to generate/save memo: {e}")
+
+    return StartupProfile(**profile_dict)
 
 def main():
     if len(sys.argv) < 2:
@@ -1428,31 +1317,32 @@ def main():
         text = extracted["text"]
         tables = extracted["tables"]
         figures = extracted["figures"]
-        # No image extraction or OCR
-        # Print extraction stats
-        print("="*40)
-        print("[EXTRACTION STATS]")
-        print(f"Extracted text length: {len(text)}")
-        print(f"Number of tables: {len(tables)}")
-        print(f"Number of figures: {len(figures)}")
-        import re
-        clean_preview = re.sub(r'^[^A-Za-z0-9]+', '', text[:1000])
-        print(f"Extracted text preview: {clean_preview}")
-        print("="*40)
+        deck_payload = {
+            "text": text,
+            "tables": tables,
+            "figures": figures,
+            "file_path": file_path
+        }
         profile = StartupProfile()
-        profile.tables = tables
-        profile.figures = figures
+        profile.raw_text = text          # add these fields to the dataclass once
+        profile.tables   = tables
+        profile.figures  = figures
+        profile.filepath = file_path
+        
         # No visual_enrichment
         # --- CrewAI multi-agent orchestration and memo generation ---
-        profile = run_multi_agent_orchestration_with_text(text, profile, file_path)
-        # Generate memo from enriched profile
+        profile = run_crewai_hierarchical_orchestration(text, profile, file_path, deck_payload)          # Generate memo from enriched profile
         memo_text = format_memo(profile)
         with open("memo.txt", "w") as f:
             f.write(memo_text)
         # Save as Word and PDF
         company_name = clean_company_name(getattr(profile, 'name', 'unknown_company'))
-        date_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        date_str = datetime.now().strftime("%Y%m%d")
         os.makedirs("out", exist_ok=True)
+        # Debug print for company_name before filename generation
+        print(f"[DEBUG] company_name before filename: {company_name} (type: {type(company_name)})")
+        if not company_name or not isinstance(company_name, str):
+            company_name = 'UnknownCompany'
         docx_filename = f"memo_{company_name.replace(' ', '_')}_{date_str}.docx"
         docx_path = os.path.join("out", docx_filename)
         save_memo_with_template(memo_text, profile, docx_path)

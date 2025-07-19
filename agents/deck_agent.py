@@ -1,107 +1,163 @@
+# agents/deck_agent.py
 """
-CrewAI wrapper that hands off the heavy work to the LangChain pitch-deck chain.
-Only the callback's return value is surfaced to the caller.
+CrewAI wrapper around the LangChain pitch-deck chain.  
+Each call:
+
+1.  Re-hydrates the incoming profile-dict.
+2.  Runs the text-based pitch-deck extractor.
+3.  (Optionally) enriches the profile with information from graphs / tables.
+4.  Returns an updated profile-dict.
+
+No other task needs anything except that single dictionary.
 """
 
-from crewai import Agent, Task, Crew
-from langchain_openai import ChatOpenAI
-from chains.pitch_deck_chain import run_pitch_deck_chain
-from core.visual_utils import extract_images_from_pdf
-from core.download_utils import extract_text_from_image
-from google.cloud import vision
+from __future__ import annotations
 import os
 import tempfile
+from typing import Tuple, Dict, Any
+from collections.abc import Mapping
 import json
 
-llm = ChatOpenAI(model="gpt-4", temperature=0.2)
+from crewai import Agent, Task
+from langchain_openai import ChatOpenAI
 
-# Helper: filter images for graphs/tables using Vision API label detection
-def filter_graphs_and_tables(image_paths):
-    client = vision.ImageAnnotatorClient()
-    relevant_labels = {"table", "chart", "graph", "diagram", "plot"}
-    selected = []
-    for img_path in image_paths:
-        with open(img_path, "rb") as image_file:
-            content = image_file.read()
-        image = vision.Image(content=content)
-        response = client.label_detection(image=image)
-        labels = response.label_annotations
-        if any(label.description.lower() in relevant_labels for label in labels):
-            selected.append(img_path)
-    return selected
+from core.schemas import StartupProfile
+from core.visual_utils import extract_images_from_pdf
+from core.download_utils import extract_text_from_image
+
+# ――― LLM used by the agent ―――
+_llm = ChatOpenAI(model="gpt-4o", temperature=0.2)
+
+# ――― optional Google Vision helper ―――
+try:
+    from google.cloud import vision
+
+    def filter_graphs_and_tables(image_paths: list[str]) -> list[str]:
+        """
+        Run Google Vision label detection and keep only tables/charts/graphs/diagrams.
+        """
+        client = vision.ImageAnnotatorClient()
+        wanted = {"table", "chart", "graph", "diagram", "plot"}
+        keep: list[str] = []
+        for p in image_paths:
+            with open(p, "rb") as f:
+                img = vision.Image(content=f.read())
+            labels = {l.description.lower() for l in client.label_detection(image=img).label_annotations}
+            if labels & wanted:
+                keep.append(p)
+        return keep
+
+except ImportError:
+    # Fallback: no filtering if Vision API isn't available
+    def filter_graphs_and_tables(image_paths: list[str]) -> list[str]:
+        return image_paths
 
 
-def build_deck_agent(pdf_path: str, trace_id=None):
+def build_deck_agent(deck_payload: Dict[str, Any]) -> Tuple[Agent, Task]:
+    """
+    Parameters
+    ----------
+    deck_payload : dict
+        {
+          "text": str,
+          "tables": list,
+          "figures": list,
+          "file_path": str
+        }
+    """
+
     analyst = Agent(
         role="Pitch-deck analyst",
-        goal="Extract basic metadata and key insights from a startup pitch deck PDF, including visual enrichment.",
+        goal="Extract key facts and visuals from a startup’s pitch-deck PDF.",
         backstory=(
-            "Former VC analyst who has reviewed 1,000+ decks and knows what matters in first-pass screening. Expert in extracting actionable insights from pitch decks, including visuals."
+            "A former VC analyst who has reviewed more than a thousand decks; "
+            "knows exactly which slides hide the crucial information."
         ),
+        llm=_llm,
         verbose=True,
-        llm=llm,
-        allow_delegation=True,
-        max_iter=25,
-        max_execution_time=300
+        allow_delegation=False,   # keep it simple – no sub-agents
+        max_iter=12,
+        max_execution_time=180,
     )
 
-    def _callback(*_):
-        # 1. Run the pitch deck chain (text extraction and field extraction)
-        profile = run_pitch_deck_chain(pdf_path)
+    def _callback(profile_dict: Dict[str, Any],
+                  _payload: Dict[str, Any] = deck_payload) -> Dict[str, Any]:
+        # In hierarchical mode, ignore incoming profile_dict and start fresh
+        profile = StartupProfile()
+        # --- 1  basic text extraction using LLM ----------
+        print("Extracted text being sent to LLM for extraction:", _payload["text"][:500])
+        prompt = f"""
+You are a VC analyst. Extract the following fields from the pitch deck text below and respond ONLY with a valid JSON object with these keys:
+- company_name
+- sector
+- founders
+- product_description
+- market_size
+- key_financials
+- competitors
+- business_model
+- esg_considerations
+- risks
+- exit_strategy
 
-        # 2. Extract images from PDF to a temp directory
-        with tempfile.TemporaryDirectory() as tmpdir:
-            image_paths = extract_images_from_pdf(pdf_path, tmpdir)
-            # 3. Filter for graphs/tables using Vision API label detection
-            filtered_images = filter_graphs_and_tables(image_paths)
-            # 4. Run OCR/table extraction on filtered images
-            ocr_results = []
-            for img_path in filtered_images:
-                ocr_text = extract_text_from_image(img_path)
-                ocr_results.append({"image": img_path, "text": ocr_text})
-            # 5. Optionally, parse/merge results into profile (simple append for now)
-            if ocr_results:
-                if not hasattr(profile, "visual_enrichment"):
-                    profile.visual_enrichment = []
-                profile.visual_enrichment.extend(ocr_results)
-            # 6. Attach filtered image paths for later use in memo
-            profile.extracted_image_paths = filtered_images
-        return profile.model_dump_json(indent=2)
+If a field is missing, use an empty string or null. 
+Respond ONLY with a valid JSON object. Do NOT include any explanation, commentary, or markdown. The first character of your response must be '{{'.
+
+Pitch deck text:
+{_payload['text']}
+"""
+        result = _llm.invoke(prompt)
+        raw = result.content.strip()
+        # Remove Markdown code block if present
+        if raw.startswith("```"):
+            lines = raw.splitlines()
+            # Remove the first line (``` or ```json)
+            if lines[0].startswith("```"):
+                lines = lines[1:]
+            # Remove the last line if it's ```
+            if lines and lines[-1].startswith("```"):
+                lines = lines[:-1]
+            raw = "\n".join(lines).strip()
+        print(f"[Deck Agent] Cleaned JSON string to parse:\n{raw}")
+        try:
+            extracted = json.loads(raw)
+            # Map LLM keys to model keys for compatibility
+            if "company_name" in extracted:
+                extracted["name"] = extracted.pop("company_name")
+            if "founders" in extracted:
+                extracted["founder_name"] = extracted.pop("founders")
+            for k, v in extracted.items():
+                if hasattr(profile, k) and v:
+                    setattr(profile, k, v)
+        except Exception as e:
+            print(f"[Deck Agent] LLM extraction failed: {e}")
+            print(f"[Deck Agent] Raw LLM output:\n{result.content}")
+        # --- 2  optional visual enrichment -----------------------------
+        try:
+            # extract images once – they’re cached on disk by the util
+            all_imgs = extract_images_from_pdf(_payload["file_path"], "extraction_cache")
+            graph_imgs = filter_graphs_and_tables(all_imgs)
+            # very naïve OCR of each kept image → append to profile.figures_ocr
+            ocr_texts = []
+            for img in graph_imgs:
+                ocr_texts.append(extract_text_from_image(img))
+            if ocr_texts:
+                profile.figures_ocr = "\n\n".join(ocr_texts)
+        except Exception as exc:  # never fail the whole run because of OCR
+            profile.figures_ocr = f"[visual-enrichment error: {exc}]"
+        output = profile.model_dump()
+        print(f"[Deck Agent] Output type: {type(output)}")
+        print(f"[Deck Agent] Output keys: {list(output.keys()) if isinstance(output, dict) else 'N/A'}")
+        return output
 
     task = Task(
-        description="Read the PDF, extract key fields, and enrich with data from graphs/tables using Vision API.",
+        description=(
+            "Read the PDF’s raw text + images, extract company/market/product "
+            "facts, and enrich the StartupProfile."
+        ),
         agent=analyst,
-        expected_output="JSON-serialised StartupProfile with key insights and visual enrichment.",
-        async_execution=False,
         callback=_callback,
+        expected_output="Updated StartupProfile as a dict",
     )
 
     return analyst, task
-
-
-def build_pitch_deck_chain_agent(profile, file_path):
-    def chain_callback(*_):
-        from chains.pitch_deck_chain import run_pitch_deck_chain
-        updated_profile = run_pitch_deck_chain(file_path)
-        return updated_profile.model_dump()
-    agent = Agent(
-        role="Pitch Deck Extractor",
-        goal="Extract fields from the pitch deck PDF.",
-        backstory="A specialized agent for extracting structured data from pitch decks.",
-        verbose=True
-    )
-    task = Task(
-        description="Extract fields from pitch deck PDF.",
-        agent=agent,
-        callback=chain_callback,
-        args=[profile.model_dump()],
-        expected_output="Profile with deck fields extracted."
-    )
-    return agent, task
-
-
-def run_crew(pdf_path: str, trace_id=None) -> str:
-    """Run the crew and return the JSON string our callback produced."""
-    agent, task = build_deck_agent(pdf_path, trace_id)
-    crew = Crew(agents=[agent], tasks=[task])
-    return crew.kickoff().raw  # < to hold the clean JSON

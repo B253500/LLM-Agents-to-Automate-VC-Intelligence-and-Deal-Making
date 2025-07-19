@@ -27,6 +27,11 @@ def fetch_page_text(url, max_chars=1500):
         return ""
 
 
+def safe_truncate(text, max_chars=3000):
+    """Truncate text to a maximum number of characters."""
+    return text[:max_chars] if text and len(text) > max_chars else text
+
+
 def get_hybrid_context(profile, topic, k_local=3, k_web=2, use_reports=True):
     """
     Get hybrid context from reports, local docs, and web.

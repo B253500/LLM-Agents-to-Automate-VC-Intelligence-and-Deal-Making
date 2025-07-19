@@ -1,7 +1,6 @@
 from pathlib import Path
 from typing import List
 import hashlib
-from chains.pitch_deck_chain import pdf_to_text
 from core.vector_store import add_doc
 
 def load_vc_reports(reports_dir: str = "data/vc_reports") -> List[str]:
