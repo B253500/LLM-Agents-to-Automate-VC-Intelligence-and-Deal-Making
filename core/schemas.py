@@ -38,8 +38,11 @@ class StartupProfile(BaseModel):
     prior_exits: Optional[int] = None
     top_competitors: List[Competitor] = []
     TAM: Optional[float] = None
+    TAM_source: Optional[str] = None
     SAM: Optional[float] = None
+    SAM_source: Optional[str] = None
     SOM: Optional[float] = None
+    SOM_source: Optional[str] = None
     cash_burn_12m: Optional[float] = None
     runway_months: Optional[float] = None
     implied_valuation: Optional[float] = None
@@ -60,3 +63,23 @@ class StartupProfile(BaseModel):
     # Visuals and charts for memo
     extracted_image_paths: Optional[List[str]] = []
     market_chart_path: Optional[str] = None
+    figures_ocr: Optional[str] = None
+    cagr: Optional[float] = None
+    cagr_source: Optional[str] = None
+    market_growth_rate: Optional[str] = None
+    market_growth_rate_source: Optional[str] = None
+    gross_margin: Optional[float] = None
+    ebitda: Optional[float] = None
+    net_income: Optional[float] = None
+    arr: Optional[float] = None
+    mrr: Optional[float] = None
+    cac: Optional[float] = None
+    ltv: Optional[float] = None
+    payback_period: Optional[str] = None
+    revenue_growth_rate: Optional[str] = None
+    major_investors: Optional[list[str]] = None
+    ownership_breakdown: Optional[list[dict]] = None
+    debt: Optional[float] = None
+    cash_on_hand: Optional[float] = None
+    tables_text: Optional[str] = None
+    market_size_sources: Optional[list[str]] = None

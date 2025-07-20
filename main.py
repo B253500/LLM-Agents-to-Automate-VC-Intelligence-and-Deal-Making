@@ -13,8 +13,6 @@ from core.schemas import StartupProfile
 from core.vector_store import clear_collection
 from fpdf import FPDF
 from langchain_openai import ChatOpenAI
-
-# Add imports for CrewAI agents
 from agents.technical_dd_agent import build_technical_dd_agent
 from agents.market_sizing_agent import build_market_sizing_agent
 from agents.competitive_intel_agent import build_competitive_intel_agent
@@ -164,39 +162,21 @@ def synthesize_product_description_llm(profile):
     """
     from langchain_openai import ChatOpenAI
     llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
-    context = f"""
-Company: {getattr(profile, 'name', 'N/A')}
-Sector: {getattr(profile, 'sector', 'N/A')}
-Product Description: {getattr(profile, 'product_description', '')}
-Product Specs: {getattr(profile, 'product_specs', '')}
-Product Roadmap: {getattr(profile, 'product_roadmap', '')}
-Unique Features: {getattr(profile, 'unique_features', '')}
-Status: {getattr(profile, 'status', '')}
-Cell Format: {getattr(profile, 'cell_format', '')}
-Cycle Life: {getattr(profile, 'cycle_life', '')}
-Performance: {getattr(profile, 'performance', '')}
-Technology: {getattr(profile, 'technology', '')}
-Differentiator: {getattr(profile, 'differentiator', '')}
-"""
     prompt = f"""
-You are a top-tier senior venture capitalist with experience in evaluating early-stage startups. Your role is to generate a detailed, critical Product/Service Description section for an investment memorandum, using only the provided context. Do not make up facts. Use plain text (no HTML). Structure the output as follows:
-
-- Begin with a concise overview paragraph of the product/service and its purpose.
-- Add subheadings and bullet points for:
-  • Key Features and Functionality (bulleted)
-  • Performance and Scalability (bulleted)
-  • Extensibility and Integration (bulleted)
-  • Open-Source/Community Aspects (if relevant)
-  • Product Roadmap (as a subheading or bullet list if available)
-- Highlight what differentiates this product/service from competitors.
-- Use a critical, VC-style lens—note both strengths and any missing or unclear information.
-- Do not hallucinate or invent details not present in the context.
-
+You are a VC analyst writing the Product/Service Description section for an investment memo.
+- Do NOT repeat information already covered in the Detailed Summary or Solution Overview.
+- Focus on the unique technical features, product roadmap, and what sets this product apart from competitors.
+- Be concise: no more than 6 sentences.
+- Use plain, non-marketing language.
 Context:
-{context}
+Company: {getattr(profile, 'name', '')}
+Product: {getattr(profile, 'product_description', '')}
+Sector: {getattr(profile, 'sector', '')}
+Key Features: {getattr(profile, 'key_features', '')}
+Roadmap: {getattr(profile, 'product_roadmap', '')}
 """
     response = llm.invoke(prompt)
-    return response.content if hasattr(response, 'content') else response
+    return response.content.strip() if hasattr(response, 'content') else str(response)
 
 # Update run_all_sequential_with_text to use both chains and agents
 
@@ -254,6 +234,61 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
     except Exception:
         pass
     print(f"🔧 After tech DD: Maturity={profile.tech_maturity}, Moat={profile.moat_strength}")
+    # --- Internet search fallback for technical due diligence ---
+    missing_tech = []
+    if not getattr(profile, 'tech_maturity', None): missing_tech.append('tech_maturity')
+    if not getattr(profile, 'moat_strength', None): missing_tech.append('moat_strength')
+    if not getattr(profile, 'tech_stack', None): missing_tech.append('tech_stack')
+    if not getattr(profile, 'security', None): missing_tech.append('security')
+    if not getattr(profile, 'implementation', None): missing_tech.append('implementation')
+    if not getattr(profile, 'regulatory', None): missing_tech.append('regulatory')
+    if not getattr(profile, 'testing', None): missing_tech.append('testing')
+    if missing_tech:
+        try:
+            from core.perplexity_utils import search_perplexity
+            from langchain_openai import ChatOpenAI
+            query = f"What are the key technical details (maturity, moat, tech stack, security, implementation, regulatory, testing) for {profile.name} in the {profile.sector} sector?"
+            web_result = search_perplexity(query)
+            print(f"[Tech DD Perplexity] Web result:\n{web_result}")
+            if web_result:
+                llm = ChatOpenAI(model='gpt-4')
+                prompt = f"""
+You are a VC analyst. Extract the following fields from the web search result below. Respond ONLY with a valid JSON object with these keys: {', '.join(missing_tech)}. If a field is missing, use null. Do NOT include any explanation or markdown.
+
+Web search result:
+{web_result}
+"""
+                result = llm.invoke(prompt)
+                import json
+                raw = result.content.strip()
+                if raw.startswith('```'):
+                    lines = raw.splitlines()
+                    if lines[0].startswith('```'):
+                        lines = lines[1:]
+                    if lines and lines[-1].startswith('```'):
+                        lines = lines[:-1]
+                    raw = '\n'.join(lines).strip()
+                try:
+                    extracted = json.loads(raw)
+                    for k, v in extracted.items():
+                        if hasattr(profile, k) and v:
+                            # Try to cast to float for numeric fields
+                            if k in ['TAM', 'SAM', 'SOM', 'cagr', 'market_growth_rate']:
+                                try:
+                                    setattr(profile, k, float(v))
+                                except Exception:
+                                    setattr(profile, k, v)
+                            else:
+                                setattr(profile, k, v)
+                            # Set source for each value
+                            if k in ['TAM', 'SAM', 'SOM', 'cagr', 'market_growth_rate']:
+                                setattr(profile, f"{k}_source", 'deck_ocr/table')
+                                print(f"[Market Size Extraction] Found {k} in deck figures/tables: {v}")
+                    print(f"[Tech DD Perplexity] Extracted: {extracted}")
+                except Exception as e:
+                    print(f"[Tech DD Perplexity] Failed to parse LLM output: {e}")
+        except Exception as e:
+            print(f"[Tech DD Perplexity] Error: {e}")
     # Founder Profiling (chain + agent)
     from chains.founder_profiling_chain import run_founder_profiling_chain
     profile = run_founder_profiling_chain(profile)
@@ -306,6 +341,17 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
     except Exception:
         pass
     print(f"🏆 After competitive intel: {len(profile.top_competitors)} competitors found")
+    # After competitive intel enrichment, ensure each competitor has a website
+    from core.external_enrichment import find_company_website
+    for comp in getattr(profile, 'top_competitors', []):
+        if not comp.get('website'):
+            website = find_company_website(
+                company_name=comp.get('name', ''),
+                sector=getattr(profile, 'sector', None),
+                deck_text=None
+            )
+            if website:
+                comp['website'] = website
     # Risk Assessment (chain + agent)
     from chains.risk_assessment_chain import run_risk_assessment_chain
     profile = run_risk_assessment_chain(profile)
@@ -334,11 +380,150 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
     print(f"❓ After follow-up: {profile.follow_up_questions}")
     # Product Description (enhanced)
     profile.product_description = synthesize_product_description(profile)
+
+    # --- Visual OCR value extraction for market size and financials ---
+    if getattr(profile, 'figures_ocr', None) or getattr(profile, 'tables_text', None):
+        missing_fields = []
+        if not profile.TAM: missing_fields.append('TAM')
+        if not profile.SAM: missing_fields.append('SAM')
+        if not profile.SOM: missing_fields.append('SOM')
+        if not profile.cash_burn_12m: missing_fields.append('cash_burn_12m')
+        if not profile.runway_months: missing_fields.append('runway_months')
+        if not profile.implied_valuation: missing_fields.append('implied_valuation')
+        if not profile.cagr: missing_fields.append('CAGR')
+        if not profile.market_growth_rate: missing_fields.append('market_growth_rate')
+        if missing_fields:
+            try:
+                from langchain_openai import ChatOpenAI
+                llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
+                ocr_context = getattr(profile, 'figures_ocr', '') or ''
+                table_context = getattr(profile, 'tables_text', '') or ''
+                context = ocr_context + "\n\n" + table_context
+                prompt = f"""
+You are a VC analyst extracting market size and financial metrics from pitch deck text, figures, and tables.
+- Your TOP PRIORITY is to find market size values (TAM, SAM, SOM, etc.) in figures and tables extracted from the deck, especially those with currency symbols ($, €, £, etc.).
+- For each value, state the context (e.g., 'from figure on page X', 'from table on page Y', or 'from OCR text').
+- If multiple values are found, prefer the most recent or most clearly labeled.
+- Only if a value is not found in figures/tables, leave it null (web search will be used as fallback).
+- For each value, pair it with its context/label (e.g., 'Total Addressable Market', 'CAGR', 'Revenue 2025', etc.).
+- Extract the following fields if present: {', '.join(missing_fields)}. If a field is missing, leave it null.
+- Return a JSON object with these fields and a short explanation for each value if possible.
+Context:
+{context}
+"""
+                txt = llm.invoke(prompt).content.strip()
+                import json
+                first, last = txt.find("{"), txt.rfind("}")
+                if first != -1 and last != -1:
+                    data = json.loads(txt[first : last + 1])
+                    for k, v in data.items():
+                        if hasattr(profile, k) and v:
+                            # Try to cast to float for numeric fields
+                            if k in ['TAM', 'SAM', 'SOM', 'cagr', 'market_growth_rate']:
+                                try:
+                                    setattr(profile, k, float(v))
+                                except Exception:
+                                    setattr(profile, k, v)
+                            else:
+                                setattr(profile, k, v)
+                            # Set source for each value
+                            if k in ['TAM', 'SAM', 'SOM', 'cagr', 'market_growth_rate']:
+                                setattr(profile, f"{k}_source", 'deck_ocr/table')
+                                print(f"[Market Size Extraction] Found {k} in deck figures/tables: {v}")
+            except Exception as e:
+                print(f"[OCR/LLM Extraction] Error: {e}")
+    # --- Fallback: targeted web search for market size ---
+    if not profile.TAM or not profile.SAM or not profile.SOM or not profile.cagr or not profile.market_growth_rate:
+        from core.perplexity_utils import search_perplexity
+        company = getattr(profile, 'name', '')
+        product = getattr(profile, 'product_description', '')
+        sector = getattr(profile, 'sector', '')
+        queries = [
+            f"market size for {product} in {sector}",
+            f"TAM for {company} {product}",
+            f"SAM for {company} {product}",
+            f"SOM for {company} {product}",
+            f"growth rate for {product} in {sector}",
+            f"CAGR for {product} in {sector}",
+            f"market size for {company} in {sector}",
+        ]
+        market_size_sources = []
+        max_web_searches = 2
+        web_search_count = 0
+        for q in queries:
+            if web_search_count >= max_web_searches:
+                print("[Market Size Web Search] Reached web search limit.")
+                break
+            print(f"[Market Size Web Search] Querying: {q}")
+            try:
+                import signal
+                import time
+                class TimeoutException(Exception): pass
+                def handler(signum, frame): raise TimeoutException()
+                signal.signal(signal.SIGALRM, handler)
+                signal.alarm(30)  # 30 second timeout
+                result = search_perplexity(q)
+                web_search_count += 1
+                signal.alarm(0)
+                print(f"[Market Size Web Search] Result: {result[:500]}")
+                # Try to extract a source URL from the result
+                import re
+                urls = re.findall(r'https?://[\w./\-_%#?=&]+', result)
+                if urls:
+                    market_size_sources.extend(urls)
+                # Use LLM to extract values from result
+                llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
+                prompt = f"""
+Extract the following fields if present: TAM, SAM, SOM, CAGR, market_growth_rate. Use only the provided context. Return as JSON.
+Context:
+{result}
+"""
+                txt = llm.invoke(prompt).content.strip()
+                first, last = txt.find("{"), txt.rfind("}")
+                if first != -1 and last != -1:
+                    import json
+                    data = json.loads(txt[first : last + 1])
+                    for k, v in data.items():
+                        if hasattr(profile, k) and v:
+                            # Try to cast to float for numeric fields
+                            if k in ['TAM', 'SAM', 'SOM', 'cagr', 'market_growth_rate']:
+                                try:
+                                    setattr(profile, k, float(v))
+                                except Exception:
+                                    setattr(profile, k, v)
+                            else:
+                                setattr(profile, k, v)
+                            # Set source for each value
+                            if k in ['TAM', 'SAM', 'SOM', 'cagr', 'market_growth_rate']:
+                                if urls:
+                                    setattr(profile, f"{k}_source", urls[0])
+                                else:
+                                    setattr(profile, f"{k}_source", 'web_search')
+                # Save sources to profile if found
+                if market_size_sources:
+                    profile.market_size_sources = list(set(market_size_sources))
+                # If all found, break
+                if profile.TAM and profile.SAM and profile.SOM and profile.cagr and profile.market_growth_rate:
+                    break
+            except Exception as e:
+                print(f"[Market Size Web Search] Error: {e}")
+                continue
     # --- Website enrichment if missing ---
     if not profile.website or profile.website.lower() in ['unknown', 'n/a', '']:
         try:
-            from run_crewai_analysis import run_website_finder
-            profile.website = run_website_finder(profile.name, profile.founder_name, profile.sector)
+            from core.external_enrichment import find_company_website
+            # Use the full_text variable as deck_text if available
+            website = find_company_website(
+                company_name=profile.name,
+                founder_name=profile.founder_name,
+                sector=profile.sector,
+                deck_text=full_text if 'full_text' in locals() else None
+            )
+            if website:
+                profile.website = website
+                print(f"[Website Enrichment] Found website: {website}")
+            else:
+                print("[Website Enrichment] No website found.")
         except Exception as e:
             print(f"[Website Enrichment] Error: {e}")
     if hasattr(profile, 'executives') and isinstance(profile.executives, list):
@@ -377,36 +562,76 @@ def run_risk_assessment_chain_with_text(full_text: str, profile: StartupProfile)
 
 # --- Enhanced Detailed Summary Paragraph ---
 def synthesize_detailed_summary(profile):
-    # Use all key fields to create a concise, non-repetitive summary (about 4 lines shorter)
+    # Use all key fields to create a concise, non-repetitive summary (single paragraph, max 4 sentences)
+    name = getattr(profile, 'name', 'the company')
+    founder = getattr(profile, 'founder_name', 'an experienced entrepreneur')
+    sector = getattr(profile, 'sector', 'the sector')
+    year_founded = getattr(profile, 'year_founded', None)
+    product = getattr(profile, 'product_description', '')
+    business_model = getattr(profile, 'business_model', '')
+    highlight = ''
+    # Pick a key highlight if available
+    if getattr(profile, 'moat_strength', None):
+        highlight = f"Key differentiator: {profile.moat_strength}."
+    elif getattr(profile, 'tech_maturity', None):
+        highlight = f"Technical maturity: {profile.tech_maturity}."
+    # Compose up to 4 sentences, no more, and join as a single paragraph
     summary_parts = []
-    summary_parts.append(f"StoreDot, founded by {getattr(profile, 'founder_name', 'an experienced entrepreneur')}, is a deep-tech battery technology company focused on enabling mass EV adoption through extreme fast charging (XFC) batteries.")
-    summary_parts.append(f"Their proprietary silicon-dominant anode lithium-ion technology allows EVs to charge 100 miles in 5-10 minutes, a significant improvement over current solutions.")
-    summary_parts.append(f"The business model centers on licensing scalable, drop-in compatible battery tech to OEMs and manufacturing partners, with commercial readiness targeted for 2025.")
-    summary_parts.append(f"StoreDot's go-to-market strategy leverages partnerships with over 15 OEMs and a strong patent portfolio (78 granted US patents), positioning the company as a critical enabler for overcoming charging anxiety and infrastructure limitations.")
-    summary_parts.append(f"Roadmap includes advancements toward semi-solid and post-lithium batteries by 2028 and 2032. No recent pivots reported; focus remains on commercializing 100in5 battery cells.")
-    return ' '.join(summary_parts[:4])  # Shorten by omitting the last line for brevity
+    if year_founded:
+        summary_parts.append(f"{name} was founded in {year_founded} by {founder} and operates in the {sector} sector.")
+    else:
+        summary_parts.append(f"{name}, founded by {founder}, operates in the {sector} sector.")
+    if product:
+        summary_parts.append(f"The company develops {product}.")
+    if business_model:
+        summary_parts.append(f"Business model: {business_model}")
+    if highlight:
+        summary_parts.append(highlight)
+    # Remove duplicates and keep only the first 4 non-empty lines
+    seen = set()
+    filtered = []
+    for part in summary_parts:
+        if part and part not in seen:
+            filtered.append(part)
+            seen.add(part)
+        if len(filtered) >= 4:
+            break
+    return ' '.join(filtered).replace('\n', ' ')
 
 # --- Enhanced Problem Statement and Solution Reasoning ---
-def synthesize_problem_statement(profile):
-    ps = getattr(profile, 'problem_statement', None)
-    if ps and len(ps.split()) > 10:
-        return ps
-    return (
-        "A major barrier to electric vehicle (EV) adoption is range anxiety—the fear that an EV cannot travel far enough on a single charge—and the inconvenience of slow charging speeds. "
-        "Current lithium-ion batteries require long charging times, making EVs less practical for daily commutes and long-distance travel. "
-        "This limits consumer confidence and slows the transition to sustainable transportation, despite growing demand for clean mobility solutions. Overcoming these challenges is essential for mass EV adoption and decarbonization."
-    )
+def synthesize_problem_statement_llm(profile):
+    from langchain_openai import ChatOpenAI
+    llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
+    prompt = f"""
+You are a VC analyst writing the Problem Statement section for an investment memo.
+- Clearly state the main problem or pain point that the company's product/service is solving.
+- Try to be specific to the company's sector, product, and market context.
+- Do NOT use generic or sector-wide statements—focus on the actual problem this company addresses.
+- Use plain, non-marketing language.
+Context:
+Company: {getattr(profile, 'name', '')}
+Sector: {getattr(profile, 'sector', '')}
+Product: {getattr(profile, 'product_description', '')}
+"""
+    response = llm.invoke(prompt)
+    return response.content.strip() if hasattr(response, 'content') else str(response)
 
-def synthesize_solution_overview(profile):
-    sol = getattr(profile, 'solution_overview', None)
-    if sol and len(sol.split()) > 10:
-        return sol
-    return (
-        "StoreDot’s ultra-fast charging batteries leverage proprietary silicon-dominant anode technology to enable EVs to recharge 100 miles in 5-10 minutes. "
-        "This breakthrough makes EVs as convenient as refueling conventional cars, directly addressing range anxiety and slow charging. "
-        "The technology is compatible with existing lithium-ion manufacturing lines, allowing rapid industry adoption and scalability. "
-        "By removing a key barrier to EV adoption, StoreDot positions itself at the forefront of battery innovation and the transition to clean mobility."
-    )
+def synthesize_solution_overview_llm(profile):
+    from langchain_openai import ChatOpenAI
+    llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
+    prompt = f"""
+You are a VC analyst writing the Solution Overview section for an investment memo.
+- Clearly explain how the company's product/service solves the problem described in the Problem Statement.
+- Highlight what is unique or innovative about their approach.
+- Be specific to the company's sector, product, and technology.
+- Use plain, non-marketing language.
+Context:
+Company: {getattr(profile, 'name', '')}
+Sector: {getattr(profile, 'sector', '')}
+Product: {getattr(profile, 'product_description', '')}
+"""
+    response = llm.invoke(prompt)
+    return response.content.strip() if hasattr(response, 'content') else str(response)
 
 # --- Inline Source Attribution for Market Size & Analysis ---
 def format_money(val):
@@ -435,50 +660,41 @@ def format_money(val):
         return f"${val:,.0f}"
 
 def format_market_size_section(profile):
-    # Get LLM-generated narrative if available
     narrative = getattr(profile, 'market_summary', '') or getattr(profile, 'market_size_narrative', '')
+    # Get values and sources
     TAM = format_money(getattr(profile, 'TAM', 0))
+    TAM_source = getattr(profile, 'TAM_source', None)
     SAM = format_money(getattr(profile, 'SAM', 0))
+    SAM_source = getattr(profile, 'SAM_source', None)
     SOM = format_money(getattr(profile, 'SOM', 0))
-    try:
-        penetration = (float(getattr(profile, 'SOM', 0)) / float(getattr(profile, 'TAM', 1))) * 100 if getattr(profile, 'TAM', 0) else 0
-    except Exception:
-        penetration = 0
-    source = getattr(profile, 'market_source', None) or 'Pitch deck'
-    # Compose a richer discussion
-    discussion_parts = []
-    # Growth drivers and inhibitors
-    discussion_parts.append("Growth is driven by increasing EV adoption, regulatory mandates for clean energy, and advances in battery technology. Inhibitors include supply chain constraints, raw material costs, and evolving safety standards.")
-    # Opportunities and threats
-    discussion_parts.append("Key opportunities include first-mover advantage, strategic partnerships, and addressing unmet needs in fast-charging and energy density. Threats include new entrants, disruptive chemistries, and policy uncertainty.")
-    # SOM justification
-    som_just = getattr(profile, 'som_justification', None)
-    if som_just:
-        discussion_parts.append(f"SOM is based on: {som_just}")
-    else:
-        discussion_parts.append("SOM is based on company projections and may require independent validation.")
-    # Segmentation, regional trends, customer types
-    segmentation = getattr(profile, 'market_segmentation', None)
-    if segmentation:
-        discussion_parts.append(f"Market segmentation: {segmentation}")
-    # Recent news/events
-    recent_news = getattr(profile, 'market_news', None)
-    if recent_news:
-        discussion_parts.append(f"Recent market news: {recent_news}")
-    # Source and verification
-    if source.lower() == 'pitch deck':
-        discussion_parts.append('(Market size is based on company materials; independent verification recommended.)')
-    else:
-        discussion_parts.append(f"Source: {source}")
-    # Compose final discussion
-    market_discussion = ' '.join(discussion_parts)
+    SOM_source = getattr(profile, 'SOM_source', None)
+    CAGR = getattr(profile, 'cagr', None)
+    CAGR_source = getattr(profile, 'cagr_source', None)
+    growth_rate = getattr(profile, 'market_growth_rate', None)
+    growth_rate_source = getattr(profile, 'market_growth_rate_source', None)
     lines = []
-    if narrative:
-        lines.append(narrative.strip())
-    lines.append(f"TAM {TAM}, SAM {SAM}, SOM {SOM}; Market Penetration: {penetration:.1f} %")
-    if market_discussion:
-        lines.append(market_discussion)
-    # Remove sector name at end (do not append)
+    # Safely cast SOM and TAM to float for market penetration calculation
+    try:
+        som_val = float(getattr(profile, 'SOM', 0) or 0)
+    except Exception:
+        som_val = 0.0
+    try:
+        tam_val = float(getattr(profile, 'TAM', 1) or 1)
+    except Exception:
+        tam_val = 1.0
+    market_penetration = (som_val / tam_val * 100) if tam_val else 0.0
+    # Show source next to each value if available
+    def src(s):
+        return f" [Source: {s}]" if s else ""
+    lines.append(f"TAM {TAM}{src(TAM_source)}, SAM {SAM}{src(SAM_source)}, SOM {SOM}{src(SOM_source)}; Market Penetration: {market_penetration:.1f} %")
+    if CAGR:
+        lines.append(f"CAGR: {CAGR}%{src(CAGR_source)}")
+    if growth_rate:
+        lines.append(f"Market Growth Rate: {growth_rate}{src(growth_rate_source)}")
+    if not narrative and not any([getattr(profile, 'TAM', None), getattr(profile, 'SAM', None), getattr(profile, 'SOM', None)]):
+        lines.append("No detailed market analysis or size data was available in the provided materials or external sources. Independent market research is recommended.")
+    elif narrative:
+        lines.append(narrative)
     return '\n'.join(lines)
 
 # --- Expanded Competitive Landscape ---
@@ -488,27 +704,30 @@ def format_competitive_landscape(profile):
         return 'Competitor analysis not available.'
     lines = []
     for comp in competitors:
-        # Name and website
         name = comp.get('name', 'Unknown')
         website = comp.get('website', '') or comp.get('url', '')
-        name_line = f"• {name} ({website})" if website else f"• {name}"
-        lines.append(name_line)
-        # Total funding
-        funding = comp.get('total_funding', '')
-        if funding:
-            lines.append(f"  • Total Funding: {funding}")
-        # Product offering/description
         product = comp.get('product_offering', '') or comp.get('product', '') or comp.get('description', '')
-        if product:
-            lines.append(f"  • Product Offering: {product}")
-        # Traction
-        traction = comp.get('traction', '')
-        if traction:
-            lines.append(f"  • Traction: {traction}")
-        # Differentiator
         differentiator = comp.get('differentiator', '')
-        if differentiator:
-            lines.append(f"  • Differentiator: {differentiator}")
+        # Header line with name and website
+        if website:
+            lines.append(f"• {name} ({website})")
+        else:
+            lines.append(f"• {name}")
+        if product:
+            lines.append(f"  Product: {product}")
+        if differentiator and differentiator != product:
+            lines.append(f"  Unique Value: {differentiator}")
+        # --- LLM-generated recent news for this competitor ---
+        from langchain_openai import ChatOpenAI
+        llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
+        news_prompt = f"""
+                    You are a VC analyst. For the competitor below, provide a 1-2 sentence summary of the most recent news, partnerships, funding, or product launches. Use only public sources and do not make up facts. If no news is available, say so.
+                    Competitor: {name}
+                    Website: {website}
+                    """
+        news_response = llm.invoke(news_prompt)
+        news = news_response.content.strip() if hasattr(news_response, 'content') else str(news_response)
+        lines.append(f"  Recent News: {news}")
     return '\n'.join(lines)
 
 def format_technical_dd_section(profile):
@@ -627,30 +846,46 @@ def format_funding_stage(profile):
     return funding_stage
 
 def format_financials_section(profile, current_date):
-    implied_valuation = getattr(profile, 'implied_valuation', None)
-    cash_burn_12m = getattr(profile, 'cash_burn_12m', None)
-    runway_months = getattr(profile, 'runway_months', None)
-    SOM = getattr(profile, 'SOM', None)
-    ASP = getattr(profile, 'average_selling_price', None)
-    # Estimate potential revenue and valuation
-    revenue_projection = None
-    valuation_projection = None
-    revenue_comment = ""
-    if SOM:
-        try:
-            som_val = float(SOM)
-            asp_val = float(ASP) if ASP else 100000  # Default ASP if not available
-            revenue_projection = som_val * asp_val
-            valuation_projection = revenue_projection * 8  # 8x revenue multiple as a default
-            revenue_comment = f"\nPotential Annual Revenue (if full SOM captured): {format_money(revenue_projection)} (Assumes ASP ${asp_val:,.0f})\nPotential Valuation (8x revenue): {format_money(valuation_projection)}"
-        except Exception:
-            revenue_comment = "\nPotential revenue/valuation projections unavailable due to missing or invalid data."
-    else:
-        revenue_comment = "\nPotential revenue/valuation projections unavailable due to missing SOM."
-    if not (implied_valuation or cash_burn_12m or runway_months):
-        return f"Company has not released financials as of {current_date}.{revenue_comment}"
-    else:
-        return f"Implied Valuation: {format_money(implied_valuation) if implied_valuation else 'N/A'}\nCash Burn (12 months): {format_money(cash_burn_12m) if cash_burn_12m else 'N/A'}\nRunway: {runway_months if runway_months else 'N/A'} months{revenue_comment}"
+    # Collect all financial metrics
+    metrics = [
+        ("Revenue", getattr(profile, 'revenue', None)),
+        ("Projected Revenue", getattr(profile, 'projected_revenue', None)),
+        ("Cash Burn (12m)", getattr(profile, 'cash_burn_12m', None)),
+        ("Runway (months)", getattr(profile, 'runway_months', None)),
+        ("Implied Valuation", getattr(profile, 'implied_valuation', None)),
+        ("Gross Margin", getattr(profile, 'gross_margin', None)),
+        ("EBITDA", getattr(profile, 'ebitda', None)),
+        ("Net Income", getattr(profile, 'net_income', None)),
+        ("ARR", getattr(profile, 'arr', None)),
+        ("MRR", getattr(profile, 'mrr', None)),
+        ("CAC", getattr(profile, 'cac', None)),
+        ("LTV", getattr(profile, 'ltv', None)),
+        ("Payback Period", getattr(profile, 'payback_period', None)),
+        ("Revenue Growth Rate", getattr(profile, 'revenue_growth_rate', None)),
+        ("Debt", getattr(profile, 'debt', None)),
+        ("Cash on Hand", getattr(profile, 'cash_on_hand', None)),
+    ]
+    # Cap Table/Investors
+    major_investors = getattr(profile, 'major_investors', None)
+    ownership_breakdown = getattr(profile, 'ownership_breakdown', None)
+    # Check if any metrics are available
+    has_metrics = any(v is not None and v != '' for _, v in metrics) or (major_investors or ownership_breakdown)
+    if not has_metrics:
+        return f"Company has not released financials as of {current_date}. No detailed financials were disclosed in the deck or public sources. We recommend requesting a financial summary from the company, including revenue, burn rate, runway, and recent funding rounds. Independent verification of financials is advised before proceeding."
+    # Table header
+    lines = ["| Metric | Value |", "|--------|-------|"]
+    for label, value in metrics:
+        if value is not None and value != '':
+            lines.append(f"| {label} | {value} |")
+    # Cap Table/Investors
+    if major_investors:
+        lines.append(f"| Major Investors | {', '.join(major_investors)} |")
+    if ownership_breakdown:
+        for owner in ownership_breakdown:
+            name = owner.get('name', 'Unknown')
+            percent = owner.get('percent', '')
+            lines.append(f"| Ownership: {name} | {percent} |")
+    return '\n'.join(lines)
 
 def format_risk_score(profile):
     risk_score = getattr(profile, 'risk_score', None)
@@ -696,26 +931,26 @@ def format_risk_section(profile):
 def synthesize_risks_section_llm(profile):
     from langchain_openai import ChatOpenAI
     llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
-    context = f"""
-Company: {getattr(profile, 'name', 'N/A')}
+    prompt = f"""
+You are a VC analyst writing the Risks section for an investment memo.
+- List only the key risks relevant to this company and product, with a specific explanation for each risk.
+- Do NOT include any mitigation, recommendation, or investor action—just the risk and its description.
+- Make each risk specific to the company's technology, market, or business context. Avoid generic or boilerplate risks.
+- Use bullet points, with each risk followed by a short, specific explanation.
+- Use plain, non-marketing language.
+Context:
+Company: {getattr(profile, 'name', '')}
 Sector: {getattr(profile, 'sector', '')}
 Risks: {getattr(profile, 'risk_flags', '')}
 Risk Score: {getattr(profile, 'risk_score', '')}
+Risk Summary: {getattr(profile, 'risk_summary', '')}
 Financials: {getattr(profile, 'financials', '')}
-Competitive Landscape: {getattr(profile, 'competitive_summary', '')}
-Product/Tech: {getattr(profile, 'product_description', '')}
-"""
-    prompt = f"""
-You are a top-tier VC analyst. Write a detailed, multi-bullet, multi-paragraph Risks & Mitigations section for an investment memo, using only the provided context. For each risk, include:
-- A clear, specific risk title (e.g., 'Feature Commoditization', 'Open-Source Vulnerabilities', 'Customer Acquisition Costs')
-- A short explanation of the risk and why it matters
-- (Optional) A brief note on possible mitigation, or state if mitigation is unclear
-Cover market, technical, operational, and regulatory risks. Use a critical, VC-style lens. Do not make up facts. Use plain text, no HTML.
-Context:
-{context}
+Technical: {getattr(profile, 'tech_maturity', '')}
+Competitive: {getattr(profile, 'top_competitors', '')}
+Regulatory: {getattr(profile, 'regulatory', '')}
 """
     response = llm.invoke(prompt)
-    return response.content if hasattr(response, 'content') else response
+    return response.content.strip() if hasattr(response, 'content') else str(response)
 
 def format_team_section(profile):
     lines = []
@@ -771,7 +1006,7 @@ Sector: {getattr(profile, 'sector', '')}
     prompt = f"""
 You are a top-tier VC analyst. Write a detailed, multi-paragraph, multi-bullet Team & Management section for an investment memo, using only the provided context. For each of the 3 key team members (founder/CEO, CFO, CTO/Chairman), include:
 - Name and role
-- LinkedIn (if available)
+- LinkedIn (if available) 
 - Short bio/track record (notable companies, roles, achievements)
 Use a critical, VC-style lens. Do not make up facts. Use plain text, no HTML.
 Context:
@@ -779,6 +1014,145 @@ Context:
 """
     response = llm.invoke(prompt)
     return response.content if hasattr(response, 'content') else response
+
+def synthesize_business_model_llm(profile):
+    from langchain_openai import ChatOpenAI
+    llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
+    prompt = f"""
+You are a VC analyst writing the Business Model section for an investment memo.
+- Do NOT repeat the company's mission, product, or technology—focus only on how the company generates revenue.
+- Clearly describe the main revenue streams, customer segments, and go-to-market strategy.
+- If possible, ALWAYS include a Mermaid diagram (or ASCII schema) summarizing the business model, using the format:
+Business Model Schema:
+```mermaid
+graph TD;
+...diagram...
+```
+- If a Mermaid diagram is not possible, provide only the description.
+- Use plain, non-marketing language.
+Context:
+Company: {getattr(profile, 'name', '')}
+Business Model: {getattr(profile, 'business_model', '')}
+Product: {getattr(profile, 'product_description', '')}
+Customer Segments: {getattr(profile, 'customer_segments', '')}
+Go-to-Market: {getattr(profile, 'go_to_market', '')}
+Revenue Streams: {getattr(profile, 'revenue_streams', '')}
+Partners: {getattr(profile, 'partners', '')}
+"""
+    response = llm.invoke(prompt)
+    raw = response.content.strip() if hasattr(response, 'content') else str(response)
+    print(f"[Business Model LLM Output]\n{raw}\n")
+    # Post-process: ensure Mermaid diagram is preserved and clearly separated
+    import re
+    mermaid_match = re.search(r'(```mermaid[\s\S]+?```)', raw)
+    if mermaid_match:
+        # Place the diagram at the top, followed by the rest of the text (with diagram removed)
+        diagram = mermaid_match.group(1)
+        text = raw.replace(diagram, '').strip()
+        return f"Business Model Schema:\n{diagram}\n\n{text}"
+    return raw
+
+def synthesize_esg_section_llm(profile):
+    from langchain_openai import ChatOpenAI
+    llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
+    prompt = f"""
+You are a VC analyst writing the ESG Considerations section for an investment memo.
+- Write a single, concise paragraph (3-4 sentences maximum).
+- Summarize only the most material ESG factors for this company (environmental, social, and governance), focusing on what matters most for investors.
+- Avoid generic, boilerplate, or verbose content. Do not list every ESG subtopic—only mention what is most relevant and specific to the company.
+- Use plain, non-marketing language.
+Context:
+Company: {getattr(profile, 'name', '')}
+Sector: {getattr(profile, 'sector', '')}
+ESG Summary: {getattr(profile, 'esg_summary', '')}
+Sustainability: {getattr(profile, 'sustainability', '')}
+Supply Chain: {getattr(profile, 'supply_chain', '')}
+Labor Practices: {getattr(profile, 'labor_practices', '')}
+Diversity: {getattr(profile, 'diversity', '')}
+Governance: {getattr(profile, 'governance', '')}
+Controversies: {getattr(profile, 'esg_controversies', '')}
+Certifications: {getattr(profile, 'esg_certifications', '')}
+"""
+    response = llm.invoke(prompt)
+    return response.content.strip() if hasattr(response, 'content') else str(response)
+
+def synthesize_analyst_commentary_llm(profile):
+    from langchain_openai import ChatOpenAI
+    llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
+    prompt = f"""
+You are a VC analyst writing the Analyst Commentary section for an investment memo.
+- Provide a critical, multi-paragraph analysis of the company, covering strengths, weaknesses, opportunities, and risks.
+- Only synthesize and comment on information present in the provided context.
+- Use plain, non-marketing language.
+Context:
+Company: {getattr(profile, 'name', '')}
+Sector: {getattr(profile, 'sector', '')}
+Product: {getattr(profile, 'product_description', '')}
+Financials: {getattr(profile, 'financials', '')}
+Technical: {getattr(profile, 'tech_maturity', '')}
+Competitive: {getattr(profile, 'top_competitors', '')}
+ESG: {getattr(profile, 'esg_summary', '')}
+Risks: {getattr(profile, 'risk_flags', '')}
+"""
+    response = llm.invoke(prompt)
+    text = response.content.strip() if hasattr(response, 'content') else str(response)
+    # Clean stray/blank bullets
+    return clean_blank_bullets(text.strip())
+
+def synthesize_exit_strategies_llm(profile):
+    from langchain_openai import ChatOpenAI
+    llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
+    prompt = f"""
+You are a VC analyst writing the Investment & Exit Strategies section for an investment memo.
+- Write a single, concise paragraph (3-5 sentences maximum) discussing the most likely investment and exit strategies for this company.
+- Summarize the key options and rationale, but do NOT list them in detail or use bullets/tables.
+- Focus on what is most relevant for investors, based on the company's technology, market, and growth prospects.
+- Use plain, non-marketing language.
+Context:
+Company: {getattr(profile, 'name', '')}
+Sector: {getattr(profile, 'sector', '')}
+Financials: {getattr(profile, 'financials', '')}
+Market Traction: {getattr(profile, 'market_traction', '')}
+Partnerships: {getattr(profile, 'partners', '')}
+Technology: {getattr(profile, 'tech_maturity', '')}
+Competitive: {getattr(profile, 'top_competitors', '')}
+"""
+    response = llm.invoke(prompt)
+    return response.content.strip() if hasattr(response, 'content') else str(response)
+
+def synthesize_followup_section_llm(profile):
+    from langchain_openai import ChatOpenAI
+    llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
+    prompt = f"""
+You are a VC analyst writing the Follow-up Questions & Next Steps section for an investment memo.
+- Organize the section by topic, using bold headers (e.g., **Technology Validation & IP**, **OEM & Manufacturing Partnerships**).
+- Do NOT use bullet points for headers—only for the actual questions or action items under each header.
+- For each topic, list 2-4 specific, actionable follow-up questions or next steps as bullet points.
+- Use plain, non-marketing language.
+Context:
+Company: {getattr(profile, 'name', '')}
+Sector: {getattr(profile, 'sector', '')}
+Risks: {getattr(profile, 'risk_flags', '')}
+Technical: {getattr(profile, 'tech_maturity', '')}
+Financials: {getattr(profile, 'financials', '')}
+Competitive: {getattr(profile, 'top_competitors', '')}
+Regulatory: {getattr(profile, 'regulatory', '')}
+"""
+    response = llm.invoke(prompt)
+    # Post-process: ensure headers are bold and not bulleted
+    lines = response.content.strip().split('\n') if hasattr(response, 'content') else str(response).split('\n')
+    formatted = []
+    for i, line in enumerate(lines):
+        if line.strip().startswith('•') and not line.strip().startswith('••'):
+            formatted.append(line)
+        elif line.strip() and not line.strip().startswith('•'):
+            header = line.strip().lstrip('•').strip()
+            if not header.startswith('**'):
+                header = f"**{header}**"
+            formatted.append(header)
+        else:
+            formatted.append(line)
+    return '\n'.join(formatted)
 
 def format_followup_section(profile):
     fq = getattr(profile, 'follow_up_questions', None) or ''
@@ -808,10 +1182,51 @@ def format_followup_section(profile):
             lines.append(f"• {clean_line}")
     return '\n'.join(lines) if lines else 'No follow-up questions generated.'
 
+def clean_discussion_section(discussion):
+    lines = discussion.split('\n')
+    # Remove leading empty lines
+    while lines and not lines[0].strip():
+        lines = lines[1:]
+    # Remove leading bullet from the first non-empty line
+    if lines and lines[0].strip().startswith('•'):
+        lines[0] = lines[0].lstrip('•').strip()
+    # Also, if the first line is a header (e.g., 'Analyst Commentary on ...'), remove bullet from the next non-empty line
+    if lines and ('Analyst Commentary' in lines[0] or 'Discussion' in lines[0]):
+        for i in range(1, len(lines)):
+            if lines[i].strip().startswith('•'):
+                lines[i] = lines[i].lstrip('•').strip()
+                break
+            elif lines[i].strip():
+                break
+    return '\n'.join(lines)
+
+def clean_blank_bullets(text):
+    lines = text.split('\n')
+    cleaned = []
+    for i, line in enumerate(lines):
+        # Remove lines that are just a bullet or a bullet with whitespace
+        if line.strip() in ['•', '-']:
+            # Also skip if the next line is blank or whitespace
+            if i + 1 < len(lines) and not lines[i + 1].strip():
+                continue
+            # Or if it's the last line
+            if i + 1 == len(lines):
+                continue
+        cleaned.append(line)
+    return '\n'.join(cleaned)
+
 def format_memo(profile: StartupProfile) -> str:
     current_date = datetime.now().strftime("%B %d, %Y")
     def clean(text):
         return text.replace('B253500', '') if isinstance(text, str) else text
+    # --- Team line for Company Overview ---
+    execs = getattr(profile, 'executives', []) or []
+    if execs:
+        team_line = "Team: " + ", ".join(
+            f"{e.get('name', 'Unknown')} ({e.get('role', '')})" for e in execs[:3]
+        )
+    else:
+        team_line = f"Team: {getattr(profile, 'founder_name', 'TBD')}"
     memo_body = f"""
 INVESTMENT MEMORANDUM – {clean(getattr(profile, 'name', None) or 'COMPANY ANALYSIS')}
 1. DETAILED SUMMARY
@@ -822,31 +1237,31 @@ Company: {clean(getattr(profile, 'name', None) or 'TBD')}
 Sector: {clean(getattr(profile, 'sector', None) or 'TBD')}
 Website: {clean(getattr(profile, 'website', None) or 'TBD')}
 Funding Stage: {format_funding_stage(profile)}
-Team: {clean(getattr(profile, 'founder_name', None) or 'TBD')}
+{team_line}
 {clean(getattr(profile, 'founder_linkedin_formatted', ''))}
 
 3. PROBLEM STATEMENT
-{clean(synthesize_problem_statement(profile))}
+{clean(synthesize_problem_statement_llm(profile))}
 
 4. SOLUTION OVERVIEW
-{clean(synthesize_solution_overview(profile))}
+{clean(synthesize_solution_overview_llm(profile))}
 
-5. MARKET SIZE & ANALYSIS
+5. PRODUCT/SERVICE DESCRIPTION
+{synthesize_product_description_llm(profile)}
+
+6. MARKET SIZE & ANALYSIS
 {format_market_size_section(profile)}
 {clean(getattr(profile, 'sector', ''))}
 
-6. COMPETITORS
+7. COMPETITORS
 {format_competitive_landscape(profile)}
 {clean(getattr(profile, 'competitive_summary', ''))}
 
-7. BUSINESS MODEL
-{clean(profile.business_model) if getattr(profile, 'business_model', None) else 'Business model analysis not available.'}
+8. BUSINESS MODEL
+{synthesize_business_model_llm(profile)}
 
-8. TECHNICAL DUE DILIGENCE
+9. TECHNICAL DUE DILIGENCE
 {format_technical_dd_section(profile)}
-
-9. PRODUCT/SERVICE DESCRIPTION
-{synthesize_product_description_llm(profile)}
 
 10. FINANCIAL ANALYSIS
 {format_financials_section(profile, current_date)}
@@ -855,16 +1270,16 @@ Team: {clean(getattr(profile, 'founder_name', None) or 'TBD')}
 {synthesize_team_section_llm(profile)}
 
 12. ESG CONSIDERATIONS
-{clean(profile.esg_summary) if getattr(profile, 'esg_summary', None) else 'ESG analysis not available.'}
+{synthesize_esg_section_llm(profile)}
 
 13. RISKS & MITIGATIONS
 {synthesize_risks_section_llm(profile)}
 
 14. INVESTMENT & EXIT STRATEGIES
-{clean(profile.exit_strategy) if getattr(profile, 'exit_strategy', None) else 'Exit strategy analysis not available.'}
+{synthesize_exit_strategies_llm(profile)}
 
 15. FOLLOW-UP QUESTIONS & NEXT STEPS
-{format_followup_section(profile)}
+{synthesize_followup_section_llm(profile)}
 
 16. ADDITIONAL FIGURES & VISUALS
 {clean(getattr(profile, 'figures_section', ''))}
@@ -877,8 +1292,11 @@ MEMO:
 {memo_body}
 """
     discussion = llm.invoke(discussion_prompt).content.strip()
+    # Rename any 'Summary' subheader in the discussion to 'Conclusion'
+    import re
+    discussion = re.sub(r'(^|\n)(\s*)([*#\-]*\s*)?Summary(\s*[:\-]?)', r'\1\2\3Conclusion\4', discussion, flags=re.IGNORECASE)
     # De-duplication post-processing
-    return deduplicate_memo(f"{memo_body}\n18. DISCUSSION & ANALYST COMMENTARY\n{discussion}\n\n---\nGenerated by VC Analysis System on {current_date}\nData Sources: Company documents, market research, competitive intelligence, technical analysis\nAnalysis Framework: Multi-agent AI system with specialized domain expertise\n")
+    return deduplicate_memo(f"{memo_body}\n17. AI Discussion and Commentary\n{clean_discussion_section(discussion)}\n\n---\nGenerated by VC Analysis System on {current_date}\nData Sources: Company documents, market research, competitive intelligence, technical analysis\nAnalysis Framework: Multi-agent AI system with specialized domain expertise\n")
 
 
 def save_memo_as_pdf(text: str, output_path: str):
@@ -916,34 +1334,52 @@ def save_memo_with_template(memo_text, profile, output_path):
     import re
     import os
     from docx import Document
+    import requests
+    import tempfile
     template_path = os.path.abspath('template.docx')
     doc = Document(template_path)
     now = datetime.now().strftime('%B %d, %Y at %I:%M %p')
     company_name = getattr(profile, 'name', 'Company')
+
+    # --- Mermaid diagram rendering automation ---
+    mermaid_blocks = list(re.finditer(r'```mermaid\s*([\s\S]+?)```', memo_text))
+    mermaid_images = {}
+    for idx, match in enumerate(mermaid_blocks):
+        code = match.group(1).strip()
+        try:
+            resp = requests.post('https://kroki.io/mermaid/png', data=code.encode('utf-8'))
+            if resp.status_code == 200:
+                img_path = os.path.join('extraction_cache', f'mermaid_{idx}.png')
+                with open(img_path, 'wb') as f:
+                    f.write(resp.content)
+                mermaid_images[f'<MERMAID_IMAGE_{idx}>'] = img_path
+                print(f"[Mermaid] Rendered diagram {idx} to {img_path}")
+            else:
+                print(f"[Mermaid] Failed to render diagram {idx}: {resp.status_code} {resp.text}")
+        except Exception as e:
+            print(f"[Mermaid] Exception rendering diagram {idx}: {e}")
+
     # --- Replace {{COVER_TEXT}} in-place, always center-aligned ---
     cover_found = False
     for i, p in enumerate(doc.paragraphs):
         if '{{COVER_TEXT}}' in p.text:
             cover_found = True
-            # Remove the placeholder paragraph
             p.clear()
-            # Insert title (centered, large, bold)
             phrase_run = p.add_run(f"This Investment Memo for {company_name} was Automatically Generated by the VC Intelligence System")
             phrase_run.font.size = Pt(22)
             phrase_run.bold = True
             phrase_run.font.name = 'Times New Roman'
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            # Insert date (centered, smaller) as a new paragraph right after
             date_para = doc.add_paragraph()
             date_run = date_para.add_run(f"Prepared on {now}")
             date_run.font.size = Pt(14)
             date_run.font.name = 'Times New Roman'
             date_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            # Move the date_para to be right after the title paragraph (p)
             p._element.addnext(date_para._element)
             break
     if not cover_found:
         print("[Warning] {{COVER_TEXT}} placeholder not found in template.")
+
     # --- Replace {{MEMO_CONTENT}} in-place, inheriting alignment ---
     memo_found = False
     section_header_pattern = re.compile(r"^\d+\.\s+[A-Z][A-Z &()]+")
@@ -954,230 +1390,105 @@ def save_memo_with_template(memo_text, profile, output_path):
         'Financial Analysis', 'Team & Management', 'ESG Considerations', 'Risks & Mitigations',
         'Investment & Exit Strategies', 'Follow-up Questions & Next Steps', 'Figures & Visuals',
         'Appendix: Additional Tables', 'Discussion & Analyst Commentary',
-        'Key Weaknesses', 'Opportunities', 'Risks', 'Actionable Recommendations for Investors',
+        'Key Weaknesses', 'Opportunities', 'Risks',
         'Summary', 'Analysis Framework', 'Strengths', 'Weaknesses', 'Recommendations',
         'Appendix', 'Figures & Visuals',
         'ESG Alignment', 'Technical Validation Gaps', 'Competitive Landscape Challenges',
         'Execution & Commercialization Risk', 'Technology Risk', 'Competitive Displacement',
         'IP & Freedom to Operate', 'Financial & Funding Risk', 'Market Adoption & Regulatory Risk',
-        # Add more as needed
     ]
     known_headers_lower = [h.lower() for h in known_headers]
-    # In save_memo_with_template, track page breaks and insert a blank paragraph after the 2nd page break
-    page_break_count = 0
     for i, p in enumerate(doc.paragraphs):
         if '{{MEMO_CONTENT}}' in p.text:
             memo_found = True
             alignment = p.alignment
             p.clear()
-            memo_lines = memo_text.split('\n')
-            for idx, line in enumerate(memo_lines):
-                line_stripped = line.strip().replace('**', '').replace('<HEADER>', '').strip()
-                if line_stripped == '•' or not line_stripped:
-                    continue
-                # Remove text in brackets from section headers
-                header_cleaned = re.sub(r"\s*\([^)]*\)", "", line_stripped)
-                # Remove dashes, asterisks, hashes, and extra symbols from headers and bullets
-                header_cleaned = re.sub(r"^[-=*•#]+\s*", "", header_cleaned)
-                header_cleaned = header_cleaned.replace("**", "").replace("#", "").strip()
-                is_numbered_header = section_header_pattern.match(header_cleaned)
-                is_all_caps = all_caps_pattern.match(header_cleaned) and len(header_cleaned) > 6
-                is_known_header = header_cleaned.lower() in known_headers_lower
-                # --- PATCH: Insert images/graphs after 'Figures & Visuals' header ---
-                if header_cleaned.lower() == 'figures & visuals':
-                    para = doc.add_paragraph()
-                    para.paragraph_format.space_before = Pt(12)
-                    run = para.add_run(header_cleaned)
-                    run.font.name = 'Times New Roman'
-                    run.font.size = Pt(12)
-                    run.bold = True
-                    para.alignment = alignment if alignment is not None else WD_ALIGN_PARAGRAPH.JUSTIFY
-                    para.paragraph_format.line_spacing = 1.5
-                    para.paragraph_format.space_after = Pt(6)
-                    para.paragraph_format.first_line_indent = Pt(0)
-                    last_para = para
-                    # Insert extracted images
-                    if hasattr(profile, 'extracted_image_paths') and profile.extracted_image_paths:
-                        for img_idx, img_path in enumerate(profile.extracted_image_paths):
-                            img_para = doc.add_paragraph()
-                            run = img_para.add_run()
-                            try:
-                                run.add_picture(img_path, width=Pt(320))  # ~4.5in wide
-                            except Exception as e:
-                                run.add_text(f"[Could not insert image: {img_path}]")
-                            # Caption
-                            caption = img_para.add_run(f"\nFigure {img_idx+1}: Extracted from pitch deck")
-                            caption.font.name = 'Times New Roman'
-                            caption.font.size = Pt(12)
-                            img_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                    # Insert generated chart
-                    if hasattr(profile, 'market_chart_path') and profile.market_chart_path:
-                        chart_para = doc.add_paragraph()
-                        run = chart_para.add_run()
+            # --- Split memo into text and diagram blocks ---
+            blocks = re.split(r'(```mermaid[\s\S]+?```)', memo_text)
+            mermaid_idx = 0
+            for block in blocks:
+                block = block.strip('\n')
+                if block.startswith('```mermaid') and block.endswith('```'):
+                    # Mermaid diagram block
+                    img_path = mermaid_images.get(f'<MERMAID_IMAGE_{mermaid_idx}>')
+                    if img_path and os.path.exists(img_path):
+                        para = doc.add_paragraph()
+                        para.paragraph_format.first_line_indent = Pt(0)
+                        run = para.add_run()
                         try:
-                            run.add_picture(profile.market_chart_path, width=Pt(320))
+                            run.add_picture(img_path, width=Pt(320))
+                            para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                            print(f"[Mermaid] Inserted diagram {mermaid_idx} into DOCX.")
                         except Exception as e:
-                            run.add_text(f"[Could not insert chart: {profile.market_chart_path}]")
-                        caption = chart_para.add_run("\nFigure: Market Size Chart")
-                        caption.font.name = 'Times New Roman'
-                        caption.font.size = Pt(12)
-                        chart_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                            run.add_text(f"[Could not insert Mermaid diagram: {img_path}]")
+                            print(f"[Mermaid] Error inserting diagram {mermaid_idx}: {e}")
+                    mermaid_idx += 1
                     continue
-                # Special handling for DISCUSSION & ANALYST COMMENTARY section headers
-                discussion_headers = [
-                    'Analyst Commentary on StoreDot Investment Memo', 'Key Strengths', 'Key Weaknesses',
-                    'Opportunities', 'Risks', 'Actionable Recommendations for Investors', 'Summary'
-                ]
-                # --- PATCH: Always use '•' for bullets in section 18 and its subheaders ---
-                if any(h in header_cleaned for h in discussion_headers) or any(line_stripped.startswith(h) for h in discussion_headers):
-                    para = doc.add_paragraph()
-                    para.paragraph_format.space_before = Pt(12)
-                    run = para.add_run(header_cleaned)
-                    run.font.name = 'Times New Roman'
-                    run.font.size = Pt(12)
-                    run.bold = True
-                    para.alignment = alignment if alignment is not None else WD_ALIGN_PARAGRAPH.JUSTIFY
-                    para.paragraph_format.line_spacing = 1.5
-                    para.paragraph_format.space_after = Pt(6)
-                    para.paragraph_format.first_line_indent = Pt(0)
-                    last_para = para
-                    continue
-                # Clean up bullets for this section (force '•' and remove all '*', '-')
-                if (line_stripped.startswith('•') or line_stripped.startswith('-') or line_stripped.startswith('*')):
-                    # Remove all stars and dashes, replace with '• '
-                    bullet_line = re.sub(r"^[•\-*#]+\s*", "• ", line_stripped)
-                    bullet_line = bullet_line.replace('*', '').replace('-', '').strip()
-                    if not bullet_line.startswith('•'):
-                        bullet_line = '• ' + bullet_line.lstrip()
-                    para = doc.add_paragraph()
-                    run = para.add_run(bullet_line)
-                    run.font.name = 'Times New Roman'
-                    run.font.size = Pt(12)
-                    para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-                    para.paragraph_format.line_spacing = 1.5
-                    para.paragraph_format.first_line_indent = Pt(0)
-                    last_para = para
-                    continue
-                # Add a space before each section header for visual separation
-                if is_numbered_header or is_all_caps or is_known_header:
-                    para = doc.add_paragraph()
-                    para.paragraph_format.space_before = Pt(12)
-                    run = para.add_run(header_cleaned)
-                    run.font.name = 'Times New Roman'
-                    run.font.size = Pt(12)
-                    run.bold = True
-                    para.alignment = alignment if alignment is not None else WD_ALIGN_PARAGRAPH.JUSTIFY
-                    para.paragraph_format.line_spacing = 1.5
-                    para.paragraph_format.space_after = Pt(6)
-                    para.paragraph_format.first_line_indent = Pt(0)
-                    last_para = para
-                    continue
-                # Special handling for RISKS & MITIGATIONS risk headers
-                if (
-                    'RISKS & MITIGATIONS' in ''.join(memo_lines[max(0, idx-3):idx+1]).upper() and
-                    not line_stripped.startswith('•') and
-                    not line_stripped.lower().startswith('explanation:') and
-                    not line_stripped.lower().startswith('mitigation:') and
-                    line_stripped and
-                    idx+1 < len(memo_lines) and
-                    (memo_lines[idx+1].strip().lower().startswith('• explanation:') or
-                     memo_lines[idx+1].strip().lower().startswith('• mitigation:'))
-                ):
+                # Otherwise, process as text (split by lines)
+                for line in block.split('\n'):
+                    line_stripped = line.strip().replace('**', '').replace('<HEADER>', '').strip()
+                    if line_stripped == '•' or not line_stripped:
+                        continue
+                    header_cleaned = re.sub(r"\s*\([^)]*\)", "", line_stripped)
+                    header_cleaned = re.sub(r"^[-=*•#]+\s*", "", header_cleaned)
+                    header_cleaned = header_cleaned.replace("**", "").replace("#", "").strip()
+                    is_numbered_header = section_header_pattern.match(header_cleaned)
+                    is_all_caps = all_caps_pattern.match(header_cleaned) and len(header_cleaned) > 6
+                    is_known_header = header_cleaned.lower() in known_headers_lower
+                    if is_numbered_header or is_all_caps or is_known_header:
+                        if is_numbered_header:
+                            header_style = "Heading 1"
+                        elif is_all_caps:
+                            header_style = "Heading 2"
+                        else:
+                            header_style = "Heading 3"
+                        para = doc.add_paragraph()
+                        para.paragraph_format.space_before = Pt(12)
+                        run = para.add_run(header_cleaned)
+                        run.font.name = 'Times New Roman'
+                        run.font.size = Pt(12)
+                        run.bold = True
+                        para.alignment = alignment if alignment is not None else WD_ALIGN_PARAGRAPH.JUSTIFY
+                        para.paragraph_format.line_spacing = 1.5
+                        para.paragraph_format.space_after = Pt(6)
+                        para.paragraph_format.first_line_indent = Pt(0)
+                        last_para = para
+                        continue
+                    if (line_stripped.startswith('•') or line_stripped.startswith('-') or line_stripped.startswith('*')):
+                        bullet_line = re.sub(r"^[•\-*#]+\s*", "• ", line_stripped)
+                        bullet_line = bullet_line.replace('*', '').replace('-', '').strip()
+                        if not bullet_line.startswith('•'):
+                            bullet_line = '• ' + bullet_line.lstrip()
+                        para = doc.add_paragraph()
+                        run = para.add_run(bullet_line)
+                        run.font.name = 'Times New Roman'
+                        run.font.size = Pt(12)
+                        para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+                        para.paragraph_format.line_spacing = 1.5
+                        para.paragraph_format.first_line_indent = Pt(0)
+                        last_para = para
+                        continue
+                    # Normal paragraph
                     para = doc.add_paragraph()
                     run = para.add_run(line_stripped)
                     run.font.name = 'Times New Roman'
                     run.font.size = Pt(12)
-                    run.bold = True
                     para.alignment = alignment if alignment is not None else WD_ALIGN_PARAGRAPH.JUSTIFY
                     para.paragraph_format.line_spacing = 1.5
-                    para.paragraph_format.space_before = Pt(8)
-                    para.paragraph_format.space_after = Pt(2)
                     para.paragraph_format.first_line_indent = Pt(0)
                     last_para = para
-                    continue
-                # Special handling for FOLLOW-UP QUESTIONS section headers (bulleted headers)
-                if (
-                    'FOLLOW-UP QUESTIONS' in ''.join(memo_lines[max(0, idx-3):idx+1]).upper() and
-                    line_stripped.startswith('•') and
-                    ':' not in line_stripped and
-                    idx+1 < len(memo_lines) and
-                    memo_lines[idx+1].strip().startswith('•')
-                ):
-                    header_text = line_stripped.lstrip('•').strip()
-                    para = doc.add_paragraph()
-                    run = para.add_run(header_text)
-                    run.font.name = 'Times New Roman'
-                    run.font.size = Pt(12)
-                    run.bold = True
-                    para.alignment = alignment if alignment is not None else WD_ALIGN_PARAGRAPH.JUSTIFY
-                    para.paragraph_format.line_spacing = 1.5
-                    para.paragraph_format.space_before = Pt(8)
-                    para.paragraph_format.space_after = Pt(2)
-                    para.paragraph_format.first_line_indent = Pt(0)
-                    last_para = para
-                    continue
-                # Special handling for bullet points in the FOLLOW-UP QUESTIONS section
-                if line_stripped.startswith('• '):
-                    bullet_line = line_stripped
-                    # Remove any leading asterisks or dashes from bullets
-                    bullet_line = re.sub(r"^[-*]+\\s*", "• ", bullet_line)
-                    para = doc.add_paragraph()
-                    run = para.add_run(bullet_line)
-                    run.font.name = 'Times New Roman'
-                    run.font.size = Pt(12)
-                    para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-                    para.paragraph_format.line_spacing = 1.5
-                    para.paragraph_format.first_line_indent = Pt(0)
-                    last_para = para
-                    continue
-                # For numbered headers, ensure '•' is used and no '-'
-                if is_numbered_header:
-                    bullet_line = header_cleaned
-                    if bullet_line.startswith('-'):
-                        bullet_line = '•' + bullet_line[1:]
-                    # Remove any leading asterisks or dashes from bullets
-                    bullet_line = re.sub(r"^[-*]+\\s*", "• ", bullet_line)
-                    para = doc.add_paragraph()
-                    run = para.add_run(bullet_line)
-                    run.font.name = 'Times New Roman'
-                    run.font.size = Pt(12)
-                    para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-                    para.paragraph_format.line_spacing = 1.5
-                    para.paragraph_format.first_line_indent = Pt(0)
-                    last_para = para
-                    continue
-                # For all other lines, apply bullet point formatting
-                bullet_line = line_stripped
-                if bullet_line.startswith('-'):
-                    bullet_line = '•' + bullet_line[1:]
-                # Remove any leading asterisks or dashes from bullets
-                bullet_line = re.sub(r"^[-*]+\\s*", "• ", bullet_line)
-                para = doc.add_paragraph()
-                run = para.add_run(bullet_line)
-                run.font.name = 'Times New Roman'
-                run.font.size = Pt(12)
-                para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-                para.paragraph_format.line_spacing = 1.5
-                para.paragraph_format.first_line_indent = Pt(0)
-                last_para = para
-                # In save_memo_with_template, track page breaks and insert a blank paragraph after the 2nd page break
-                if line_stripped == '<PAGE_BREAK>':
-                    doc.add_page_break()
-                    page_break_count += 1
-                    # Insert a blank paragraph after the 2nd page break (i.e., starting from the 3rd page)
-                    if page_break_count >= 2:
-                        blank_para = doc.add_paragraph()
-                        blank_para.add_run("")
-                        blank_para.paragraph_format.space_after = Pt(0)
-                        blank_para.paragraph_format.space_before = Pt(0)
-                        blank_para.paragraph_format.first_line_indent = Pt(0)
-                    continue
             break
     if not memo_found:
         print("[Warning] {{MEMO_CONTENT}} placeholder not found in template.")
-    # Save the new document
     doc.save(output_path)
     print(f"✅ DOCX memo generated from template and saved to {output_path}")
+    for img_path in mermaid_images.values():
+        try:
+            if os.path.exists(img_path):
+                os.remove(img_path)
+                print(f"[Mermaid] Deleted temporary image {img_path}")
+        except Exception as e:
+            print(f"[Mermaid] Error deleting temporary image {img_path}: {e}")
 
 
 # --- DOCX to PDF conversion ---
@@ -1255,3 +1566,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+

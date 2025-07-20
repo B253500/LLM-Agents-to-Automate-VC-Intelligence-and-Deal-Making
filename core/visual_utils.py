@@ -47,6 +47,28 @@ def generate_sample_market_chart(data: dict, output_path: str) -> str:
     return output_path
 
 
+def filter_graphs_and_tables(image_paths: list[str]) -> list[str]:
+    """
+    Use Google Vision API to keep only images that are likely tables, charts, graphs, diagrams, or plots.
+    If Google Vision is not available, return all images.
+    """
+    try:
+        from google.cloud import vision
+        client = vision.ImageAnnotatorClient()
+        wanted = {"table", "chart", "graph", "diagram", "plot"}
+        keep: list[str] = []
+        for p in image_paths:
+            with open(p, "rb") as f:
+                img = vision.Image(content=f.read())
+            labels = {l.description.lower() for l in client.label_detection(image=img).label_annotations}
+            if labels & wanted:
+                keep.append(p)
+        return keep
+    except ImportError:
+        # Fallback: no filtering if Vision API isn't available
+        return image_paths
+
+
 # Example usage:
 # images = extract_images_from_pdf("data/storedot.pdf", "extracted_images/")
 # chart_path = generate_sample_market_chart({"2022": 1.2, "2023": 1.5, "2024": 2.0}, "market_chart.png") 
