@@ -1,5 +1,6 @@
 import sys
 import os
+import re
 from datetime import datetime
 from core.download_utils import extract_text
 from chains.pitch_deck_chain import run_pitch_deck_chain
@@ -28,7 +29,7 @@ from docx.shared import Inches, Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 import subprocess
 from core.perplexity_utils import search_perplexity
-from core.visual_utils import extract_images_from_pdf, generate_sample_market_chart
+from core.visual_utils import extract_images_from_pdf, generate_sample_market_chart, extract_market_and_financials_from_visuals
 
 CACHE_DIR = "extraction_cache"
 os.makedirs(CACHE_DIR, exist_ok=True)
@@ -51,6 +52,92 @@ def save_to_cache(file_path, data):
     with open(cache_path, 'w', encoding='utf-8') as f:
         pyjson.dump(data, f)
 
+def extract_market_size_from_text(text):
+    """Extract market size values with better error handling and logging"""
+    results = {}
+    try:
+        tam_match = re.search(r'(Total Addressable Market|Addressable market|TAM)[^\d$]{0,20}(\$?\d+[,.]?\d*)\s*[Bb]?', text, re.IGNORECASE)
+        if tam_match:
+            val = tam_match.group(2).replace(',', '').replace('$', '')
+            try:
+                results['TAM'] = float(val) * 1e9 if 'B' in tam_match.group(0) or 'billion' in tam_match.group(0).lower() else float(val)
+                print(f"[Market Size] Found TAM={results['TAM']}")
+            except Exception as e:
+                print(f"[Market Size] Error parsing TAM value '{val}': {e}")
+                results['TAM'] = val
+    # SAM
+            sam_match = re.search(r'(Serviceable Available Market|SAM)[^\d$]{0,20}(\$?\d+[,.]?\d*)\s*[BbMmKk]?', text, re.IGNORECASE)
+        if sam_match:
+            val = sam_match.group(2).replace(',', '').replace('$', '')
+            try:
+                results['SAM'] = float(val) * 1e9 if 'B' in sam_match.group(0) or 'billion' in sam_match.group(0).lower() else float(val)
+                print(f"[Market Size] Found SAM={results['SAM']}")
+            except Exception as e:
+                print(f"[Market Size] Error parsing SAM value '{val}': {e}")
+
+        # SOM
+        som_match = re.search(r'(Serviceable Obtainable Market|SOM)[^\d$]{0,20}(\$?\d+[,.]?\d*)\s*[BbMmKk]?', text, re.IGNORECASE)
+        if som_match:
+            val = som_match.group(2).replace(',', '').replace('$', '')
+            try:
+                results['SOM'] = float(val) * 1e9 if 'B' in som_match.group(0) or 'billion' in som_match.group(0).lower() else float(val)
+                print(f"[Market Size] Found SOM={results['SOM']}")
+            except Exception as e:
+                print(f"[Market Size] Error parsing SOM value '{val}': {e}")
+
+        # CAGR
+        cagr_match = re.search(r'(\d{1,2}(?:\.\d+)?)\s*%\s*CAGR', text)
+        if cagr_match:
+            try:
+                results['cagr'] = float(cagr_match.group(1))
+                print(f"[Market Size] Found CAGR={results['cagr']}%")
+            except Exception as e:
+                print(f"[Market Size] Error parsing CAGR: {e}")
+
+    except Exception as e:
+        print(f"[Market Size] Error extracting market sizes: {e}")
+    return results
+
+def update_market_value(profile, key, value, source):
+    """Update market size value if new source has higher priority"""
+    current_value = getattr(profile, key, None)
+    current_source = getattr(profile, f"{key}_source", None)
+    
+    # Priority order: deck_text > deck_ocr/table > web_search
+    source_priority = {
+        "deck_text": 3,
+        "deck_ocr/table": 2, 
+        "web_search": 1
+    }
+    
+    if not current_value or source_priority.get(source, 0) > source_priority.get(current_source, 0):
+        setattr(profile, key, value)
+        setattr(profile, f"{key}_source", source)
+        print(f"[Market Size] Updated {key}={value} from {source}")
+
+def log_market_size_changes(profile):
+    """Debug helper to track market size changes"""
+    market_fields = ['TAM', 'SAM', 'SOM', 'cagr', 'market_growth_rate']
+    print("\n=== Market Size Values ===")
+    for field in market_fields:
+        value = getattr(profile, field, None)
+        source = getattr(profile, f"{field}_source", None)
+        print(f"[Market Size] {field}={value} (source: {source})")
+    print("========================\n")
+
+# Update run_all_sequential_with_text to use these functions
+def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_path: str) -> StartupProfile:
+    print(f"🔍 Processing extracted text ({len(full_text)} characters)")
+    
+    # Extract and validate market size values
+    market_vals = extract_market_size_from_text(full_text)
+    for k, v in market_vals.items():
+        if v:
+            update_market_value(profile, k, v, "deck_text")
+    
+    # Log initial market values
+    log_market_size_changes(profile)
+    
 def enrich_executives_with_perplexity(company_name, existing_execs):
     """
     Use Perplexity to find additional executives and their LinkedIn profiles if fewer than 3 are found.
@@ -144,7 +231,8 @@ def synthesize_product_description(profile):
         getattr(profile, 'business_model', None),
         getattr(profile, 'tech_maturity', None),
     ]
-    descs = [d for d in descs if d and d.lower() not in ['n/a', 'not available', 'unknown']]
+    descs = [d for d in descs if d and (not isinstance(d, str) or d.lower() not in ['n/a', 'not available', 'unknown'])]
+
     if not descs:
         return 'Product description not available.'
     # Remove duplicates and repetitive phrases
@@ -183,7 +271,15 @@ Roadmap: {getattr(profile, 'product_roadmap', '')}
 def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_path: str) -> StartupProfile:
     print(f"🔍 Processing extracted text ({len(full_text)} characters)")
     print(f"📄 Starting with fresh profile: {profile.name}")
-    # Deck extraction (chain + agent)
+
+     # --- NEW: Extract market size from text before running agents ---
+    market_vals = extract_market_size_from_text(full_text)
+    for k, v in market_vals.items():
+        if hasattr(profile, k) and v:
+            setattr(profile, k, v)
+            setattr(profile, f"{k}_source", "deck_text")
+            print(f"[Market Size] Found {k}={v} in deck text")
+    # Deck extraction (chain + agent)    
     from chains.pitch_deck_chain import run_pitch_deck_chain_with_text as run_pitch_chain
     profile = run_pitch_chain(full_text, profile, pdf_path=file_path)
     deck_agent, deck_task = build_deck_agent(file_path)
@@ -302,9 +398,7 @@ Web search result:
     except Exception:
         pass
     print(f"👤 After founder profiling: Score={profile.founder_fit_score}")
-    # Market Sizing (chain + agent)
-    from chains.market_sizing_chain import run_market_sizing_chain
-    profile = run_market_sizing_chain(profile)
+    # Market Sizing (agent only; all logic is now in the agent)
     market_agent, market_task = build_market_sizing_agent(profile)
     market_agent_output = market_task.callback()
     try:
@@ -382,56 +476,9 @@ Web search result:
     profile.product_description = synthesize_product_description(profile)
 
     # --- Visual OCR value extraction for market size and financials ---
+    from core.visual_utils import extract_market_and_financials_from_visuals
     if getattr(profile, 'figures_ocr', None) or getattr(profile, 'tables_text', None):
-        missing_fields = []
-        if not profile.TAM: missing_fields.append('TAM')
-        if not profile.SAM: missing_fields.append('SAM')
-        if not profile.SOM: missing_fields.append('SOM')
-        if not profile.cash_burn_12m: missing_fields.append('cash_burn_12m')
-        if not profile.runway_months: missing_fields.append('runway_months')
-        if not profile.implied_valuation: missing_fields.append('implied_valuation')
-        if not profile.cagr: missing_fields.append('CAGR')
-        if not profile.market_growth_rate: missing_fields.append('market_growth_rate')
-        if missing_fields:
-            try:
-                from langchain_openai import ChatOpenAI
-                llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
-                ocr_context = getattr(profile, 'figures_ocr', '') or ''
-                table_context = getattr(profile, 'tables_text', '') or ''
-                context = ocr_context + "\n\n" + table_context
-                prompt = f"""
-You are a VC analyst extracting market size and financial metrics from pitch deck text, figures, and tables.
-- Your TOP PRIORITY is to find market size values (TAM, SAM, SOM, etc.) in figures and tables extracted from the deck, especially those with currency symbols ($, €, £, etc.).
-- For each value, state the context (e.g., 'from figure on page X', 'from table on page Y', or 'from OCR text').
-- If multiple values are found, prefer the most recent or most clearly labeled.
-- Only if a value is not found in figures/tables, leave it null (web search will be used as fallback).
-- For each value, pair it with its context/label (e.g., 'Total Addressable Market', 'CAGR', 'Revenue 2025', etc.).
-- Extract the following fields if present: {', '.join(missing_fields)}. If a field is missing, leave it null.
-- Return a JSON object with these fields and a short explanation for each value if possible.
-Context:
-{context}
-"""
-                txt = llm.invoke(prompt).content.strip()
-                import json
-                first, last = txt.find("{"), txt.rfind("}")
-                if first != -1 and last != -1:
-                    data = json.loads(txt[first : last + 1])
-                    for k, v in data.items():
-                        if hasattr(profile, k) and v:
-                            # Try to cast to float for numeric fields
-                            if k in ['TAM', 'SAM', 'SOM', 'cagr', 'market_growth_rate']:
-                                try:
-                                    setattr(profile, k, float(v))
-                                except Exception:
-                                    setattr(profile, k, v)
-                            else:
-                                setattr(profile, k, v)
-                            # Set source for each value
-                            if k in ['TAM', 'SAM', 'SOM', 'cagr', 'market_growth_rate']:
-                                setattr(profile, f"{k}_source", 'deck_ocr/table')
-                                print(f"[Market Size Extraction] Found {k} in deck figures/tables: {v}")
-            except Exception as e:
-                print(f"[OCR/LLM Extraction] Error: {e}")
+        profile = extract_market_and_financials_from_visuals(profile, getattr(profile, 'figures_ocr', None), getattr(profile, 'tables_text', None))
     # --- Fallback: targeted web search for market size ---
     if not profile.TAM or not profile.SAM or not profile.SOM or not profile.cagr or not profile.market_growth_rate:
         from core.perplexity_utils import search_perplexity
@@ -1246,13 +1293,13 @@ Website: {clean(getattr(profile, 'website', None) or 'TBD')}
 Funding Stage: {format_funding_stage(profile)}
 {team_line}
 {clean(getattr(profile, 'founder_linkedin_formatted', ''))}
-
+    
 3. PROBLEM STATEMENT
 {clean(synthesize_problem_statement_llm(profile))}
-
+    
 4. SOLUTION OVERVIEW
 {clean(synthesize_solution_overview_llm(profile))}
-
+    
 5. PRODUCT/SERVICE DESCRIPTION
 {synthesize_product_description_llm(profile)}
 

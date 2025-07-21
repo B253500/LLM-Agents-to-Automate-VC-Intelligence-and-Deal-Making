@@ -69,6 +69,60 @@ def filter_graphs_and_tables(image_paths: list[str]) -> list[str]:
         return image_paths
 
 
+def extract_market_and_financials_from_visuals(profile, figures_ocr, tables_text):
+    """
+    Extract market size and financial metrics from figures_ocr and tables_text using LLM.
+    Updates the profile in-place with extracted values and sources.
+    """
+    from langchain_openai import ChatOpenAI
+    llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
+    missing_fields = []
+    if not getattr(profile, 'TAM', None): missing_fields.append('TAM')
+    if not getattr(profile, 'SAM', None): missing_fields.append('SAM')
+    if not getattr(profile, 'SOM', None): missing_fields.append('SOM')
+    if not getattr(profile, 'cash_burn_12m', None): missing_fields.append('cash_burn_12m')
+    if not getattr(profile, 'runway_months', None): missing_fields.append('runway_months')
+    if not getattr(profile, 'implied_valuation', None): missing_fields.append('implied_valuation')
+    if not getattr(profile, 'cagr', None): missing_fields.append('CAGR')
+    if not getattr(profile, 'market_growth_rate', None): missing_fields.append('market_growth_rate')
+    if not missing_fields:
+        return profile
+    ocr_context = figures_ocr or ''
+    table_context = tables_text or ''
+    context = ocr_context + "\n\n" + table_context
+    prompt = f"""
+You are a VC analyst extracting market size and financial metrics from pitch deck text, figures, and tables.
+- Your TOP PRIORITY is to find market size values (TAM, SAM, SOM, etc.) in figures and tables extracted from the deck, especially those with currency symbols ($, €, £, etc.).
+- For each value, state the context (e.g., 'from figure on page X', 'from table on page Y', or 'from OCR text').
+- If multiple values are found, prefer the most recent or most clearly labeled.
+- Only if a value is not found in figures/tables, leave it null (web search will be used as fallback).
+- For each value, pair it with its context/label (e.g., 'Total Addressable Market', 'CAGR', 'Revenue 2025', etc.).
+- Extract the following fields if present: {', '.join(missing_fields)}. If a field is missing, leave it null.
+- Return a JSON object with these fields and a short explanation for each value if possible.
+Context:
+{context}
+"""
+    txt = llm.invoke(prompt).content.strip()
+    import json
+    first, last = txt.find("{"), txt.rfind("}")
+    if first != -1 and last != -1:
+        data = json.loads(txt[first : last + 1])
+        for k, v in data.items():
+            if hasattr(profile, k) and v:
+                # Try to cast to float for numeric fields
+                if k in ['TAM', 'SAM', 'SOM', 'cagr', 'market_growth_rate']:
+                    try:
+                        setattr(profile, k, float(v))
+                    except Exception:
+                        setattr(profile, k, v)
+                else:
+                    setattr(profile, k, v)
+                # Set source for each value
+                if k in ['TAM', 'SAM', 'SOM', 'cagr', 'market_growth_rate']:
+                    setattr(profile, f"{k}_source", 'deck_ocr/table')
+    return profile
+
+
 # Example usage:
 # images = extract_images_from_pdf("data/storedot.pdf", "extracted_images/")
 # chart_path = generate_sample_market_chart({"2022": 1.2, "2023": 1.5, "2024": 2.0}, "market_chart.png") 
