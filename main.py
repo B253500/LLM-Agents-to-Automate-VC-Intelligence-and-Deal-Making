@@ -166,7 +166,7 @@ def synthesize_product_description_llm(profile):
 You are a VC analyst writing the Product/Service Description section for an investment memo.
 - Do NOT repeat information already covered in the Detailed Summary or Solution Overview.
 - Focus on the unique technical features, product roadmap, and what sets this product apart from competitors.
-- Be concise: no more than 6 sentences.
+- Be concise: no more than 8 sentences.
 - Use plain, non-marketing language.
 Context:
 Company: {getattr(profile, 'name', '')}
@@ -438,15 +438,25 @@ Context:
         company = getattr(profile, 'name', '')
         product = getattr(profile, 'product_description', '')
         sector = getattr(profile, 'sector', '')
-        queries = [
-            f"market size for {product} in {sector}",
-            f"TAM for {company} {product}",
-            f"SAM for {company} {product}",
-            f"SOM for {company} {product}",
-            f"growth rate for {product} in {sector}",
-            f"CAGR for {product} in {sector}",
-            f"market size for {company} in {sector}",
-        ]
+        queries = []
+        if sector:
+            queries += [
+                f"global {sector} market size 2024",
+                f"{sector} TAM 2024",
+                f"{sector} total addressable market",
+                f"{sector} market CAGR 2024",
+                f"{sector} market growth rate 2024"
+            ]
+        if product:
+            queries += [
+                f"market size for {product} 2024",
+                f"{product} TAM 2024"
+            ]
+        if company:
+            queries += [
+                f"market size for {company} 2024",
+                f"{company} TAM 2024"
+            ]
         market_size_sources = []
         max_web_searches = 2
         web_search_count = 0
@@ -568,7 +578,6 @@ def synthesize_detailed_summary(profile):
     sector = getattr(profile, 'sector', 'the sector')
     year_founded = getattr(profile, 'year_founded', None)
     product = getattr(profile, 'product_description', '')
-    business_model = getattr(profile, 'business_model', '')
     highlight = ''
     # Pick a key highlight if available
     if getattr(profile, 'moat_strength', None):
@@ -583,8 +592,7 @@ def synthesize_detailed_summary(profile):
         summary_parts.append(f"{name}, founded by {founder}, operates in the {sector} sector.")
     if product:
         summary_parts.append(f"The company develops {product}.")
-    if business_model:
-        summary_parts.append(f"Business model: {business_model}")
+    # business_model is intentionally omitted
     if highlight:
         summary_parts.append(highlight)
     # Remove duplicates and keep only the first 4 non-empty lines
@@ -607,6 +615,7 @@ You are a VC analyst writing the Problem Statement section for an investment mem
 - Clearly state the main problem or pain point that the company's product/service is solving.
 - Try to be specific to the company's sector, product, and market context.
 - Do NOT use generic or sector-wide statements—focus on the actual problem this company addresses.
+- Do NOT mention the company's solution or product features—only describe the problem.
 - Use plain, non-marketing language.
 Context:
 Company: {getattr(profile, 'name', '')}
@@ -622,8 +631,7 @@ def synthesize_solution_overview_llm(profile):
     prompt = f"""
 You are a VC analyst writing the Solution Overview section for an investment memo.
 - Clearly explain how the company's product/service solves the problem described in the Problem Statement.
-- Highlight what is unique or innovative about their approach.
-- Be specific to the company's sector, product, and technology.
+- Focus ONLY on the core solution and its mechanism of action.
 - Use plain, non-marketing language.
 Context:
 Company: {getattr(profile, 'name', '')}
@@ -683,9 +691,13 @@ def format_market_size_section(profile):
     except Exception:
         tam_val = 1.0
     market_penetration = (som_val / tam_val * 100) if tam_val else 0.0
-    # Show source next to each value if available
+    # Show source next to each value if available, as a clickable link if it's a URL
     def src(s):
-        return f" [Source: {s}]" if s else ""
+        if not s:
+            return ""
+        if isinstance(s, str) and s.startswith("http"):
+            return f" [Source: [link]({s})]"
+        return f" [Source: {s}]"
     lines.append(f"TAM {TAM}{src(TAM_source)}, SAM {SAM}{src(SAM_source)}, SOM {SOM}{src(SOM_source)}; Market Penetration: {market_penetration:.1f} %")
     if CAGR:
         lines.append(f"CAGR: {CAGR}%{src(CAGR_source)}")
@@ -933,9 +945,9 @@ def synthesize_risks_section_llm(profile):
     llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
     prompt = f"""
 You are a VC analyst writing the Risks section for an investment memo.
-- List only the key risks relevant to this company and product, with a specific explanation for each risk.
-- Do NOT include any mitigation, recommendation, or investor action—just the risk and its description.
+- List the risks relevant to this company and product, sector with a specific explanation for each risk.
 - Make each risk specific to the company's technology, market, or business context. Avoid generic or boilerplate risks.
+- If possible cover market, technical, operational, regulatory and financial risks. Use a critical, VC-style lens.
 - Use bullet points, with each risk followed by a short, specific explanation.
 - Use plain, non-marketing language.
 Context:
@@ -1021,7 +1033,7 @@ def synthesize_business_model_llm(profile):
     prompt = f"""
 You are a VC analyst writing the Business Model section for an investment memo.
 - Do NOT repeat the company's mission, product, or technology—focus only on how the company generates revenue.
-- Clearly describe the main revenue streams, customer segments, and go-to-market strategy.
+- Clearly describe the main revenue streams, customer segments.
 - If possible, ALWAYS include a Mermaid diagram (or ASCII schema) summarizing the business model, using the format:
 Business Model Schema:
 ```mermaid
@@ -1046,9 +1058,10 @@ Partners: {getattr(profile, 'partners', '')}
     import re
     mermaid_match = re.search(r'(```mermaid[\s\S]+?```)', raw)
     if mermaid_match:
-        # Place the diagram at the top, followed by the rest of the text (with diagram removed)
         diagram = mermaid_match.group(1)
         text = raw.replace(diagram, '').strip()
+        # Remove any redundant 'Business Model Schema:' header in the text (not just at the start)
+        text = re.sub(r'(?i)business model schema:\s*', '', text)
         return f"Business Model Schema:\n{diagram}\n\n{text}"
     return raw
 
@@ -1184,21 +1197,16 @@ def format_followup_section(profile):
 
 def clean_discussion_section(discussion):
     lines = discussion.split('\n')
-    # Remove leading empty lines
-    while lines and not lines[0].strip():
-        lines = lines[1:]
-    # Remove leading bullet from the first non-empty line
-    if lines and lines[0].strip().startswith('•'):
-        lines[0] = lines[0].lstrip('•').strip()
-    # Also, if the first line is a header (e.g., 'Analyst Commentary on ...'), remove bullet from the next non-empty line
-    if lines and ('Analyst Commentary' in lines[0] or 'Discussion' in lines[0]):
-        for i in range(1, len(lines)):
-            if lines[i].strip().startswith('•'):
-                lines[i] = lines[i].lstrip('•').strip()
-                break
-            elif lines[i].strip():
-                break
-    return '\n'.join(lines)
+    cleaned = []
+    for line in lines:
+        # Remove lines that are just a bullet or whitespace
+        if line.strip() in ['•', '-', '*', '']:
+            continue
+        # Remove leading bullet from the first non-empty line
+        if cleaned == [] and line.strip().startswith('•'):
+            line = line.lstrip('•').strip()
+        cleaned.append(line)
+    return '\n'.join(cleaned)
 
 def clean_blank_bullets(text):
     lines = text.split('\n')
@@ -1228,7 +1236,6 @@ def format_memo(profile: StartupProfile) -> str:
     else:
         team_line = f"Team: {getattr(profile, 'founder_name', 'TBD')}"
     memo_body = f"""
-INVESTMENT MEMORANDUM – {clean(getattr(profile, 'name', None) or 'COMPANY ANALYSIS')}
 1. DETAILED SUMMARY
 {clean(synthesize_detailed_summary(profile))}
 
@@ -1286,7 +1293,7 @@ Funding Stage: {format_funding_stage(profile)}
 """
     llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0.2)
     discussion_prompt = f"""
-You are a senior VC analyst. Based on the following investment memo, provide a critical discussion and analyst commentary. Highlight key strengths, weaknesses, opportunities, and risks. Offer actionable recommendations for investors. Be concise but insightful.
+You are a senior VC analyst. Based on the following investment memo, provide a critical discussion and analyst commentary. Highlight key strengths, weaknesses, opportunities, and risks. Be concise but insightful.
 
 MEMO:
 {memo_body}
@@ -1295,8 +1302,12 @@ MEMO:
     # Rename any 'Summary' subheader in the discussion to 'Conclusion'
     import re
     discussion = re.sub(r'(^|\n)(\s*)([*#\-]*\s*)?Summary(\s*[:\-]?)', r'\1\2\3Conclusion\4', discussion, flags=re.IGNORECASE)
+    # Remove any sentences before the first 'Key Strengths' or similar main header
+    match = re.search(r'(Key Strengths[\s\S]*)', discussion, re.IGNORECASE)
+    if match:
+        discussion = match.group(1).lstrip()
     # De-duplication post-processing
-    return deduplicate_memo(f"{memo_body}\n17. AI Discussion and Commentary\n{clean_discussion_section(discussion)}\n\n---\nGenerated by VC Analysis System on {current_date}\nData Sources: Company documents, market research, competitive intelligence, technical analysis\nAnalysis Framework: Multi-agent AI system with specialized domain expertise\n")
+    return deduplicate_memo(f"{memo_body}\n17. AI DISCUSSION AND COMMENTARY\n{clean_discussion_section(discussion)}\n\n---\nGenerated by VC Analysis System on {current_date}\nData Sources: Company documents, market research, competitive intelligence, technical analysis\nAnalysis Framework: Multi-agent AI system with specialized domain expertise\n")
 
 
 def save_memo_as_pdf(text: str, output_path: str):
@@ -1387,10 +1398,10 @@ def save_memo_with_template(memo_text, profile, output_path):
     known_headers = [
         'Detailed Summary', 'Company Overview', 'Problem Statement', 'Solution Overview', 'Market Size & Analysis',
         'Competitive Landscape', 'Business Model', 'Technical Due Diligence', 'Product Description',
-        'Financial Analysis', 'Team & Management', 'ESG Considerations', 'Risks & Mitigations',
+        'Financial Analysis', 'Team & Management', 'ESG Considerations', 'Risks',
         'Investment & Exit Strategies', 'Follow-up Questions & Next Steps', 'Figures & Visuals',
-        'Appendix: Additional Tables', 'Discussion & Analyst Commentary',
-        'Key Weaknesses', 'Opportunities', 'Risks',
+        'Appendix: Additional Tables', 'AI DISCUSSION AND COMMENTARY', 'Key Strengths',
+        'Key Weaknesses', 'Opportunities', 'Risks', 'Conclusion',
         'Summary', 'Analysis Framework', 'Strengths', 'Weaknesses', 'Recommendations',
         'Appendix', 'Figures & Visuals',
         'ESG Alignment', 'Technical Validation Gaps', 'Competitive Landscape Challenges',

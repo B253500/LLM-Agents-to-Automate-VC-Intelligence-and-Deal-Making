@@ -4,8 +4,13 @@ from langchain.tools import Tool
 from crewai_tools import EXASearchTool
 from core.schemas import StartupProfile
 from chains.competitive_intel_chain import run_competitive_intel_chain
+from dotenv import load_dotenv
+import os
+load_dotenv()
+exa_api_key = os.getenv("EXA_API_KEY")
 
 exa_search_tool = EXASearchTool(
+    api_key=exa_api_key,
     type='neural',
     use_autoprompt=True,
     category='company',
