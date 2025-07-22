@@ -251,18 +251,19 @@ def synthesize_product_description_llm(profile):
     from langchain_openai import ChatOpenAI
     llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
     prompt = f"""
-You are a VC analyst writing the Product/Service Description section for an investment memo.
-- Do NOT repeat information already covered in the Detailed Summary or Solution Overview.
-- Focus on the unique technical features, product roadmap, and what sets this product apart from competitors.
-- Be concise: no more than 8 sentences.
-- Use plain, non-marketing language.
-Context:
-Company: {getattr(profile, 'name', '')}
-Product: {getattr(profile, 'product_description', '')}
-Sector: {getattr(profile, 'sector', '')}
-Key Features: {getattr(profile, 'key_features', '')}
-Roadmap: {getattr(profile, 'product_roadmap', '')}
-"""
+    You are a VC analyst writing the Product/Service Description section for an investment memo.
+    - Do NOT repeat information already covered in the Detailed Summary or Solution Overview.
+    - Focus on the unique technical features, product roadmap, and what sets this product apart from competitors.
+    - Be concise: no more than 8 sentences.
+    - Use plain, non-marketing language.
+    Context:
+    Company: {getattr(profile, 'name', '')}
+    Sector: {getattr(profile, 'sector', '')}
+    Product: {getattr(profile, 'product_description', '')}
+    Stage: {getattr(profile, 'funding_stage', '')}
+    Business Model: {getattr(profile, 'business_model', '')}
+    Go-to-Market: {getattr(profile, 'go_to_market', '')}
+    """
     response = llm.invoke(prompt)
     return response.content.strip() if hasattr(response, 'content') else str(response)
 
@@ -431,6 +432,9 @@ Web search result:
         comp_agent_data = json.loads(comp_agent_output)
         for k, v in comp_agent_data.items():
             if hasattr(profile, k) and v:
+                # Only overwrite top_competitors if v is a non-empty list
+                if k == "top_competitors" and isinstance(v, list) and not v:
+                    continue
                 setattr(profile, k, v)
     except Exception:
         pass
@@ -541,7 +545,8 @@ Context:
                     import json
                     data = json.loads(txt[first : last + 1])
                     for k, v in data.items():
-                        if hasattr(profile, k) and v:
+                        # Only set if not already set from deck/ocr
+                        if hasattr(profile, k) and v and not getattr(profile, k, None):
                             # Try to cast to float for numeric fields
                             if k in ['TAM', 'SAM', 'SOM', 'cagr', 'market_growth_rate']:
                                 try:
@@ -569,7 +574,6 @@ Context:
     if not profile.website or profile.website.lower() in ['unknown', 'n/a', '']:
         try:
             from core.external_enrichment import find_company_website
-            # Use the full_text variable as deck_text if available
             website = find_company_website(
                 company_name=profile.name,
                 founder_name=profile.founder_name,
@@ -583,6 +587,27 @@ Context:
                 print("[Website Enrichment] No website found.")
         except Exception as e:
             print(f"[Website Enrichment] Error: {e}")
+
+    # --- Funding stage and amount enrichment ---
+    try:
+        from langchain_openai import ChatOpenAI
+        llm = ChatOpenAI(model="gpt-4o", temperature=0.2)
+        funding_query = f"What is the latest funding stage and total funding amount for {profile.name}? Prefer Crunchbase, PitchBook, or TechCrunch as sources. Return the answer as: Funding Stage: <stage>, Funding Amount: <amount>, Source: <url>"
+        funding_result = llm.invoke(funding_query).content.strip()
+        import re
+        stage_match = re.search(r'Funding Stage:\s*([^,\n]+)', funding_result)
+        amount_match = re.search(r'Funding Amount:\s*([^,\n]+)', funding_result)
+        source_match = re.search(r'Source:\s*(https?://\S+)', funding_result)
+        if stage_match:
+            profile.funding_stage = stage_match.group(1).strip()
+        if amount_match:
+            profile.funding_amount = amount_match.group(1).strip()
+        if source_match:
+            profile.funding_source = source_match.group(1).strip()
+        print(f"[Funding Enrichment] Stage: {getattr(profile, 'funding_stage', None)}, Amount: {getattr(profile, 'funding_amount', None)}, Source: {getattr(profile, 'funding_source', None)}")
+    except Exception as e:
+        print(f"[Funding Enrichment] Error: {e}")
+
     if hasattr(profile, 'executives') and isinstance(profile.executives, list):
         profile.executives = enrich_executive_details_with_perplexity(profile.name, profile.executives)
     return profile
@@ -619,56 +644,42 @@ def run_risk_assessment_chain_with_text(full_text: str, profile: StartupProfile)
 
 # --- Enhanced Detailed Summary Paragraph ---
 def synthesize_detailed_summary(profile):
-    # Use all key fields to create a concise, non-repetitive summary (single paragraph, max 4 sentences)
-    name = getattr(profile, 'name', 'the company')
-    founder = getattr(profile, 'founder_name', 'an experienced entrepreneur')
-    sector = getattr(profile, 'sector', 'the sector')
-    year_founded = getattr(profile, 'year_founded', None)
-    product = getattr(profile, 'product_description', '')
-    highlight = ''
-    # Pick a key highlight if available
-    if getattr(profile, 'moat_strength', None):
-        highlight = f"Key differentiator: {profile.moat_strength}."
-    elif getattr(profile, 'tech_maturity', None):
-        highlight = f"Technical maturity: {profile.tech_maturity}."
-    # Compose up to 4 sentences, no more, and join as a single paragraph
-    summary_parts = []
-    if year_founded:
-        summary_parts.append(f"{name} was founded in {year_founded} by {founder} and operates in the {sector} sector.")
-    else:
-        summary_parts.append(f"{name}, founded by {founder}, operates in the {sector} sector.")
-    if product:
-        summary_parts.append(f"The company develops {product}.")
-    # business_model is intentionally omitted
-    if highlight:
-        summary_parts.append(highlight)
-    # Remove duplicates and keep only the first 4 non-empty lines
-    seen = set()
-    filtered = []
-    for part in summary_parts:
-        if part and part not in seen:
-            filtered.append(part)
-            seen.add(part)
-        if len(filtered) >= 4:
-            break
-    return ' '.join(filtered).replace('\n', ' ')
+    from langchain_openai import ChatOpenAI
+    llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
+    prompt = f"""
+    You are a VC analyst writing the DETAILED SUMMARY section for an investment memo.
+    - Write a concise, high-level summary of the company in 3-5 sentences (no more than half a page).
+    - Focus on what the company does, its unique value, business model, and market positioning.
+    - Do NOT include technical details, product specs, or deep business model mechanics—leave those for later sections.
+    - Use plain, non-marketing language.
+    Context:
+    Company: {getattr(profile, 'name', '')}
+    Sector: {getattr(profile, 'sector', '')}
+    Product: {getattr(profile, 'product_description', '')}
+    Stage: {getattr(profile, 'funding_stage', '')}
+    """
+    response = llm.invoke(prompt)
+    return response.content.strip() if hasattr(response, 'content') else str(response)
 
 # --- Enhanced Problem Statement and Solution Reasoning ---
 def synthesize_problem_statement_llm(profile):
     from langchain_openai import ChatOpenAI
     llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
     prompt = f"""
-You are a VC analyst writing the Problem Statement section for an investment memo.
-- Clearly state the main problem or pain point that the company's product/service is solving.
-- Try to be specific to the company's sector, product, and market context.
-- Do NOT use generic or sector-wide statements—focus on the actual problem this company addresses.
-- Do NOT mention the company's solution or product features—only describe the problem.
-- Use plain, non-marketing language.
-Context:
-Company: {getattr(profile, 'name', '')}
-Sector: {getattr(profile, 'sector', '')}
-Product: {getattr(profile, 'product_description', '')}
-"""
+    You are a VC analyst writing the Problem Statement section for an investment memo.
+    - Clearly state the main problem or pain point that the company's product/service is solving.
+    - Try to be specific to the company's sector, product, and market context.
+    - Do NOT use generic or sector-wide statements—focus on the actual problem this company addresses.
+    - Do NOT mention the company's solution or product features—only describe the problem.
+    - Use plain, non-marketing language.
+    Context:
+    Company: {getattr(profile, 'name', '')}
+    Sector: {getattr(profile, 'sector', '')}
+    Product: {getattr(profile, 'product_description', '')}
+    Stage: {getattr(profile, 'funding_stage', '')}
+    Business Model: {getattr(profile, 'business_model', '')}
+    Go-to-Market: {getattr(profile, 'go_to_market', '')}
+    """
     response = llm.invoke(prompt)
     return response.content.strip() if hasattr(response, 'content') else str(response)
 
@@ -676,15 +687,16 @@ def synthesize_solution_overview_llm(profile):
     from langchain_openai import ChatOpenAI
     llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
     prompt = f"""
-You are a VC analyst writing the Solution Overview section for an investment memo.
-- Clearly explain how the company's product/service solves the problem described in the Problem Statement.
-- Focus ONLY on the core solution and its mechanism of action.
-- Use plain, non-marketing language.
-Context:
-Company: {getattr(profile, 'name', '')}
-Sector: {getattr(profile, 'sector', '')}
-Product: {getattr(profile, 'product_description', '')}
-"""
+    You are a VC analyst writing the Solution Overview section for an investment memo.
+    - Clearly explain how the company's product/service solves the problem described in the Problem Statement.
+    - Focus ONLY on the core solution. Don't describe in detail the product, just the solution.
+    - Use plain, non-marketing language.
+    Context:
+    Company: {getattr(profile, 'name', '')}
+    Sector: {getattr(profile, 'sector', '')}
+    Product: {getattr(profile, 'product_description', '')}
+    Stage: {getattr(profile, 'funding_stage', '')}
+    """
     response = llm.invoke(prompt)
     return response.content.strip() if hasattr(response, 'content') else str(response)
 
@@ -715,8 +727,7 @@ def format_money(val):
         return f"${val:,.0f}"
 
 def format_market_size_section(profile):
-    narrative = getattr(profile, 'market_summary', '') or getattr(profile, 'market_size_narrative', '')
-    # Get values and sources
+    from langchain_openai import ChatOpenAI
     TAM = format_money(getattr(profile, 'TAM', 0))
     TAM_source = getattr(profile, 'TAM_source', None)
     SAM = format_money(getattr(profile, 'SAM', 0))
@@ -727,66 +738,122 @@ def format_market_size_section(profile):
     CAGR_source = getattr(profile, 'cagr_source', None)
     growth_rate = getattr(profile, 'market_growth_rate', None)
     growth_rate_source = getattr(profile, 'market_growth_rate_source', None)
+    sector = getattr(profile, 'sector', '')
+    llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
+    web_sources = getattr(profile, 'market_size_sources', []) or []
+    web_links = [url for url in web_sources if url.startswith('http')][:3]
+    web_links_str = '\n'.join(f"- [Source Link]({url})" for url in web_links)
+    prompt = f"""
+You are a VC analyst writing the Market Size & Analysis section for an investment memo.
+- Use the following data and web sources to write a concise, insightful market discussion (3-5 sentences).
+- Discuss market size, growth, key trends, and what the company could achieve or challenges it may face.
+- If web sources are available, reference them and include clickable links.
+- Use plain, non-marketing language.
+
+Data:
+TAM: {TAM}
+SAM: {SAM}
+SOM: {SOM}
+CAGR: {CAGR}%
+Growth Rate: {growth_rate}
+Sector: {sector}
+Web Sources:\n{web_links_str}
+"""
+    market_discussion = llm.invoke(prompt).content.strip()
+    def format_source(source):
+        if isinstance(source, str):
+            if source.startswith('http'):
+                return f"[Source: {source}]"
+            elif source == 'web_search':
+                urls = getattr(profile, 'market_size_sources', []) or []
+                if urls:
+                    return f"[Source: {urls[0]}]"
+        return f"[Source: {source}]" if source else ""
     lines = []
-    # Safely cast SOM and TAM to float for market penetration calculation
+    lines.append(market_discussion)
+    lines.append("")
     try:
         som_val = float(getattr(profile, 'SOM', 0) or 0)
-    except Exception:
-        som_val = 0.0
-    try:
         tam_val = float(getattr(profile, 'TAM', 1) or 1)
+        market_penetration = (som_val / tam_val * 100) if tam_val else 0.0
     except Exception:
-        tam_val = 1.0
-    market_penetration = (som_val / tam_val * 100) if tam_val else 0.0
-    # Show source next to each value if available, as a clickable link if it's a URL
-    def src(s):
-        if not s:
-            return ""
-        if isinstance(s, str) and s.startswith("http"):
-            return f" [Source: [link]({s})]"
-        return f" [Source: {s}]"
-    lines.append(f"TAM {TAM}{src(TAM_source)}, SAM {SAM}{src(SAM_source)}, SOM {SOM}{src(SOM_source)}; Market Penetration: {market_penetration:.1f} %")
+        market_penetration = 0.0
+    lines.append(f"TAM {TAM}{format_source(TAM_source)}, SAM {SAM}{format_source(SAM_source)}, SOM {SOM}{format_source(SOM_source)}; Market Penetration: {market_penetration:.1f} %")
     if CAGR:
-        lines.append(f"CAGR: {CAGR}%{src(CAGR_source)}")
+        lines.append(f"CAGR: {CAGR}%{format_source(CAGR_source)}")
     if growth_rate:
-        lines.append(f"Market Growth Rate: {growth_rate}{src(growth_rate_source)}")
-    if not narrative and not any([getattr(profile, 'TAM', None), getattr(profile, 'SAM', None), getattr(profile, 'SOM', None)]):
-        lines.append("No detailed market analysis or size data was available in the provided materials or external sources. Independent market research is recommended.")
-    elif narrative:
-        lines.append(narrative)
+        lines.append(f"Market Growth Rate: {growth_rate}{format_source(growth_rate_source)}")
+    web_metrics = []
+    for key, label in [("TAM", "TAM"), ("CAGR", "CAGR"), ("challenges", "Key Challenges"), ("drivers", "Key Drivers")]:
+        val = getattr(profile, f'web_{key}', None)
+        src = getattr(profile, f'web_{key}_source', None)
+        if val:
+            if src and src.startswith('http'):
+                web_metrics.append(f"• {label}: {val} [Source: {src}]")
+            else:
+                web_metrics.append(f"• {label}: {val}")
+    if web_metrics:
+        lines.append("\nWeb-Enriched Market Metrics:")
+        lines.extend(web_metrics)
+    if web_links:
+        lines.append("\nMarket Data Sources:")
+        for url in web_links:
+            lines.append(f"- {url}")
+    # Add alternative market size estimates if available
+    if hasattr(profile, 'alternative_market_sizes') and profile.alternative_market_sizes:
+        lines.append("\nAlternative Market Size Estimates:")
+        for entry in profile.alternative_market_sizes:
+            if entry.get('url'):
+                lines.append(f"• {entry['value']} ({entry['year']}) – [{entry['source']}]({entry['url']})")
+            else:
+                lines.append(f"• {entry['value']} ({entry['year']}) – {entry['source']}")
     return '\n'.join(lines)
 
-# --- Expanded Competitive Landscape ---
 def format_competitive_landscape(profile):
+    """Enhanced competitive landscape with detailed competitor analysis"""
     competitors = getattr(profile, 'top_competitors', [])
     if not competitors:
-        return 'Competitor analysis not available.'
-    lines = []
+        from langchain_openai import ChatOpenAI
+        llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
+        # Try to generate competitors from context
+        prompt = f"""
+        Based on this company's profile, list 3-5 likely competitors in their space:
+        Company: {getattr(profile, 'name', '')}
+        Sector: {getattr(profile, 'sector', '')}
+        Product: {getattr(profile, 'product_description', '')}
+        Market: {getattr(profile, 'market_summary', '')}
+        """
+        competitors_text = llm.invoke(prompt).content.strip()
+        if competitors_text:
+            return f"Potential Competitors (AI-generated based on company profile):\n{competitors_text}\n\nNote: This is an AI-generated competitive landscape and should be verified."
+
+    lines = ["Key Competitors Analysis:"]
+    
     for comp in competitors:
         name = comp.get('name', 'Unknown')
         website = comp.get('website', '') or comp.get('url', '')
         product = comp.get('product_offering', '') or comp.get('product', '') or comp.get('description', '')
         differentiator = comp.get('differentiator', '')
-        # Header line with name and website
+        
+        # Header with name and website
         if website:
-            lines.append(f"• {name} ({website})")
+            lines.append(f"\n• {name} ({website})")
         else:
-            lines.append(f"• {name}")
+            lines.append(f"\n• {name}")
+            
         if product:
             lines.append(f"  Product: {product}")
         if differentiator and differentiator != product:
-            lines.append(f"  Unique Value: {differentiator}")
-        # --- LLM-generated recent news for this competitor ---
-        from langchain_openai import ChatOpenAI
-        llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
-        news_prompt = f"""
-                    You are a VC analyst. For the competitor below, provide a 1-2 sentence summary of the most recent news, partnerships, funding, or product launches. Use only public sources and do not make up facts. If no news is available, say so.
-                    Competitor: {name}
-                    Website: {website}
-                    """
-        news_response = llm.invoke(news_prompt)
-        news = news_response.content.strip() if hasattr(news_response, 'content') else str(news_response)
-        lines.append(f"  Recent News: {news}")
+            lines.append(f"  Differentiator: {differentiator}")
+            
+        # Add competitive positioning
+        if getattr(profile, 'competitive_positioning', None):
+            lines.append(f"  Positioning vs {name}: {profile.competitive_positioning}")
+            
+    # Add competitive summary if available
+    if getattr(profile, 'competitive_summary', None):
+        lines.append(f"\nCompetitive Summary:\n{profile.competitive_summary}")
+        
     return '\n'.join(lines)
 
 def format_technical_dd_section(profile):
@@ -968,7 +1035,6 @@ def deduplicate_memo(text):
             result.append(line)
     return '\n'.join(result)
 
-# Move the entire format_risk_section(profile) function definition so it is above format_memo(profile: StartupProfile)
 def format_risk_section(profile):
     risk_flags = getattr(profile, 'risk_flags', [])
     regulatory = getattr(profile, 'regulatory', None)
@@ -1013,45 +1079,46 @@ Regulatory: {getattr(profile, 'regulatory', '')}
 
 def format_team_section(profile):
     lines = []
-    # Only show key roles: founder/CEO, CFO, chairman, and any C-levels
     execs = getattr(profile, 'executives', None) or []
     founder = getattr(profile, 'founder_name', None)
-    key_roles = ['founder', 'ceo', 'chief executive officer', 'cfo', 'chief financial officer', 'chairman', 'cto', 'chief technology officer', 'coo', 'chief operating officer']
+    key_roles = ['founder', 'ceo', 'chief executive officer', 'cfo', 'chief financial officer', 'chairman', 'cto', 'chief technology officer']
     shown = set()
     # Always show founder if present
     if founder:
-        lines.append(f"Founder: {founder}")
-        shown.add(founder.lower())
+        founder_exec = next((e for e in execs if e.get('name', '').lower() == founder.lower()), None)
+        if founder_exec:
+            execs = [founder_exec] + [e for e in execs if e != founder_exec]
+    # List key team members
     for exec in execs:
         if isinstance(exec, dict):
             name = exec.get('name', 'Unknown')
-            role = exec.get('role', '').lower()
+            role = exec.get('role', '').title()
             linkedin = exec.get('linkedin', '')
+            bio = exec.get('bio', '')
             # Only show if role is in key_roles or if not already shown
-            if any(r in role for r in key_roles) and name.lower() not in shown:
-                line = f"{name} ({exec.get('role', '')})"
+            if any(r in role.lower() for r in key_roles) and name.lower() not in shown:
+                lines.append(f"**{name} – {role}**")
                 if linkedin:
-                    line += f" | LinkedIn: {linkedin}"
-                lines.append(line)
+                    lines.append(f"• LinkedIn: {linkedin}")
+                if bio:
+                    lines.append(f"• Bio: {bio}")
                 shown.add(name.lower())
-    # Prior exits
-    prior_exits = getattr(profile, 'prior_exits', None)
-    prior_exit_details = getattr(profile, 'prior_exit_details', None) or []
-    if prior_exits and int(prior_exits) > 0:
-        lines.append(f"Prior Exits: {prior_exits}")
-        for exit in prior_exit_details:
-            if isinstance(exit, dict):
-                cname = exit.get('company', 'Unknown')
-                link = exit.get('link', '')
-                if link:
-                    lines.append(f"  - {cname}: {link}")
-                else:
-                    lines.append(f"  - {cname}")
-            else:
-                lines.append(f"  - {exit}")
-    # LinkedIn summary (if available)
-    if hasattr(profile, 'founder_linkedin_formatted'):
-        lines.append(profile.founder_linkedin_formatted)
+    # Add Overall Team Assessment (critical analysis) at the end
+    overall_assessment = getattr(profile, 'overall_team_assessment', None)
+    if not overall_assessment:
+        from langchain_openai import ChatOpenAI
+        llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
+        team_bios = '\n'.join([e.get('bio', '') for e in execs if isinstance(e, dict) and e.get('bio', '')])
+        prompt = f"""
+You are a VC analyst. Write a single-paragraph critical assessment of the overall leadership team for an investment memo, based on the following team bios and roles. Focus on strengths, gaps, and relevance to the company's sector. Do not repeat individual bios.
+
+Team Bios:
+{team_bios}
+"""
+        overall_assessment = llm.invoke(prompt).content.strip()
+    if overall_assessment:
+        lines.append("\nOverall Team Assessment:")
+        lines.append(overall_assessment)
     return '\n'.join(lines) if lines else 'Team and management information not available.'
 
 def synthesize_team_section_llm(profile):
@@ -1270,6 +1337,43 @@ def clean_blank_bullets(text):
         cleaned.append(line)
     return '\n'.join(cleaned)
 
+from langchain_openai import ChatOpenAI
+
+def deduplicate_and_paraphrase(text, min_phrase_len=3, max_allowed=2):
+    """
+    Deduplicate and paraphrase repeated phrases in text.
+    - Finds repeated phrases (sequences of min_phrase_len+ words).
+    - If a phrase occurs more than max_allowed times, paraphrase extra occurrences.
+    - Keeps the first occurrence as-is.
+    """
+    import re
+    llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
+    # Find all phrases of min_phrase_len+ words
+    words = text.split()
+    phrase_counts = {}
+    phrase_locs = {}
+    for i in range(len(words) - min_phrase_len + 1):
+        phrase = ' '.join(words[i:i+min_phrase_len])
+        phrase_counts[phrase] = phrase_counts.get(phrase, 0) + 1
+        phrase_locs.setdefault(phrase, []).append(i)
+    # Only process phrases that occur more than max_allowed times
+    for phrase, count in phrase_counts.items():
+        if count > max_allowed:
+            # Paraphrase all but the first occurrence
+            locs = phrase_locs[phrase][1:]
+            for loc in locs:
+                # Find the phrase in the text and paraphrase it
+                pattern = re.escape(phrase)
+                matches = list(re.finditer(pattern, text))
+                if len(matches) > 1:
+                    match = matches[1]  # Paraphrase the second occurrence
+                    start, end = match.start(), match.end()
+                    context = text[max(0, start-50):min(len(text), end+50)]
+                    prompt = f"Paraphrase the following phrase to avoid duplication, keeping the meaning and context:\n\nPhrase: {phrase}\nContext: {context}"
+                    paraphrased = llm.invoke(prompt).content.strip()
+                    text = text[:start] + paraphrased + text[end:]
+    return text
+
 def format_memo(profile: StartupProfile) -> str:
     current_date = datetime.now().strftime("%B %d, %Y")
     def clean(text):
@@ -1282,6 +1386,14 @@ def format_memo(profile: StartupProfile) -> str:
         )
     else:
         team_line = f"Team: {getattr(profile, 'founder_name', 'TBD')}"
+
+    # --- Funding line for Company Overview ---
+    funding_line = f"Funding Stage: {getattr(profile, 'funding_stage', 'Undisclosed')}"
+    if getattr(profile, 'funding_amount', None):
+        funding_line += f", {profile.funding_amount}"
+    if getattr(profile, 'funding_source', None):
+        funding_line += f" [Source: {profile.funding_source}]"
+
     memo_body = f"""
 1. DETAILED SUMMARY
 {clean(synthesize_detailed_summary(profile))}
@@ -1290,7 +1402,7 @@ def format_memo(profile: StartupProfile) -> str:
 Company: {clean(getattr(profile, 'name', None) or 'TBD')}
 Sector: {clean(getattr(profile, 'sector', None) or 'TBD')}
 Website: {clean(getattr(profile, 'website', None) or 'TBD')}
-Funding Stage: {format_funding_stage(profile)}
+{funding_line}
 {team_line}
 {clean(getattr(profile, 'founder_linkedin_formatted', ''))}
     
@@ -1332,10 +1444,13 @@ Funding Stage: {format_funding_stage(profile)}
 14. INVESTMENT & EXIT STRATEGIES
 {synthesize_exit_strategies_llm(profile)}
 
-15. FOLLOW-UP QUESTIONS & NEXT STEPS
+15. COUNTERFACTUAL ANALYSIS: WHAT IF WE DON'T INVEST?
+{synthesize_counterfactual_section(profile)}
+
+16. FOLLOW-UP QUESTIONS & NEXT STEPS
 {synthesize_followup_section_llm(profile)}
 
-16. ADDITIONAL FIGURES & VISUALS
+17. ADDITIONAL FIGURES & VISUALS
 {clean(getattr(profile, 'figures_section', ''))}
 """
     llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0.2)
@@ -1346,15 +1461,18 @@ MEMO:
 {memo_body}
 """
     discussion = llm.invoke(discussion_prompt).content.strip()
-    # Rename any 'Summary' subheader in the discussion to 'Conclusion'
     import re
-    discussion = re.sub(r'(^|\n)(\s*)([*#\-]*\s*)?Summary(\s*[:\-]?)', r'\1\2\3Conclusion\4', discussion, flags=re.IGNORECASE)
+    # Replace any 'Conclusion and Recommendation' or 'Recommendation' with just 'Conclusion' in bold
+    discussion = re.sub(r'^(#+\s*)?(Conclusion and Recommendation|Recommendation)(\s*[:\-]?)', r'**Conclusion**', discussion, flags=re.IGNORECASE | re.MULTILINE)
+    # Replace any 'Conclusion' header with bold (no hashtags)
+    discussion = re.sub(r'^(#+\s*)?Conclusion(\s*[:\-]?)', r'**Conclusion**', discussion, flags=re.IGNORECASE | re.MULTILINE)
+    # Remove any remaining markdown headers (hashtags) from the start of lines
+    discussion = re.sub(r'^#+\s*', '', discussion, flags=re.MULTILINE)
     # Remove any sentences before the first 'Key Strengths' or similar main header
     match = re.search(r'(Key Strengths[\s\S]*)', discussion, re.IGNORECASE)
     if match:
         discussion = match.group(1).lstrip()
-    # De-duplication post-processing
-    return deduplicate_memo(f"{memo_body}\n17. AI DISCUSSION AND COMMENTARY\n{clean_discussion_section(discussion)}\n\n---\nGenerated by VC Analysis System on {current_date}\nData Sources: Company documents, market research, competitive intelligence, technical analysis\nAnalysis Framework: Multi-agent AI system with specialized domain expertise\n")
+    return deduplicate_memo(f"{memo_body}\n18. AI DISCUSSION AND COMMENTARY\n{clean_discussion_section(discussion)}\n\n---\nGenerated by VC Analysis System on {current_date}\nData Sources: Company documents, market research, competitive intelligence, technical analysis\nAnalysis Framework: Multi-agent AI system with specialized domain expertise\n")
 
 
 def save_memo_as_pdf(text: str, output_path: str):
@@ -1449,7 +1567,7 @@ def save_memo_with_template(memo_text, profile, output_path):
         'Investment & Exit Strategies', 'Follow-up Questions & Next Steps', 'Figures & Visuals',
         'Appendix: Additional Tables', 'AI DISCUSSION AND COMMENTARY', 'Key Strengths',
         'Key Weaknesses', 'Opportunities', 'Risks', 'Conclusion',
-        'Summary', 'Analysis Framework', 'Strengths', 'Weaknesses', 'Recommendations',
+        'Summary', 'Analysis Framework', 'Strengths', 'Weaknesses',
         'Appendix', 'Figures & Visuals',
         'ESG Alignment', 'Technical Validation Gaps', 'Competitive Landscape Challenges',
         'Execution & Commercialization Risk', 'Technology Risk', 'Competitive Displacement',
@@ -1564,6 +1682,22 @@ def convert_docx_to_pdf(docx_path, output_dir=None):
         print(f"❌ Error converting DOCX to PDF: {e}")
         return None
 
+
+# --- Counterfactual Analysis Section ---
+def synthesize_counterfactual_section(profile):
+    from langchain_openai import ChatOpenAI
+    llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
+    prompt = f"""
+You are a senior VC analyst at a top investment firm. Write a concise, professional paragraph for an investment memo answering: 'What are the likely outcomes and opportunity costs if we do NOT invest in this company?' Consider market, competitive, and strategic risks, and the potential for missed upside. Use the style and tone of leading VC/investment firms. Do not use marketing language.
+Context:
+Company: {getattr(profile, 'name', '')}
+Sector: {getattr(profile, 'sector', '')}
+Top Competitors: {getattr(profile, 'top_competitors', '')}
+Market Size: {getattr(profile, 'TAM', '')}
+Stage: {getattr(profile, 'funding_stage', '')}
+"""
+    response = llm.invoke(prompt)
+    return response.content.strip() if hasattr(response, 'content') else str(response)
 
 def main():
     if len(sys.argv) < 2:
