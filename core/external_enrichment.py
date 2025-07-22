@@ -90,10 +90,11 @@ def find_company_website(company_name, founder_name=None, sector=None, deck_text
     try:
         from langchain_openai import ChatOpenAI
         prompt = (
-            f"You are a research analyst. Find the official website for the company '{company_name}'."
+            f"You are a research analyst. Find the official, public-facing company website (homepage) for the company '{company_name}'."
             f"{' The founder is ' + founder_name + '.' if founder_name else ''}"
             f"{' The sector is ' + sector + '.' if sector else ''}"
-            " Use Google or web search if needed. Return only the official website URL. If ambiguous, explain your reasoning."
+            " Do NOT return internal, admin, login, or example URLs (such as /admin, /login, or subdomains like myshopify.com)."
+            " If not found, return 'unknown'. Use Google or web search if needed. Return only the official website URL. If ambiguous, explain your reasoning."
         )
         llm = ChatOpenAI(model='gpt-4')
         result = llm.invoke(prompt).content.strip()

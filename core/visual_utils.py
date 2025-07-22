@@ -92,13 +92,23 @@ def extract_market_and_financials_from_visuals(profile, figures_ocr, tables_text
     context = ocr_context + "\n\n" + table_context
     prompt = f"""
 You are a VC analyst extracting market size and financial metrics from pitch deck text, figures, and tables.
-- Your TOP PRIORITY is to find market size values (TAM, SAM, SOM, etc.) in figures and tables extracted from the deck, especially those with currency symbols ($, €, £, etc.).
+- Your TOP PRIORITY is to find market size values (TAM, SAM, SOM, etc.) and financial metrics in figures and tables extracted from the deck, especially those with currency symbols ($, €, £, etc.).
 - For each value, state the context (e.g., 'from figure on page X', 'from table on page Y', or 'from OCR text').
 - If multiple values are found, prefer the most recent or most clearly labeled.
 - Only if a value is not found in figures/tables, leave it null (web search will be used as fallback).
 - For each value, pair it with its context/label (e.g., 'Total Addressable Market', 'CAGR', 'Revenue 2025', etc.).
-- Extract the following fields if present: {', '.join(missing_fields)}. If a field is missing, leave it null.
-- Return a JSON object with these fields and a short explanation for each value if possible.
+- Extract the following financial metrics if present (for each year available):
+    - Revenue
+    - Gross Profit
+    - Gross Margin (%)
+    - Total Opex
+    - Net Operating Loss
+    - Depreciation & Amortization
+    - EBITDA
+    - EBITDA % as of Revenue
+    - Any other available financials
+- Return a JSON object with years as keys and metrics as sub-keys, and a short explanation for each value if possible.
+- Also extract market size fields: {', '.join(missing_fields)}. If a field is missing, leave it null.
 Context:
 {context}
 """

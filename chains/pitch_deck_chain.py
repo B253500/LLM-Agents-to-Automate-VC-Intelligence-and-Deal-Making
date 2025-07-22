@@ -24,6 +24,9 @@ You are a top-tier VC investment analyst. Extract the following fields as JSON:
 - website
 - funding_stage
 - executives: a list of ONLY the following roles if present: CEO/Founder, CFO (Chief Financial Officer), Chairman, CTO (Chief Technology Officer). For each, include name, role, LinkedIn if available, and a list of prior exits with company name and link if available.
+
+For the 'name' field: Identify the actual company name from the following pitch deck text. Do not return a slogan, product, or generic term. Only return the official company name.
+
 If not explicitly stated, return "unknown". Do NOT hallucinate or infer.
 Return ONLY valid JSON.
 """
