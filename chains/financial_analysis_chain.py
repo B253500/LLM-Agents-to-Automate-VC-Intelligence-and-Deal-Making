@@ -6,6 +6,7 @@ Financial-analysis chain
 import json
 from hashlib import sha1
 from pathlib import Path
+import re
 
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
@@ -26,23 +27,74 @@ def web_search_financial_context(company_name):
 
 SYSTEM = """
 You are a VC financial analyst specializing in startup financial analysis.
-Analyze the company's financial data and provide:
-- Key metrics (burn, runway, valuation, revenue, funding sought)
-- A concise summary of financial health and risks
-- Commentary on missing data and red flags
-- Any recent financial news (use web search context if available)
-- Attribute sources where possible
-Return JSON with numeric fields and a 'summary' field.
-If you cannot find reliable data for a field, set it to null instead of 0.
+Extract all available financial metrics from the following text, even if not in a table.
+Return a JSON object with as many of the following fields as possible:
+- revenue (by year if available)
+- MRR (monthly recurring revenue)
+- GMV (gross merchandise volume)
+- gross_profit
+- cash_burn_12m
+- runway_months
+- implied_valuation
+- any other key financials
+If a table is present, extract it as both markdown and JSON. If not, extract from running text.
+If you cannot find reliable data for a field, set it to null. Do NOT guess, estimate, or hallucinate. Only extract numbers that are explicitly present in the text or tables. If a value is not explicitly stated, return null for that field. Never invent or infer values.
 """
 
 PROMPT = ChatPromptTemplate.from_messages([
     ("system", SYSTEM), ("human", "Financial snippets:\n{context}\nWeb search context:\n{web_context}\n")
 ])
 
-def run_financial_analysis_chain(profile: StartupProfile) -> StartupProfile:
-    # Build a context string from the profile fields for financial analysis
-    context = f"""
+def parse_money_string(s):
+    s = s.replace(",", "").strip()
+    match = re.match(r"\$?([\d\.]+)\s*([KMB]?)", s, re.IGNORECASE)
+    if not match:
+        return None
+    num, suffix = match.groups()
+    try:
+        num = float(num)
+    except (ValueError, TypeError):
+        return None
+    multiplier = {"": 1, "K": 1e3, "M": 1e6, "B": 1e9}
+    return num * multiplier.get(suffix.upper(), 1)
+
+def extract_financials_from_text(text):
+    patterns = [
+        (r"revenue[^\d$]*\$?([\d\.]+)\s*([KMB]?)", "revenue"),
+        (r"MRR[^\d$]*\$?([\d\.]+)\s*([KMB]?)", "mrr"),
+        (r"GMV[^\d$]*\$?([\d\.]+)\s*([KMB]?)", "gmv"),
+        (r"gross profit[^\d$]*\$?([\d\.]+)\s*([KMB]?)", "gross_profit"),
+        (r"cash burn[^\d$]*\$?([\d\.]+)\s*([KMB]?)", "cash_burn_12m"),
+        (r"runway[^\d$]*([\d\.]+)\s*(months|mo)?", "runway_months"),
+        (r"implied valuation[^\d$]*\$?([\d\.]+)\s*([KMB]?)", "implied_valuation"),
+    ]
+    results = {}
+    for pat, field in patterns:
+        match = re.search(pat, text, re.IGNORECASE)
+        if match:
+            if field == "runway_months":
+                num = match.group(1)
+                results[field] = float(num)
+            else:
+                num, suffix = match.groups()[:2]
+                results[field] = parse_money_string(num + (suffix or ""))
+    return results
+
+def value_in_text(value, text):
+    """Check if the numeric value (as string) appears in the text (case-insensitive, ignoring commas)."""
+    if value is None:
+        return False
+    if isinstance(value, float) or isinstance(value, int):
+        value_str = f"{value:,.0f}".replace(",", "")
+        return value_str in text.replace(",", "")
+    return str(value) in text
+
+def run_financial_analysis_chain(profile: StartupProfile, financial_context: str = "") -> StartupProfile:
+    # If financial_context is provided, use it; otherwise, build from profile fields
+    if financial_context and financial_context.strip():
+        context = financial_context
+    else:
+        context = f"""
 Funding: {getattr(profile, 'funding_stage', '')}
 Revenue: {getattr(profile, 'revenue', '')}
 Prior Exits: {getattr(profile, 'prior_exits', '')}
@@ -50,21 +102,35 @@ Sector: {getattr(profile, 'sector', '')}
 """
     # Optionally, add more fields as needed
     txt = llm.invoke(PROMPT.format(context=context, web_context="")).content.strip()
+    print("[Financial Chain] LLM raw output:", txt)
     first, last = txt.find("{"), txt.rfind("}")
     if first == -1 or last == -1:
         return profile
     try:
         data = json.loads(txt[first : last + 1])
-        if data.get("cash_burn_12m") is not None:
-            profile.cash_burn_12m = float(data.get("cash_burn_12m"))
-        if data.get("runway_months") is not None and data.get("runway_months", 0) > 0:
-            profile.runway_months = float(data.get("runway_months"))
-        if data.get("implied_valuation") is not None and data.get("implied_valuation", 0) > 0:
-            profile.implied_valuation = float(data.get("implied_valuation"))
+        print("[Financial Chain] Parsed JSON:", data)
+        # Only assign values if they are present in the original text/tables
+        for field in ["cash_burn_12m", "runway_months", "implied_valuation", "revenue", "mrr", "gmv", "gross_profit"]:
+            val = data.get(field)
+            if val is not None and value_in_text(val, context):
+                setattr(profile, field, float(val))
         if data.get("summary"):
             profile.financial_summary = data.get("summary")
-    except:
+        if data.get("financials_table"):
+            profile.financials_table = data.get("financials_table")
+        if data.get("financials_by_year"):
+            profile.financials_by_year = data.get("financials_by_year")
+    except Exception as e:
+        print(f"[Financial Chain Parsing Error] {e}")
         pass
+    # Regex fallback: extract from summary text if present
+    summary_text = txt if isinstance(txt, str) else ""
+    extracted = extract_financials_from_text(summary_text)
+    print("[Financial Chain] Regex extracted:", extracted)
+    for k, v in extracted.items():
+        if hasattr(profile, k) and v and value_in_text(v, context):
+            setattr(profile, k, v)
     if not profile.startup_id:
+        from hashlib import sha1
         profile.startup_id = sha1((profile.name or context[:40]).encode()).hexdigest()[:10]
     return profile

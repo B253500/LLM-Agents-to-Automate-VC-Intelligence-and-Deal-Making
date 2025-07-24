@@ -43,4 +43,4 @@ def get_report_context(question: str, k: int = 3) -> str:
     
     # Combine results
     contexts = results["documents"][0] if results["documents"] else []
-    return "\n\n".join(contexts) if contexts else "No relevant report data found." 
+    return "\n\n".join([str(c) for c in contexts if c]) if contexts else "No relevant report data found." 

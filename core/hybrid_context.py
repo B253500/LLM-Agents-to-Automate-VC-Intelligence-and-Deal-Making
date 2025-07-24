@@ -50,12 +50,12 @@ def get_hybrid_context(profile, topic, k_local=3, k_web=2, use_reports=True):
             context_parts.extend(local)
     
     # 3. Get web context if we still need more
-    if not context_parts:  # Only if we have no other context
-        search_query = f"{name} {topic}"
-        urls = google_search(search_query, num_results=k_web)
-        web_texts = [fetch_page_text(url) for url in urls if url]
-        if web_texts:
-            context_parts.extend(web_texts)
+    # if not context_parts:  # Only if we have no other context
+    #     search_query = f"{name} {topic}"
+    #     urls = google_search(search_query, num_results=k_web)
+    #     web_texts = [fetch_page_text(url) for url in urls if url]
+    #     if web_texts:
+    #         context_parts.extend(web_texts)
     
     # Combine and truncate
     context = "\n\n".join(context_parts)[:4000]

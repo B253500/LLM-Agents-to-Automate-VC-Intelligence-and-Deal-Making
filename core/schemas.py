@@ -57,6 +57,40 @@ class StartupProfile(BaseModel):
     executives: Optional[List[dict]] = []
     prior_exit_details: Optional[List[dict]] = []
 
+    founding_year: Optional[int] = None
+    funding_rounds: Optional[list] = None
+    investors: Optional[list] = None
+    linkedin: Optional[str] = None
+    twitter: Optional[str] = None
+    facebook: Optional[str] = None
+    revenue_estimate: Optional[float] = None
+    revenue_currency: Optional[str] = None
+    revenue_source: Optional[str] = None
+    tech_stack: Optional[list] = None
+    size_range: Optional[str] = None
+    status: Optional[str] = None
+    parent_id: Optional[str] = None
+    hq_city: Optional[str] = None
+    hq_country_iso2: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    office_locations: Optional[list] = None
+    emails: Optional[list] = None
+    phones: Optional[list] = None
+    linkedin_followers: Optional[int] = None
+    x_followers: Optional[int] = None
+    competitor_ids: Optional[list] = None
+    products: Optional[list] = None
+    keywords: Optional[list] = None
+    employee_cost_estimate: Optional[float] = None
+    app_store_links: Optional[list] = None
+    similarweb_monthly_visits: Optional[int] = None
+    bounce_rate: Optional[float] = None
+    avg_visit_duration_s: Optional[float] = None
+    news_mentions: Optional[int] = None
+    news_headlines: Optional[list] = None
+    news_sentiment: Optional[float] = None
+
     # New fields for structured data
     tables: List[Table] = []
     figures: List[Figure] = []
@@ -83,3 +117,14 @@ class StartupProfile(BaseModel):
     cash_on_hand: Optional[float] = None
     tables_text: Optional[str] = None
     market_size_sources: Optional[list[str]] = None
+    revenue: Optional[float] = None
+    gmv: Optional[float] = None
+    mrr: Optional[float] = None
+    gross_profit: Optional[float] = None
+
+    # --- Add missing fields for LLM outputs ---
+    financial_summary: Optional[str] = None
+    financials_table: Optional[str] = None
+    financials_by_year: Optional[dict] = None
+    market_summary: Optional[str] = None
+    market_reasoning: Optional[str] = None

@@ -21,7 +21,7 @@ from agents.founder_profiling_agent import build_founder_profiling_agent
 from agents.financial_analysis_agent import build_financial_analysis_agent
 from agents.risk_assessment_agent import build_risk_assessment_agent
 from agents.deck_agent import build_deck_agent
-from dotenv import load_dotenv
+
 import hashlib
 import json as pyjson
 from docx import Document
@@ -30,13 +30,9 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 import subprocess
 from core.perplexity_utils import search_perplexity
 from core.visual_utils import extract_images_from_pdf, generate_sample_market_chart, extract_market_and_financials_from_visuals
-from core.coresignal_utils import get_full_company_data
-import requests
 
 CACHE_DIR = "extraction_cache"
 os.makedirs(CACHE_DIR, exist_ok=True)
-
-load_dotenv()
 
 def get_cache_path(file_path):
     # Use file hash for uniqueness
@@ -141,7 +137,7 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
     
     # Log initial market values
     log_market_size_changes(profile)
-
+    
 def enrich_executives_with_perplexity(company_name, existing_execs):
     """
     Use Perplexity to find additional executives and their LinkedIn profiles if fewer than 3 are found.
@@ -235,28 +231,18 @@ def synthesize_product_description(profile):
         getattr(profile, 'business_model', None),
         getattr(profile, 'tech_maturity', None),
     ]
-    # Filter out None values and convert to strings, handling non-string types
-    filtered_descs = []
-    for d in descs:
-        if d is not None:
-            if isinstance(d, str):
-                if d.lower() not in ['n/a', 'not available', 'unknown']:
-                    filtered_descs.append(d)
-            else:
-                # Convert non-string types to string
-                filtered_descs.append(str(d))
-    
-    if not filtered_descs:
+    descs = [d for d in descs if d and (not isinstance(d, str) or d.lower() not in ['n/a', 'not available', 'unknown'])]
+
+    if not descs:
         return 'Product description not available.'
-    
     # Remove duplicates and repetitive phrases
     seen = set()
     result = []
-    for d in filtered_descs:
+    for d in descs:
         if d not in seen and len(d.split()) > 6:
             result.append(d)
             seen.add(d)
-    return '\n'.join(result) if result else filtered_descs[0]
+    return '\n'.join(result) if result else descs[0]
 
 def synthesize_product_description_llm(profile):
     """
@@ -265,19 +251,19 @@ def synthesize_product_description_llm(profile):
     from langchain_openai import ChatOpenAI
     llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
     prompt = f"""
-You are a VC analyst writing the Product/Service Description section for an investment memo.
-- Do NOT repeat information already covered in the Detailed Summary or Solution Overview.
-- Focus on the unique technical features, product roadmap, and what sets this product apart from competitors.
-- Be concise: no more than 8 sentences.
-- Use plain, non-marketing language.
-Context:
-Company: {getattr(profile, 'name', '')}
-Sector: {getattr(profile, 'sector', '')}
+    You are a VC analyst writing the Product/Service Description section for an investment memo.
+    - Do NOT repeat information already covered in the Detailed Summary or Solution Overview.
+    - Focus on the unique technical features, product roadmap, and what sets this product apart from competitors.
+    - Be concise: no more than 8 sentences.
+    - Use plain, non-marketing language.
+    Context:
+    Company: {getattr(profile, 'name', '')}
+    Sector: {getattr(profile, 'sector', '')}
     Product: {getattr(profile, 'product_description', '')}
     Stage: {getattr(profile, 'funding_stage', '')}
     Business Model: {getattr(profile, 'business_model', '')}
     Go-to-Market: {getattr(profile, 'go_to_market', '')}
-"""
+    """
     response = llm.invoke(prompt)
     return response.content.strip() if hasattr(response, 'content') else str(response)
 
@@ -291,11 +277,6 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
     market_vals = extract_market_size_from_text(full_text)
     for k, v in market_vals.items():
         if hasattr(profile, k) and v:
-            # Use parse_money_string for TAM, SAM, SOM, etc.
-            if k in ["TAM", "SAM", "SOM"] and isinstance(v, str):
-                parsed = parse_money_string(v)
-                if parsed:
-                    v = parsed
             setattr(profile, k, v)
             setattr(profile, f"{k}_source", "deck_text")
             print(f"[Market Size] Found {k}={v} in deck text")
@@ -304,141 +285,10 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
     profile = run_pitch_chain(full_text, profile, pdf_path=file_path)
     deck_agent, deck_task = build_deck_agent(file_path)
     deck_agent_output = deck_task.callback()
-
-    # --- CoreSignal full enrichment ---
-    if profile.name and profile.name.lower() not in ['unknown', 'n/a', 'not available', 'none']:
-        cs_full_data = get_full_company_data(profile.name)
-        # Handle both list and dict results
-        if isinstance(cs_full_data, list):
-            print(f"[CoreSignal] Returned a list with {len(cs_full_data)} items. Searching for a company profile dict...")
-            found = None
-            for item in cs_full_data:
-                if isinstance(item, dict) and 'name' in item:
-                    found = item
-                    print(f"[CoreSignal] Found company profile dict with fields: {list(found.keys())}")
-                    break
-            cs_full_data = found
-        elif isinstance(cs_full_data, dict):
-            print(f"[CoreSignal] Returned a dict with fields: {list(cs_full_data.keys())}")
-        else:
-            print(f"[CoreSignal] No valid enrichment data returned for {profile.name}.")
-            cs_full_data = None
-        if cs_full_data and isinstance(cs_full_data, dict):
-            print(f"[CoreSignal] Enriching profile for {profile.name} with mapped fields:")
-            # Field mapping checklist with fallbacks
-            mapping = {
-                "company_id": cs_full_data.get("id") or cs_full_data.get("company_id"),
-                "name": cs_full_data.get("name"),
-                "legal_name": cs_full_data.get("company_legal_name") or cs_full_data.get("legal_name"),
-                "shorthand_name": cs_full_data.get("company_shorthand_name") or cs_full_data.get("shorthand_name"),
-                "description": cs_full_data.get("description"),
-                "industry": cs_full_data.get("industry"),
-                "domain": cs_full_data.get("website") or cs_full_data.get("domain"),
-                "primary_domain": cs_full_data.get("primary_domain"),
-                "other_domains": cs_full_data.get("other_domains"),
-                "size_range": cs_full_data.get("size") or cs_full_data.get("size_range"),
-                "founded_year": cs_full_data.get("founded") or cs_full_data.get("founded_year"),
-                "status": cs_full_data.get("type") or cs_full_data.get("status"),
-                "hq_city": cs_full_data.get("headquarters_city") or cs_full_data.get("headquarters_new_address"),
-                "hq_country_iso2": cs_full_data.get("headquarters_country_restored") or cs_full_data.get("hq_country_iso2"),
-                "office_locations": cs_full_data.get("company_locations_collection") or cs_full_data.get("office_locations"),
-                "workforce_trends": cs_full_data.get("workforce_trends"),
-                "active_job_postings": cs_full_data.get("active_job_postings"),
-                "linkedin_followers": cs_full_data.get("followers") or cs_full_data.get("linkedin_followers"),
-                "x_followers": cs_full_data.get("x_followers"),
-                "news_counts": cs_full_data.get("news_counts"),
-                "news_features": cs_full_data.get("company_updates_collection") or cs_full_data.get("news_features"),
-                "website_traffic": cs_full_data.get("website_traffic"),
-                "estimated_revenue_range": cs_full_data.get("estimated_revenue_range"),
-                "revenue_currency": cs_full_data.get("revenue_currency"),
-                "revenue_source": cs_full_data.get("revenue_source"),
-                "last_funding_round_name": cs_full_data.get("last_funding_round_name"),
-                "last_funding_round_amount_raised": cs_full_data.get("last_funding_round_amount_raised"),
-                "last_funding_round_announced_date": cs_full_data.get("last_funding_round_announced_date"),
-                "funding_rounds": cs_full_data.get("company_funding_rounds_collection") or cs_full_data.get("funding_rounds"),
-                "acquisitions": cs_full_data.get("acquisition_list_source_1") or cs_full_data.get("acquisitions"),
-                "competitors": cs_full_data.get("company_similar_collection") or cs_full_data.get("competitors"),
-                "technographics": cs_full_data.get("technographics"),
-                "products": cs_full_data.get("products"),
-                "patent_count": cs_full_data.get("patent_count"),
-                "glassdoor_reviews": cs_full_data.get("glassdoor_reviews"),
-                "median_salary_by_title": cs_full_data.get("median_salary_by_title"),
-                "employee_sentiment": cs_full_data.get("employee_sentiment"),
-                "emails": cs_full_data.get("company_emails") or cs_full_data.get("emails"),
-                "phones": cs_full_data.get("company_phone_numbers") or cs_full_data.get("phones"),
-                "linkedin": cs_full_data.get("canonical_url") or cs_full_data.get("linkedin"),
-                "twitter": cs_full_data.get("twitter"),
-                "facebook": cs_full_data.get("facebook"),
-                "app_store_links": cs_full_data.get("app_store_links"),
-            }
-            for k, v in mapping.items():
-                # Do NOT set profile.executives or competitors from CoreSignal - rely on deck extraction and LLM enrichment
-                if k in ['executives', 'competitors']:
-                    print(f"[CoreSignal] Skipping {k} field - will use deck extraction and LLM enrichment")
-                    continue
-                if hasattr(profile, k) and v is not None and (getattr(profile, k, None) in [None, '', []]):
-                    setattr(profile, k, v)
-                    print(f"[CoreSignal] Set profile.{k} = {v!r}")
-        else:
-            print(f"[CoreSignal] No enrichment data found for {profile.name}.")
-
-    # --- Fallback: Infer sector from product/business if missing ---
-    if not profile.sector or profile.sector.lower() == 'unknown':
-        desc = getattr(profile, 'product_description', None) or getattr(profile, 'business_model', None) or synthesize_product_description(profile)
-        if desc and len(desc) > 10:
-            from langchain_openai import ChatOpenAI
-            llm = ChatOpenAI(model="gpt-4o", temperature=0.2)
-            sector_prompt = f"Given the following company description, what is the most likely sector or industry? Return only the sector name.\nDescription: {desc}"
-            inferred_sector = llm.invoke(sector_prompt).content.strip()
-            if inferred_sector and inferred_sector.lower() not in ['unknown', 'n/a', 'not available', 'none']:
-                profile.sector = inferred_sector
-
-    # --- Market Size Web Search: Only if sector or product is known ---
-    company = getattr(profile, 'name', '')
-    sector = getattr(profile, 'sector', '')
-    product = getattr(profile, 'product_description', '')
-    queries = []
-    if sector and sector.lower() not in ['unknown', 'n/a', 'not available', 'none']:
-        queries += [
-            f"global {sector} market size 2024",
-            f"{sector} TAM 2024",
-            f"{sector} total addressable market",
-            f"{sector} market CAGR 2024",
-            f"{sector} market growth rate 2024"
-        ]
-    elif product and len(product) > 10:
-        queries += [
-            f"market size for {product} 2024",
-            f"{product} TAM 2024"
-        ]
-    elif company and company.lower() not in ['unknown', 'n/a', 'not available', 'none']:
-        queries += [
-            f"market size for {company} 2024",
-            f"{company} TAM 2024"
-        ]
-    else:
-        print("[Market Size Web Search] Skipped: No sector, product, or company context available.")
-        queries = []
-    # Only run web search if we have a valid query
-    if queries:
-        # ... existing web search logic ...
-        pass
     try:
         deck_agent_data = json.loads(deck_agent_output)
         for k, v in deck_agent_data.items():
             if hasattr(profile, k) and v:
-                # Only overwrite financial metrics if the new value is more complete
-                if k in ["cash_burn_12m", "runway_months", "implied_valuation", "revenue", "projected_revenue", "funding_sought"]:
-                    current = getattr(profile, k, None)
-                    if v is not None and v != '' and (not isinstance(v, (int, float)) or v > 0):
-                        if current is None or current == '' or (isinstance(v, (int, float)) and (current is None or current == '' or v > current)):
-                            setattr(profile, k, v)
-                    continue
-                if k == "financial_summary":
-                    current = getattr(profile, k, None)
-                    if v and (not current or len(str(v)) > len(str(current))):
-                        setattr(profile, k, v)
-                    continue
                 setattr(profile, k, v)
     except Exception:
         pass
@@ -560,80 +410,16 @@ Web search result:
     except Exception:
         pass
     print(f"📈 After market sizing: TAM={profile.TAM}, SAM={profile.SAM}, SOM={profile.SOM}")
-    # --- Aggregate all relevant financial information ---
-    def extract_financial_paragraphs(text):
-        keywords = ["revenue", "funding", "ebitda", "burn", "runway", "profit", "loss", "investment", "round", "valuation", "gross", "opex", "net", "cash", "amortization", "depreciation"]
-        paras = text.split('\n')
-        return '\n'.join([p for p in paras if any(k in p.lower() for k in keywords)])
-
-    financial_context = ""
-    if hasattr(profile, "tables_text") and profile.tables_text:
-        financial_context += "\n\n" + profile.tables_text
-    if hasattr(profile, "figures_ocr") and profile.figures_ocr:
-        financial_context += "\n\n" + profile.figures_ocr
-    if full_text:
-        financial_context += "\n\n" + extract_financial_paragraphs(full_text)
-    print("\n[Financial Analysis Context]\n" + financial_context[:2000] + ("..." if len(financial_context) > 2000 else ""))
-
-    # --- Financial Analysis (agent only; all logic is now in the agent) ---
-    # Remove direct call to run_financial_analysis_chain and context aggregation from main.py
-    # Only call the agent, passing full_text, tables_text, and figures_ocr for internal aggregation
-    fin_agent, fin_task = build_financial_analysis_agent(
-        profile,
-        full_text=full_text,
-        tables_text=getattr(profile, "tables_text", None),
-        figures_ocr=getattr(profile, "figures_ocr", None)
-    )
+    # Financial Analysis (chain + agent)
+    from chains.financial_analysis_chain import run_financial_analysis_chain
+    profile = run_financial_analysis_chain(profile)
+    fin_agent, fin_task = build_financial_analysis_agent(profile)
     fin_agent_output = fin_task.callback()
     try:
         fin_agent_data = json.loads(fin_agent_output)
         for k, v in fin_agent_data.items():
             if hasattr(profile, k) and v:
-                # Only overwrite financial metrics if the new value is more complete
-                if k in ["cash_burn_12m", "runway_months", "implied_valuation", "revenue", "projected_revenue", "funding_sought"]:
-                    current = getattr(profile, k, None)
-                    if v is not None and v != '' and (not isinstance(v, (int, float)) or v > 0):
-                        if current is None or current == '' or (isinstance(v, (int, float)) and (current is None or current == '' or v > current)):
-                            setattr(profile, k, v)
-                    continue
-                if k == "financial_summary":
-                    current = getattr(profile, k, None)
-                    if v and (not current or len(str(v)) > len(str(current))):
-                        setattr(profile, k, v)
-                    continue
                 setattr(profile, k, v)
-    except Exception:
-        pass
-    print(f"💰 After financial analysis: Burn={profile.cash_burn_12m}, Runway={profile.runway_months}")
-    # --- After financial agent output ---
-    try:
-        fin_agent_data = json.loads(fin_agent_output)
-        for k, v in fin_agent_data.items():
-            if hasattr(profile, k) and v:
-                # Only overwrite financial metrics if the new value is more complete
-                if k in ["cash_burn_12m", "runway_months", "implied_valuation", "revenue", "projected_revenue", "funding_sought"]:
-                    current = getattr(profile, k, None)
-                    if v is not None and v != '' and (not isinstance(v, (int, float)) or v > 0):
-                        if current is None or current == '' or (isinstance(v, (int, float)) and (current is None or current == '' or v > current)):
-                            setattr(profile, k, v)
-                    continue
-                if k == "financial_summary":
-                    current = getattr(profile, k, None)
-                    if v and (not current or len(str(v)) > len(str(current))):
-                        setattr(profile, k, v)
-                    continue
-                setattr(profile, k, v)
-        # --- Route technical metrics ---
-        if 'other_key_financials' in fin_agent_data and fin_agent_data['other_key_financials']:
-            if not hasattr(profile, 'technical_metrics') or profile.technical_metrics is None:
-                profile.technical_metrics = {}
-            for k, v in fin_agent_data['other_key_financials'].items():
-                profile.technical_metrics[k] = v
-            print("[Technical] Extracted technical metrics:")
-            for k, v in profile.technical_metrics.items():
-                print(f"  {k}: {v}")
-            # Remove from financials so they don't show up in Financials section
-            del fin_agent_data['other_key_financials']
     except Exception:
         pass
     print(f"💰 After financial analysis: Burn={profile.cash_burn_12m}, Runway={profile.runway_months}")
@@ -656,18 +442,14 @@ Web search result:
     # After competitive intel enrichment, ensure each competitor has a website
     from core.external_enrichment import find_company_website
     for comp in getattr(profile, 'top_competitors', []):
-        has_website = getattr(comp, 'website', None) if hasattr(comp, 'website') else comp.get('website', None) if isinstance(comp, dict) else None
-        if not has_website:
+        if not comp.get('website'):
             website = find_company_website(
-                company_name=getattr(comp, 'name', '') if hasattr(comp, 'name') else comp.get('name', ''),
+                company_name=comp.get('name', ''),
                 sector=getattr(profile, 'sector', None),
                 deck_text=None
             )
             if website:
-                if hasattr(comp, 'website'):
-                    comp.website = website
-                elif isinstance(comp, dict):
-                    comp['website'] = website
+                comp['website'] = website
     # Risk Assessment (chain + agent)
     from chains.risk_assessment_chain import run_risk_assessment_chain
     profile = run_risk_assessment_chain(profile)
@@ -748,7 +530,6 @@ Web search result:
                 # Try to extract a source URL from the result
                 import re
                 urls = re.findall(r'https?://[\w./\-_%#?=&]+', result)
-                print("Extracted URLs from web search:", urls)
                 if urls:
                     market_size_sources.extend(urls)
                 # Use LLM to extract values from result
@@ -774,22 +555,12 @@ Context:
                                     setattr(profile, k, v)
                             else:
                                 setattr(profile, k, v)
-                        # Always set the source to the actual URL if available
-                        if k in ['TAM', 'SAM', 'SOM', 'cagr', 'market_growth_rate']:
-                            if urls:
-                                setattr(profile, f"{k}_source", urls[0])
-                                print(f"Set {k}_source to {urls[0]}")
-                            else:
-                                setattr(profile, f"{k}_source", 'web_search')
-                                print(f"Set {k}_source to web_search (no URL found)")
-                    # If the metric was set from the deck but a web URL is available, append the web URL as a reference
-                    for k in ['TAM', 'SAM', 'SOM', 'cagr', 'market_growth_rate']:
-                        if hasattr(profile, k) and getattr(profile, k, None) and urls:
-                            # If the source is not already a URL, add the web reference
-                            src = getattr(profile, f"{k}_source", None)
-                            if not (src and isinstance(src, str) and src.startswith('http')):
-                                setattr(profile, f"{k}_source", urls[0])
-                                print(f"Updated {k}_source to {urls[0]} (deck value, web reference)")
+                            # Set source for each value
+                            if k in ['TAM', 'SAM', 'SOM', 'cagr', 'market_growth_rate']:
+                                if urls:
+                                    setattr(profile, f"{k}_source", urls[0])
+                                else:
+                                    setattr(profile, f"{k}_source", 'web_search')
                 # Save sources to profile if found
                 if market_size_sources:
                     profile.market_size_sources = list(set(market_size_sources))
@@ -895,20 +666,20 @@ def synthesize_problem_statement_llm(profile):
     from langchain_openai import ChatOpenAI
     llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
     prompt = f"""
-You are a VC analyst writing the Problem Statement section for an investment memo.
-- Clearly state the main problem or pain point that the company's product/service is solving.
-- Try to be specific to the company's sector, product, and market context.
-- Do NOT use generic or sector-wide statements—focus on the actual problem this company addresses.
-- Do NOT mention the company's solution or product features—only describe the problem.
-- Use plain, non-marketing language.
-Context:
-Company: {getattr(profile, 'name', '')}
-Sector: {getattr(profile, 'sector', '')}
-Product: {getattr(profile, 'product_description', '')}
+    You are a VC analyst writing the Problem Statement section for an investment memo.
+    - Clearly state the main problem or pain point that the company's product/service is solving.
+    - Try to be specific to the company's sector, product, and market context.
+    - Do NOT use generic or sector-wide statements—focus on the actual problem this company addresses.
+    - Do NOT mention the company's solution or product features—only describe the problem.
+    - Use plain, non-marketing language.
+    Context:
+    Company: {getattr(profile, 'name', '')}
+    Sector: {getattr(profile, 'sector', '')}
+    Product: {getattr(profile, 'product_description', '')}
     Stage: {getattr(profile, 'funding_stage', '')}
     Business Model: {getattr(profile, 'business_model', '')}
     Go-to-Market: {getattr(profile, 'go_to_market', '')}
-"""
+    """
     response = llm.invoke(prompt)
     return response.content.strip() if hasattr(response, 'content') else str(response)
 
@@ -916,16 +687,16 @@ def synthesize_solution_overview_llm(profile):
     from langchain_openai import ChatOpenAI
     llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
     prompt = f"""
-You are a VC analyst writing the Solution Overview section for an investment memo.
-- Clearly explain how the company's product/service solves the problem described in the Problem Statement.
+    You are a VC analyst writing the Solution Overview section for an investment memo.
+    - Clearly explain how the company's product/service solves the problem described in the Problem Statement.
     - Focus ONLY on the core solution. Don't describe in detail the product, just the solution.
-- Use plain, non-marketing language.
-Context:
-Company: {getattr(profile, 'name', '')}
-Sector: {getattr(profile, 'sector', '')}
-Product: {getattr(profile, 'product_description', '')}
+    - Use plain, non-marketing language.
+    Context:
+    Company: {getattr(profile, 'name', '')}
+    Sector: {getattr(profile, 'sector', '')}
+    Product: {getattr(profile, 'product_description', '')}
     Stage: {getattr(profile, 'funding_stage', '')}
-"""
+    """
     response = llm.invoke(prompt)
     return response.content.strip() if hasattr(response, 'content') else str(response)
 
@@ -969,28 +740,6 @@ def format_market_size_section(profile):
     growth_rate_source = getattr(profile, 'market_growth_rate_source', None)
     sector = getattr(profile, 'sector', '')
     llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
-    
-    # --- NEW: Web search for sector articles ---
-    sector_articles_summary = ""
-    if sector:
-        try:
-            from core.perplexity_utils import search_perplexity
-            search_query = f"Recent news and analysis for the {sector} sector."
-            search_results = search_perplexity(search_query) # Limit to 3 results
-            
-            if search_results:
-                # Use LLM to summarize the articles
-                summary_prompt = f"""
-                Based on the following search results for the '{sector}' sector, please provide a 2-sentence summary for each of the top 2-3 articles.
-                For each summary, include a clickable markdown link to the source URL.
-
-                Search Results:
-                {search_results}
-                """
-                sector_articles_summary = llm.invoke(summary_prompt).content.strip()
-        except Exception as e:
-            print(f"[Market Analysis] Error during web search for sector articles: {e}")
-    
     web_sources = getattr(profile, 'market_size_sources', []) or []
     web_links = [url for url in web_sources if url.startswith('http')][:3]
     web_links_str = '\n'.join(f"- [Source Link]({url})" for url in web_links)
@@ -1011,87 +760,53 @@ Sector: {sector}
 Web Sources:\n{web_links_str}
 """
     market_discussion = llm.invoke(prompt).content.strip()
-    
     def format_source(source):
-        source_map = {
-            "deck_text": "Pitch Deck",
-            "deck_ocr/table": "Pitch Deck (Visuals)"
-        }
-        
-        # If source is a URL, use it directly to create a clickable link.
-        if isinstance(source, str) and source.startswith('http'):
-            return f" [Source]({source})"
-
-        display_source = source_map.get(source, source)
-
-        # If source is 'web_search', try to find a URL from the profile's sources.
-        if source == 'web_search':
-            urls = getattr(profile, 'market_size_sources', []) or []
-            if urls and isinstance(urls[0], str) and urls[0].startswith('http'):
-                return f" [Source]({urls[0]})"
-            else:
-                # Fallback if no URL is found for a web search.
-                return " [Source: Web Search]"
-                
-        # For other non-URL sources like 'Pitch Deck'.
-        return f" [Source: {display_source}]" if display_source else ""
-
+        if isinstance(source, str):
+            if source.startswith('http'):
+                return f"[Source: {source}]"
+            elif source == 'web_search':
+                urls = getattr(profile, 'market_size_sources', []) or []
+                if urls:
+                    return f"[Source: {urls[0]}]"
+        return f"[Source: {source}]" if source else ""
     lines = []
     lines.append(market_discussion)
     lines.append("")
-    # --- NEW: Add sector articles summary ---
-    if sector_articles_summary:
-        lines.append("**Sector News & Analysis:**")
-        lines.append(sector_articles_summary)
-        lines.append("")
-    
-    # Conditionally build the metrics line
-    metrics_parts = []
-    tam_val = getattr(profile, 'TAM', None)
-    if tam_val:
-        metrics_parts.append(f"TAM {format_money(tam_val)}{format_source(getattr(profile, 'TAM_source', None))}")
-    
-    sam_val = getattr(profile, 'SAM', None)
-    if sam_val:
-        metrics_parts.append(f"SAM {format_money(sam_val)}{format_source(getattr(profile, 'SAM_source', None))}")
-        
-    som_val = getattr(profile, 'SOM', None)
-    if som_val:
-        metrics_parts.append(f"SOM {format_money(som_val)}{format_source(getattr(profile, 'SOM_source', None))}")
-    
-    # Only add penetration if we have both TAM and SOM
-    if tam_val and som_val:
-        try:
-            market_penetration = (float(som_val) / float(tam_val)) * 100
-            metrics_parts.append(f"Market Penetration: {market_penetration:.1f}%")
-        except (ValueError, TypeError, ZeroDivisionError):
-            pass # Ignore if values are not numeric
-
-    if metrics_parts:
-        lines.append('; '.join(metrics_parts))
-
-    cagr_val = getattr(profile, 'cagr', None)
-    if cagr_val:
-        lines.append(f"CAGR: {cagr_val}%{format_source(getattr(profile, 'cagr_source', None))}")
-
-    growth_rate_val = getattr(profile, 'market_growth_rate', None)
-    if growth_rate_val:
-        lines.append(f"Market Growth Rate: {growth_rate_val}{format_source(getattr(profile, 'market_growth_rate_source', None))}")
-
+    try:
+        som_val = float(getattr(profile, 'SOM', 0) or 0)
+        tam_val = float(getattr(profile, 'TAM', 1) or 1)
+        market_penetration = (som_val / tam_val * 100) if tam_val else 0.0
+    except Exception:
+        market_penetration = 0.0
+    lines.append(f"TAM {TAM}{format_source(TAM_source)}, SAM {SAM}{format_source(SAM_source)}, SOM {SOM}{format_source(SOM_source)}; Market Penetration: {market_penetration:.1f} %")
+    if CAGR:
+        lines.append(f"CAGR: {CAGR}%{format_source(CAGR_source)}")
+    if growth_rate:
+        lines.append(f"Market Growth Rate: {growth_rate}{format_source(growth_rate_source)}")
+    web_metrics = []
+    for key, label in [("TAM", "TAM"), ("CAGR", "CAGR"), ("challenges", "Key Challenges"), ("drivers", "Key Drivers")]:
+        val = getattr(profile, f'web_{key}', None)
+        src = getattr(profile, f'web_{key}_source', None)
+        if val:
+            if src and src.startswith('http'):
+                web_metrics.append(f"• {label}: {val} [Source: {src}]")
+            else:
+                web_metrics.append(f"• {label}: {val}")
+    if web_metrics:
+        lines.append("\nWeb-Enriched Market Metrics:")
+        lines.extend(web_metrics)
     if web_links:
-        lines.append("\n**Market Data Sources:**")
+        lines.append("\nMarket Data Sources:")
         for url in web_links:
             lines.append(f"- {url}")
-            
     # Add alternative market size estimates if available
     if hasattr(profile, 'alternative_market_sizes') and profile.alternative_market_sizes:
-        lines.append("\n**Alternative Market Size Estimates:**")
+        lines.append("\nAlternative Market Size Estimates:")
         for entry in profile.alternative_market_sizes:
             if entry.get('url'):
                 lines.append(f"• {entry['value']} ({entry['year']}) – [{entry['source']}]({entry['url']})")
             else:
                 lines.append(f"• {entry['value']} ({entry['year']}) – {entry['source']}")
-                
     return '\n'.join(lines)
 
 def format_competitive_landscape(profile):
@@ -1112,36 +827,24 @@ def format_competitive_landscape(profile):
         if competitors_text:
             return f"Potential Competitors (AI-generated based on company profile):\n{competitors_text}\n\nNote: This is an AI-generated competitive landscape and should be verified."
 
-    lines = ["**Key Competitors Analysis:**"]
+    lines = ["Key Competitors Analysis:"]
     
     for comp in competitors:
         name = comp.get('name', 'Unknown')
         website = comp.get('website', '') or comp.get('url', '')
         product = comp.get('product_offering', '') or comp.get('product', '') or comp.get('description', '')
         differentiator = comp.get('differentiator', '')
-
-        # --- NEW: Enrich product description if missing ---
-        if not product and name != 'Unknown':
-            try:
-                from core.perplexity_utils import search_perplexity
-                print(f"[Competitor Enrichment] Searching for product description for {name}...")
-                search_query = f"What is the core product or service offering of the company {name}?"
-                product_description = search_perplexity(search_query, max_results=1)
-                if product_description and len(product_description) > 10:
-                    product = product_description.strip()
-            except Exception as e:
-                print(f"[Competitor Enrichment] Error fetching product description for {name}: {e}")
         
         # Header with name and website
         if website:
-            lines.append(f"\n• **{name}** ({website})")
+            lines.append(f"\n• {name} ({website})")
         else:
-            lines.append(f"\n• **{name}**")
+            lines.append(f"\n• {name}")
             
         if product:
-            lines.append(f"  *Product:* {product}")
+            lines.append(f"  Product: {product}")
         if differentiator and differentiator != product:
-            lines.append(f"  *Differentiator:* {differentiator}")
+            lines.append(f"  Differentiator: {differentiator}")
             
         # Add competitive positioning
         if getattr(profile, 'competitive_positioning', None):
@@ -1182,11 +885,6 @@ def format_technical_dd_section(profile):
     if narrative:
         lines.append(narrative.strip())
     lines.extend(bullets)
-    # --- Add technical metrics if present ---
-    if hasattr(profile, 'technical_metrics') and profile.technical_metrics:
-        lines.append("Technical Metrics:")
-        for k, v in profile.technical_metrics.items():
-            lines.append(f"• {k.replace('_', ' ').capitalize()}: {v}")
     return '\n'.join(lines)
 
 def format_product_description_section(profile):
@@ -1296,9 +994,9 @@ def format_financials_section(profile, current_date):
     # Cap Table/Investors
     major_investors = getattr(profile, 'major_investors', None)
     ownership_breakdown = getattr(profile, 'ownership_breakdown', None)
-    # Only count as 'present' if not None and not empty string
-    present_metrics = [v for _, v in metrics if v not in [None, '']]
-    if len(present_metrics) < 3 and not (major_investors or ownership_breakdown):
+    # Check if any metrics are available
+    has_metrics = any(v is not None and v != '' for _, v in metrics) or (major_investors or ownership_breakdown)
+    if not has_metrics:
         return f"Company has not released financials as of {current_date}. No detailed financials were disclosed in the deck or public sources. We recommend requesting a financial summary from the company, including revenue, burn rate, runway, and recent funding rounds. Independent verification of financials is advised before proceeding."
     # Table header
     lines = ["| Metric | Value |", "|--------|-------|"]
@@ -1510,7 +1208,7 @@ def synthesize_analyst_commentary_llm(profile):
     llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
     prompt = f"""
 You are a VC analyst writing the Analyst Commentary section for an investment memo.
-- Provide a critical, multi-paragraph analysis of the company, covering strengths, weaknesses, opportunities, and risks and give conclusion.
+- Provide a critical, multi-paragraph analysis of the company, covering strengths, weaknesses, opportunities, and risks.
 - Only synthesize and comment on information present in the provided context.
 - Use plain, non-marketing language.
 Context:
@@ -1526,9 +1224,7 @@ Risks: {getattr(profile, 'risk_flags', '')}
     response = llm.invoke(prompt)
     text = response.content.strip() if hasattr(response, 'content') else str(response)
     # Clean stray/blank bullets
-    lines = text.strip().split('\n')
-    lines = [line for line in lines if line.strip() and line.strip() not in ['•', '-', '*']]
-    return clean_blank_bullets('\n'.join(lines))
+    return clean_blank_bullets(text.strip())
 
 def synthesize_exit_strategies_llm(profile):
     from langchain_openai import ChatOpenAI
@@ -1703,8 +1399,13 @@ def format_memo(profile: StartupProfile) -> str:
 {clean(synthesize_detailed_summary(profile))}
 
 2. COMPANY OVERVIEW
-{clean(format_company_overview_section(profile))}
-
+Company: {clean(getattr(profile, 'name', None) or 'TBD')}
+Sector: {clean(getattr(profile, 'sector', None) or 'TBD')}
+Website: {clean(getattr(profile, 'website', None) or 'TBD')}
+{funding_line}
+{team_line}
+{clean(getattr(profile, 'founder_linkedin_formatted', ''))}
+    
 3. PROBLEM STATEMENT
 {clean(synthesize_problem_statement_llm(profile))}
     
@@ -1713,7 +1414,7 @@ def format_memo(profile: StartupProfile) -> str:
     
 5. PRODUCT/SERVICE DESCRIPTION
 {synthesize_product_description_llm(profile)}
-    
+
 6. MARKET SIZE & ANALYSIS
 {format_market_size_section(profile)}
 {clean(getattr(profile, 'sector', ''))}
@@ -1748,6 +1449,9 @@ def format_memo(profile: StartupProfile) -> str:
 
 16. FOLLOW-UP QUESTIONS & NEXT STEPS
 {synthesize_followup_section_llm(profile)}
+
+17. ADDITIONAL FIGURES & VISUALS
+{clean(getattr(profile, 'figures_section', ''))}
 """
     llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0.2)
     discussion_prompt = f"""
@@ -1768,7 +1472,7 @@ MEMO:
     match = re.search(r'(Key Strengths[\s\S]*)', discussion, re.IGNORECASE)
     if match:
         discussion = match.group(1).lstrip()
-    return deduplicate_memo(f"{memo_body}\n17. AI DISCUSSION AND COMMENTARY\n{clean_discussion_section(discussion)}\n\n---\nGenerated by VC Analysis System on {current_date}\nData Sources: Company documents, market research, competitive intelligence, technical analysis\nAnalysis Framework: Multi-agent AI system with specialized domain expertise\n")
+    return deduplicate_memo(f"{memo_body}\n18. AI DISCUSSION AND COMMENTARY\n{clean_discussion_section(discussion)}\n\n---\nGenerated by VC Analysis System on {current_date}\nData Sources: Company documents, market research, competitive intelligence, technical analysis\nAnalysis Framework: Multi-agent AI system with specialized domain expertise\n")
 
 
 def save_memo_as_pdf(text: str, output_path: str):
@@ -1982,144 +1686,18 @@ def convert_docx_to_pdf(docx_path, output_dir=None):
 # --- Counterfactual Analysis Section ---
 def synthesize_counterfactual_section(profile):
     from langchain_openai import ChatOpenAI
-    # Compose system message
-    system_msg = (
-        "You are a senior VC analyst. "
-        "Write a concise, neutral paragraph assessing the opportunity cost of NOT investing. "
-        "Avoid promotional language; focus on market, competitive and strategic implications."
-    )
-    # Compose extra note for revenue
-    revenue = getattr(profile, "revenue", None)
-    if not revenue:
-        extra_note = "Note: The company is pre-revenue; base the analysis on traction proxies (e.g. pilots, wait-lists, LOIs)."
-    else:
-        extra_note = f"Trailing 12-month revenue: {revenue}"
-    # Format competitors
-    competitors = getattr(profile, "top_competitors", None)
-    if isinstance(competitors, list):
-        competitors_str = ", ".join([c.get("name", "") for c in competitors if isinstance(c, dict) and c.get("name")])
-        if not competitors_str:
-            competitors_str = "None highlighted"
-    else:
-        competitors_str = str(competitors) if competitors else "None highlighted"
-    # Prepare context
-    ctx = {
-        "name": getattr(profile, "name", "Unknown"),
-        "sector": getattr(profile, "sector", "Unknown"),
-        "stage": getattr(profile, "funding_stage", "Unknown"),
-        "tam": getattr(profile, "TAM", "Unspecified"),
-        "competitors": competitors_str,
-        "extra_note": extra_note
-    }
-    # Compose user message
-    user_msg = (
-        f"Company: {ctx['name']}\n"
-        f"Sector: {ctx['sector']}\n"
-        f"Stage: {ctx['stage']}\n"
-        f"Market size (TAM): {ctx['tam']}\n"
-        f"Top competitors: {ctx['competitors']}\n"
-        f"{ctx['extra_note']}"
-    )
-    llm = ChatOpenAI(model="gpt-4o", temperature=0.2)
-    try:
-        response = llm.invoke(
-            [
-                {"role": "system", "content": system_msg},
-                {"role": "user", "content": user_msg}
-            ]
-        )
-        return response.content.strip() if hasattr(response, 'content') else str(response)
-    except Exception as e:
-        return f"[Counterfactual section could not be generated: {e}]"
-
-def parse_money_string(s):
-    s = s.replace(",", "").strip()
-    match = re.match(r"\$?([\d\.]+)\s*([KMB]?)", s, re.IGNORECASE)
-    if not match:
-        return None
-    num, suffix = match.groups()
-    num = float(num)
-    multiplier = {"": 1, "K": 1e3, "M": 1e6, "B": 1e9}
-    return num * multiplier.get(suffix.upper(), 1)
-
-def format_company_overview_section(profile):
-    lines = []
-    lines.append(f"Company: {getattr(profile, 'name', 'TBD')}")
-    if getattr(profile, 'sector', None):
-        lines.append(f"Sector: {profile.sector}")
-    if getattr(profile, 'website', None):
-        lines.append(f"Website: {profile.website}")
-    if getattr(profile, 'size_range', None):
-        lines.append(f"Size: {profile.size_range}")
-    elif getattr(profile, 'size', None):
-        lines.append(f"Size: {profile.size}")
-    if getattr(profile, 'founded_year', None):
-        lines.append(f"Founded: {profile.founded_year}")
-    elif getattr(profile, 'founded', None):
-        lines.append(f"Founded: {profile.founded}")
-    hq = getattr(profile, 'headquarters_new_address', None) or getattr(profile, 'headquarters_city', None)
-    if hq:
-        lines.append(f"Headquarters: {hq}")
-    if getattr(profile, 'headquarters_country_restored', None):
-        lines.append(f"Country: {profile.headquarters_country_restored}")
-    if getattr(profile, 'canonical_url', None):
-        lines.append(f"LinkedIn: {profile.canonical_url}")
-    if getattr(profile, 'followers', None):
-        lines.append(f"Followers: {profile.followers}")
-    if getattr(profile, 'employees_count', None):
-        lines.append(f"Employees: {profile.employees_count}")
-    locs = getattr(profile, 'company_locations_collection', None)
-    if locs and isinstance(locs, list):
-        loc_strs = []
-        for loc in locs:
-            addr = loc.get('location_address') if isinstance(loc, dict) else str(loc)
-            if addr:
-                loc_strs.append(addr)
-        if loc_strs:
-            lines.append(f"Locations: {', '.join(loc_strs)}")
-    # Funding Stage
-    if getattr(profile, 'funding_stage', None):
-        lines.append(f"Funding Stage: {profile.funding_stage}")
-    # Team
-    execs = getattr(profile, 'executives', []) or []
-    if execs:
-        team_str = "Team: " + ", ".join(
-            f"{e.get('name', 'Unknown')} ({e.get('role', '')})" if isinstance(e, dict) else str(e)
-            for e in execs[:3]
-        )
-        lines.append(team_str)
-    return '\n'.join(lines)
-
-def format_financial_history_section(profile):
-    lines = []
-    rounds = getattr(profile, 'company_funding_rounds_collection', None) or getattr(profile, 'funding_rounds', None)
-    if rounds and isinstance(rounds, list):
-        lines.append("Funding Rounds:")
-        for r in rounds:
-            if isinstance(r, dict):
-                round_type = r.get('last_round_type') or r.get('round_type')
-                date = r.get('last_round_date') or r.get('date')
-                amount = r.get('last_round_money_raised') or r.get('amount_usd')
-                investors = r.get('last_round_investors_count') or r.get('investors')
-                parts = []
-                if round_type: parts.append(str(round_type))
-                if date: parts.append(str(date))
-                if amount: parts.append(str(amount))
-                if investors: parts.append(f"Investors: {investors}")
-                if parts:
-                    lines.append("- " + ", ".join(parts))
-    investors = getattr(profile, 'company_featured_investors_collection', None)
-    if investors and isinstance(investors, list):
-        lines.append("Major Investors:")
-        for inv in investors:
-            name = inv.get('name') if isinstance(inv, dict) else str(inv)
-            url = inv.get('cb_url') if isinstance(inv, dict) else None
-            if name:
-                if url:
-                    lines.append(f"- {name} ({url})")
-                else:
-                    lines.append(f"- {name}")
-    return '\n'.join(lines)
+    llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
+    prompt = f"""
+You are a senior VC analyst at a top investment firm. Write a concise, professional paragraph for an investment memo answering: 'What are the likely outcomes and opportunity costs if we do NOT invest in this company?' Consider market, competitive, and strategic risks, and the potential for missed upside. Use the style and tone of leading VC/investment firms. Do not use marketing language.
+Context:
+Company: {getattr(profile, 'name', '')}
+Sector: {getattr(profile, 'sector', '')}
+Top Competitors: {getattr(profile, 'top_competitors', '')}
+Market Size: {getattr(profile, 'TAM', '')}
+Stage: {getattr(profile, 'funding_stage', '')}
+"""
+    response = llm.invoke(prompt)
+    return response.content.strip() if hasattr(response, 'content') else str(response)
 
 def main():
     if len(sys.argv) < 2:
@@ -2153,13 +1731,13 @@ def main():
         profile.figures = figures
 
         # --- Extract images from PDF and generate chart ---
-        # Use extraction_cache/ for intermediate image extraction only
-        intermediate_dir = CACHE_DIR
         output_dir = "out"
         os.makedirs(output_dir, exist_ok=True)
-        extracted_image_paths = extract_images_from_pdf(file_path, intermediate_dir)
         company_name = profile.name or "unknown_company"
         date_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        images_dir = os.path.join(output_dir, f"{company_name.replace(' ', '_')}_images_{date_str}")
+        extracted_image_paths = extract_images_from_pdf(file_path, images_dir)
+        # Example: Generate a sample market chart if market size data is available
         market_chart_path = None
         if hasattr(profile, "market_size_by_year") and profile.market_size_by_year:
             chart_path = os.path.join(output_dir, f"{company_name.replace(' ', '_')}_market_chart_{date_str}.png")
@@ -2168,9 +1746,10 @@ def main():
         # Attach visuals to profile for use in memo formatting
         profile.extracted_image_paths = extracted_image_paths
         profile.market_chart_path = market_chart_path
-        # Save memo and docx/pdf outputs in out/
+
         memo_text = format_memo(profile)
         print(memo_text)
+
         docx_filename = f"memo_{company_name.replace(' ', '_')}_{date_str}.docx"
         docx_path = os.path.join(output_dir, docx_filename)
         save_memo_with_template(memo_text, profile, docx_path)
@@ -2179,3 +1758,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+

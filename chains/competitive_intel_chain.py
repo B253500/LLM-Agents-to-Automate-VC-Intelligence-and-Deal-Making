@@ -48,11 +48,39 @@ def run_competitive_intel_chain_with_text(full_text: str, profile: StartupProfil
         return profile
     try:
         data = json.loads(txt[first : last + 1])
-        profile.top_competitors = [Competitor(**c) for c in data.get("top_competitors", [])[:3]]
+        competitors = data.get("top_competitors", [])
+        if competitors:
+            # Set both top_competitors (for compatibility) and competitor_info (like old version)
+            profile.top_competitors = [Competitor(**c) for c in competitors[:3]]
+            
+            # Also set competitor_info in the old format for compatibility
+            profile.competitor_info = {
+                "competitors": [
+                    {
+                        "name": c.get("name", "Unknown"),
+                        "position": c.get("position", "Unknown"),
+                        "advantages": c.get("advantages", []),
+                        "moats": c.get("moats", []),
+                        "market_share": c.get("market_share", "Unknown"),
+                        "growth_rate": c.get("growth_rate", "Unknown"),
+                        "technology": c.get("technology", "Unknown"),
+                        "pricing": c.get("pricing", "Unknown"),
+                        "gtm": c.get("gtm", "Unknown"),
+                        "website": c.get("website", ""),
+                        "description": c.get("product_offering", ""),
+                        "product": c.get("product_offering", "")
+                    }
+                    for c in competitors[:3]
+                ]
+            }
+            print(f"[Competitive Intel] Found {len(profile.top_competitors)} competitors")
+        else:
+            print(f"[Competitive Intel] No competitors in JSON response")
         if data.get("summary"):
             profile.competitive_summary = data.get("summary")
-    except:
-        pass
+    except Exception as e:
+        print(f"[Competitive Intel] JSON parsing failed: {e}")
+        print(f"[Competitive Intel] Raw response: {txt[:500]}...")
     if not profile.startup_id:
         profile.startup_id = sha1((profile.name or context[:40]).encode()).hexdigest()[:10]
     return profile
@@ -70,13 +98,39 @@ Product: {getattr(profile, 'tech_stack', '')}
         return profile
     try:
         data = json.loads(txt[first : last + 1])
-        profile.top_competitors = [
-            Competitor(**c) for c in data.get("top_competitors", [])[:3]
-        ]
+        competitors = data.get("top_competitors", [])
+        if competitors:
+            # Set both top_competitors (for compatibility) and competitor_info (like old version)
+            profile.top_competitors = [Competitor(**c) for c in competitors[:3]]
+            
+            # Also set competitor_info in the old format for compatibility
+            profile.competitor_info = {
+                "competitors": [
+                    {
+                        "name": c.get("name", "Unknown"),
+                        "position": c.get("position", "Unknown"),
+                        "advantages": c.get("advantages", []),
+                        "moats": c.get("moats", []),
+                        "market_share": c.get("market_share", "Unknown"),
+                        "growth_rate": c.get("growth_rate", "Unknown"),
+                        "technology": c.get("technology", "Unknown"),
+                        "pricing": c.get("pricing", "Unknown"),
+                        "gtm": c.get("gtm", "Unknown"),
+                        "website": c.get("website", ""),
+                        "description": c.get("product_offering", ""),
+                        "product": c.get("product_offering", "")
+                    }
+                    for c in competitors[:3]
+                ]
+            }
+            print(f"[Competitive Intel] Found {len(profile.top_competitors)} competitors")
+        else:
+            print(f"[Competitive Intel] No competitors in JSON response")
         if data.get("summary"):
             profile.competitive_summary = data.get("summary")
-    except:
-        pass
+    except Exception as e:
+        print(f"[Competitive Intel] JSON parsing failed: {e}")
+        print(f"[Competitive Intel] Raw response: {txt[:500]}...")
     if not profile.startup_id:
         profile.startup_id = sha1((profile.name or context[:40]).encode()).hexdigest()[:10]
     return profile
