@@ -50,29 +50,7 @@ def run_competitive_intel_chain_with_text(full_text: str, profile: StartupProfil
         data = json.loads(txt[first : last + 1])
         competitors = data.get("top_competitors", [])
         if competitors:
-            # Set both top_competitors (for compatibility) and competitor_info (like old version)
             profile.top_competitors = [Competitor(**c) for c in competitors[:3]]
-            
-            # Also set competitor_info in the old format for compatibility
-            profile.competitor_info = {
-                "competitors": [
-                    {
-                        "name": c.get("name", "Unknown"),
-                        "position": c.get("position", "Unknown"),
-                        "advantages": c.get("advantages", []),
-                        "moats": c.get("moats", []),
-                        "market_share": c.get("market_share", "Unknown"),
-                        "growth_rate": c.get("growth_rate", "Unknown"),
-                        "technology": c.get("technology", "Unknown"),
-                        "pricing": c.get("pricing", "Unknown"),
-                        "gtm": c.get("gtm", "Unknown"),
-                        "website": c.get("website", ""),
-                        "description": c.get("product_offering", ""),
-                        "product": c.get("product_offering", "")
-                    }
-                    for c in competitors[:3]
-                ]
-            }
             print(f"[Competitive Intel] Found {len(profile.top_competitors)} competitors")
         else:
             print(f"[Competitive Intel] No competitors in JSON response")
@@ -100,29 +78,7 @@ Product: {getattr(profile, 'tech_stack', '')}
         data = json.loads(txt[first : last + 1])
         competitors = data.get("top_competitors", [])
         if competitors:
-            # Set both top_competitors (for compatibility) and competitor_info (like old version)
             profile.top_competitors = [Competitor(**c) for c in competitors[:3]]
-            
-            # Also set competitor_info in the old format for compatibility
-            profile.competitor_info = {
-                "competitors": [
-                    {
-                        "name": c.get("name", "Unknown"),
-                        "position": c.get("position", "Unknown"),
-                        "advantages": c.get("advantages", []),
-                        "moats": c.get("moats", []),
-                        "market_share": c.get("market_share", "Unknown"),
-                        "growth_rate": c.get("growth_rate", "Unknown"),
-                        "technology": c.get("technology", "Unknown"),
-                        "pricing": c.get("pricing", "Unknown"),
-                        "gtm": c.get("gtm", "Unknown"),
-                        "website": c.get("website", ""),
-                        "description": c.get("product_offering", ""),
-                        "product": c.get("product_offering", "")
-                    }
-                    for c in competitors[:3]
-                ]
-            }
             print(f"[Competitive Intel] Found {len(profile.top_competitors)} competitors")
         else:
             print(f"[Competitive Intel] No competitors in JSON response")

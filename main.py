@@ -357,7 +357,7 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
                 "last_funding_round_announced_date": cs_full_data.get("last_funding_round_announced_date"),
                 "funding_rounds": cs_full_data.get("company_funding_rounds_collection") or cs_full_data.get("funding_rounds"),
                 "acquisitions": cs_full_data.get("acquisition_list_source_1") or cs_full_data.get("acquisitions"),
-                "competitors": cs_full_data.get("company_similar_collection") or cs_full_data.get("competitors"),
+                "top_competitors": cs_full_data.get("company_similar_collection") or cs_full_data.get("competitors"),
                 "technographics": cs_full_data.get("technographics"),
                 "products": cs_full_data.get("products"),
                 "patent_count": cs_full_data.get("patent_count"),
@@ -372,10 +372,6 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
                 "app_store_links": cs_full_data.get("app_store_links"),
             }
             for k, v in mapping.items():
-                # Do NOT set profile.executives or competitors from CoreSignal - rely on deck extraction and LLM enrichment
-                if k in ['executives', 'competitors']:
-                    print(f"[CoreSignal] Skipping {k} field - will use deck extraction and LLM enrichment")
-                    continue
                 if hasattr(profile, k) and v is not None and (getattr(profile, k, None) in [None, '', []]):
                     setattr(profile, k, v)
                     print(f"[CoreSignal] Set profile.{k} = {v!r}")
@@ -1126,7 +1122,7 @@ def format_competitive_landscape(profile):
                 from core.perplexity_utils import search_perplexity
                 print(f"[Competitor Enrichment] Searching for product description for {name}...")
                 search_query = f"What is the core product or service offering of the company {name}?"
-                product_description = search_perplexity(search_query, max_results=1)
+                product_description = search_perplexity(search_query, num_results=1)
                 if product_description and len(product_description) > 10:
                     product = product_description.strip()
             except Exception as e:
