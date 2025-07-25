@@ -10,7 +10,7 @@ from core.schemas import StartupProfile
 from core.hybrid_context import get_hybrid_context
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
+llm = ChatOpenAI(model="gpt-4o", temperature=0.2)
 
 SYSTEM = """
 You are a senior CTO performing technical due diligence for venture capital investment.
@@ -27,11 +27,24 @@ TECH STACK REQUIREMENTS:
 - Include specific technologies, frameworks, or methodologies mentioned
 - Be comprehensive but avoid speculation
 
+PRODUCT ROADMAP REQUIREMENTS:
+- If available, provide a brief product development roadmap
+- Include current phase, next milestones, and future development stages
+- Focus on technical milestones and commercialization timeline
+
+PATENT ANALYSIS REQUIREMENTS:
+- If available, provide a brief assessment of the company's patent portfolio
+- Include number of patents, key patent areas, and patent strength
+- Assess patent defensibility and potential for licensing revenue
+- Note if patent information is limited or unavailable
+
 Return your analysis in the following JSON format:
 {
     "tech_maturity": "Brief assessment of technical maturity (e.g., 'Early-stage prototype', 'Production-ready', 'Lab-scale')",
     "moat_strength": "Assessment of technical moat and defensibility",
     "tech_stack": "Detailed description of the technology stack and architecture (3-4 sentences covering core technologies, infrastructure, and technical approach)",
+    "product_roadmap": "Brief product development roadmap with current phase and future milestones (2-3 sentences)",
+    "patent_portfolio": "Assessment of patent portfolio including number of patents, key areas, and strength (2-3 sentences)",
     "complexity": "Assessment of technical complexity",
     "security": "Security considerations and risks",
     "implementation": "Implementation challenges and requirements",
@@ -61,21 +74,39 @@ def clean_llm_output(text):
     
     json_str = text[first:last + 1]
     
+    # Clean up common JSON formatting issues
+    json_str = json_str.strip()
+    
     try:
         return json.loads(json_str)
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        print(f"[Technical DD] JSON parsing error: {e}")
+        print(f"[Technical DD] Raw JSON: {json_str[:200]}...")
+        
         # Try to fix common JSON issues
+        # Fix unquoted keys
         json_str = re.sub(r'([{,])\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:', r'\1"\2":', json_str)
+        # Fix unquoted string values
         json_str = re.sub(r':\s*([^",\{\}\[\]]+?)([,}\]])', r': "\1"\2', json_str)
+        # Remove bullet points from string values
+        json_str = re.sub(r'•\s*', '', json_str)
+        # Remove extra whitespace and newlines
+        json_str = re.sub(r'\s+', ' ', json_str)
+        # Fix trailing commas
+        json_str = re.sub(r',\s*}', '}', json_str)
+        json_str = re.sub(r',\s*]', ']', json_str)
+        
         try:
             return json.loads(json_str)
-        except:
+        except json.JSONDecodeError as e2:
+            print(f"[Technical DD] Second JSON parsing error: {e2}")
+            print(f"[Technical DD] Cleaned JSON: {json_str[:200]}...")
             return None
 
 
 def run_technical_dd_chain(profile: StartupProfile) -> StartupProfile:
     context = get_hybrid_context(
-        profile, "technology stack OR product OR patents OR infrastructure", 3, 3
+        profile, "technology stack OR product OR patents OR patent portfolio OR intellectual property OR IP", 3, 3
     )
     
     try:
@@ -90,6 +121,10 @@ def run_technical_dd_chain(profile: StartupProfile) -> StartupProfile:
                 profile.moat_strength = str(data["moat_strength"])
             if data.get("tech_stack"):
                 profile.tech_stack = str(data["tech_stack"])
+            if data.get("product_roadmap"):
+                profile.product_roadmap = str(data["product_roadmap"])
+            if data.get("patent_portfolio"):
+                profile.patent_portfolio = str(data["patent_portfolio"])
             if data.get("complexity"):
                 profile.complexity = str(data["complexity"])
             if data.get("security"):
@@ -110,6 +145,22 @@ def run_technical_dd_chain(profile: StartupProfile) -> StartupProfile:
         # Set fallback values
         profile.tech_maturity = "Technical assessment unavailable"
         profile.moat_strength = "Moat analysis unavailable"
+        profile.tech_stack = "Technology stack details require additional research"
+        profile.product_roadmap = "Product roadmap information requires additional research"
+        profile.patent_portfolio = "Patent portfolio information requires additional research"
+        profile.complexity = "Technical complexity assessment requires additional research"
+        profile.security = "Security considerations require additional research"
+        profile.implementation = "Implementation details require additional research"
+        profile.regulatory = "Regulatory compliance information requires additional research"
+        profile.testing = "Testing and validation information requires additional research"
+        profile.tech_stack = "Technology stack details require additional research"
+        profile.product_roadmap = "Product roadmap information requires additional research"
+        profile.patent_portfolio = "Patent portfolio information requires additional research"
+        profile.complexity = "Technical complexity assessment requires additional research"
+        profile.security = "Security considerations require additional research"
+        profile.implementation = "Implementation details require additional research"
+        profile.regulatory = "Regulatory compliance information requires additional research"
+        profile.testing = "Testing and validation information requires additional research"
     
     if not profile.startup_id:
         profile.startup_id = sha1((profile.name or context[:40]).encode()).hexdigest()[:10]
@@ -133,6 +184,10 @@ def run_technical_dd_chain_with_text(full_text: str, profile: StartupProfile) ->
                 profile.moat_strength = str(data["moat_strength"])
             if data.get("tech_stack"):
                 profile.tech_stack = str(data["tech_stack"])
+            if data.get("product_roadmap"):
+                profile.product_roadmap = str(data["product_roadmap"])
+            if data.get("patent_portfolio"):
+                profile.patent_portfolio = str(data["patent_portfolio"])
             if data.get("complexity"):
                 profile.complexity = str(data["complexity"])
             if data.get("security"):

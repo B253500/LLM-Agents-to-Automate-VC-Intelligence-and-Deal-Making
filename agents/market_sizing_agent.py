@@ -27,7 +27,7 @@ exa_search_tool = EXASearchTool(
     numResults=20
 )
 
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
+llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0.2)
 
 SYSTEM = """
 You are a market research analyst for venture capital.
@@ -48,7 +48,7 @@ def format_market_size(val):
     """
     Format market size values (TAM, SAM, SOM) preserving original units from source.
     If the value is already a string with units, keep it as-is.
-    If it's a number, format it nicely.
+    If it's a number, format it nicely with appropriate units (B, M, K).
     """
     # If it's already a string (with units), return as-is
     if isinstance(val, str):
@@ -59,11 +59,28 @@ def format_market_size(val):
     except (TypeError, ValueError):
         return str(val)
     
-    # For numeric values, format nicely
-    if val % 1 == 0:
-        return f"${val:,.0f}"
+    # For numeric values, format nicely with appropriate units
+    abs_val = abs(val)
+    if abs_val >= 1_000_000_000:
+        if val % 1_000_000_000 == 0:
+            return f"${val/1_000_000_000:,.0f}B"
+        else:
+            return f"${val/1_000_000_000:,.1f}B"
+    elif abs_val >= 1_000_000:
+        if val % 1_000_000 == 0:
+            return f"${val/1_000_000:,.0f}M"
+        else:
+            return f"${val/1_000_000:,.1f}M"
+    elif abs_val >= 1_000:
+        if val % 1_000 == 0:
+            return f"${val/1_000:,.0f}K"
+        else:
+            return f"${val/1_000:,.1f}K"
     else:
-        return f"${val:,.1f}"
+        if val % 1 == 0:
+            return f"${val:,.0f}"
+        else:
+            return f"${val:,.1f}"
 
 
 def web_search_market_context(company_name, sector):
@@ -130,15 +147,21 @@ def generate_market_size_section(profile: StartupProfile) -> str:
         except Exception as e:
             print(f"[Market Research] Error during Perplexity search: {e}")
     
-    # --- Perplexity for market analysis content (without URL extraction) ---
+    # --- Perplexity for market analysis content with source extraction ---
     sector_analysis = ""
+    sector_sources = []
     if sector:
         try:
             search_query = f"Latest market analysis and trends for the {sector} sector in 2024-2025. Focus on market size, growth drivers, and key trends."
             search_results = search_perplexity(search_query, num_results=2)
             
             if search_results:
-                # Use LLM to summarize the analysis without trying to extract URLs
+                # Extract URLs from the search results
+                import re
+                urls = re.findall(r'https?://[^\s\)]+', search_results)
+                sector_sources = urls[:2]  # Take first 2 URLs
+                
+                # Use LLM to summarize the analysis
                 summary_prompt = f"""
                 Based on the following market research for the '{sector}' sector, provide a concise summary (2-3 sentences) covering:
                 1. Key market trends and drivers
@@ -218,8 +241,10 @@ Sector: {sector}
     
     if metrics_data:
         for metric, value, source in metrics_data:
+            # Format the value using the improved formatting function
+            formatted_value = format_market_size(value)
             source_str = format_source(source)
-            lines.append(f"• **{metric}**: {value}{source_str}")
+            lines.append(f"• **{metric}**: {formatted_value}{source_str}")
         lines.append("")
     
     # 3. Growth Metrics
@@ -234,11 +259,17 @@ Sector: {sector}
         lines.append(" • ".join(growth_metrics))
         lines.append("")
     
-    # 4. Sector Analysis (without URLs)
+    # 4. Sector Analysis with source links
     if sector_analysis:
         lines.append("**📰 Sector Analysis**")
         lines.append("")
         lines.append(sector_analysis)
+        if sector_sources:
+            lines.append("")
+            lines.append("**Sources:**")
+            for url in sector_sources:
+                domain = url.split('/')[2] if len(url.split('/')) > 2 else url
+                lines.append(f"• [{domain}]({url})")
         lines.append("")
     
     # 5. Market Research Sources (Perplexity search results)

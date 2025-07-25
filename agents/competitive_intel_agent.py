@@ -24,14 +24,14 @@ exa_search_tool = EXASearchTool(
     numResults=20
 )
 
-llm = ChatOpenAI(model="gpt-4", temperature=0.2)
+llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0.2)
 
 def generate_competitive_landscape(profile: StartupProfile) -> str:
     """Enhanced competitive landscape with detailed competitor analysis"""
     competitors = getattr(profile, 'top_competitors', [])
     if not competitors:
         from langchain_openai import ChatOpenAI
-        llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
+        llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0.2)
         # Try to generate competitors from context with detailed descriptions
         prompt = f"""
         Based on this company's profile, identify exactly 3 main competitors in their space. For each competitor, provide:
@@ -46,7 +46,7 @@ def generate_competitive_landscape(profile: StartupProfile) -> str:
         Market: {getattr(profile, 'market_summary', '')}
         
         Format each competitor as:
-        • Company Name (website.com)
+        • **Company Name** (website.com)
           Product description: [2-3 sentences about their technology/product]
           Key differentiator: [What makes them unique]
         
@@ -67,18 +67,35 @@ def generate_competitive_landscape(profile: StartupProfile) -> str:
     # Find websites for competitors that don't have them
     from core.external_enrichment import find_company_website
     for comp in competitors:
-        if not comp.get('website') and not comp.get('url'):
-            try:
-                website = find_company_website(
-                    company_name=comp.get('name', ''),
-                    sector=getattr(profile, 'sector', None),
-                    deck_text=None
-                )
-                if website:
-                    comp['website'] = website
-                    print(f"[Competitor Website] Found website for {comp.get('name')}: {website}")
-            except Exception as e:
-                print(f"[Competitor Website] Error finding website for {comp.get('name')}: {e}")
+        # Handle both dict and Competitor objects
+        if hasattr(comp, 'name'):  # Competitor object
+            name = comp.name
+            website = comp.url or comp.website if hasattr(comp, 'url') or hasattr(comp, 'website') else None
+            if not website:
+                try:
+                    website = find_company_website(
+                        company_name=name,
+                        sector=getattr(profile, 'sector', None),
+                        deck_text=None
+                    )
+                    if website:
+                        comp.url = website
+                        print(f"[Competitor Website] Found website for {name}: {website}")
+                except Exception as e:
+                    print(f"[Competitor Website] Error finding website for {name}: {e}")
+        else:  # dict object
+            if not comp.get('website') and not comp.get('url'):
+                try:
+                    website = find_company_website(
+                        company_name=comp.get('name', ''),
+                        sector=getattr(profile, 'sector', None),
+                        deck_text=None
+                    )
+                    if website:
+                        comp['website'] = website
+                        print(f"[Competitor Website] Found website for {comp.get('name')}: {website}")
+                except Exception as e:
+                    print(f"[Competitor Website] Error finding website for {comp.get('name')}: {e}")
 
     lines = ["Key Competitors Analysis:"]
     
@@ -86,16 +103,23 @@ def generate_competitive_landscape(profile: StartupProfile) -> str:
     top_competitors = competitors[:3]
     
     for comp in top_competitors:
-        name = comp.get('name', 'Unknown')
-        website = comp.get('website', '') or comp.get('url', '')
-        product = comp.get('product_offering', '') or comp.get('product', '') or comp.get('description', '')
-        differentiator = comp.get('differentiator', '')
+        # Handle both dict and Competitor objects
+        if hasattr(comp, 'name'):  # Competitor object
+            name = comp.name
+            website = comp.url or comp.website if hasattr(comp, 'url') or hasattr(comp, 'website') else ''
+            product = comp.product_offering or comp.product or comp.description if hasattr(comp, 'product_offering') or hasattr(comp, 'product') or hasattr(comp, 'description') else ''
+            differentiator = comp.differentiator if hasattr(comp, 'differentiator') else ''
+        else:  # dict object
+            name = comp.get('name', 'Unknown')
+            website = comp.get('website', '') or comp.get('url', '')
+            product = comp.get('product_offering', '') or comp.get('product', '') or comp.get('description', '')
+            differentiator = comp.get('differentiator', '')
         
-        # Header with name and website
+        # Header with name and website (make name bold)
         if website:
-            lines.append(f"\n• {name} ({website})")
+            lines.append(f"\n• **{name}** ({website})")
         else:
-            lines.append(f"\n• {name}")
+            lines.append(f"\n• **{name}**")
             
         if product:
             lines.append(f"  Product: {product}")

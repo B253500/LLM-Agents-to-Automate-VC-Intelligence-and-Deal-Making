@@ -20,11 +20,11 @@ def format_technical_dd_section(profile):
     security = getattr(profile, 'security', None)
     complexity = getattr(profile, 'complexity', None)
     implementation = getattr(profile, 'implementation', None)
-    bullets = []
-    bullets.append(f"• Technical Feasibility and Performance: {tech}.")
-    if moat:
-        bullets.append(f"• Moat: {moat}.")
-    if tech_stack:
+    
+    lines = []
+    
+    # Add technical specifications paragraph if we have meaningful tech stack info
+    if tech_stack and len(tech_stack.strip()) > 50:
         # Clean up tech stack by removing thinking tags but preserve the detailed content
         cleaned_tech_stack = tech_stack
         import re
@@ -36,27 +36,112 @@ def format_technical_dd_section(profile):
         cleaned_tech_stack = re.sub(r'^\d+\.\s*[A-Z].*?(?=\n|$)', '', cleaned_tech_stack, flags=re.MULTILINE)
         # Remove citation markers
         cleaned_tech_stack = re.sub(r'\[\d+\]', '', cleaned_tech_stack)
+        # Remove hashtags only
+        cleaned_tech_stack = re.sub(r'#+\s*[A-Za-z\s]+', '', cleaned_tech_stack)
+        # Remove standalone bullet points that don't have content
+        cleaned_tech_stack = re.sub(r'^\s*•\s*$', '', cleaned_tech_stack, flags=re.MULTILINE)
+        # Remove bullet points at the beginning of lines that are followed by whitespace
+        cleaned_tech_stack = re.sub(r'^\s*•\s+(?=\s|$)', '', cleaned_tech_stack, flags=re.MULTILINE)
         # Clean up extra whitespace and newlines
         cleaned_tech_stack = re.sub(r'\n\s*\n', '\n', cleaned_tech_stack)
         cleaned_tech_stack = cleaned_tech_stack.strip()
         
-        # Use the full cleaned tech stack description
-        if len(cleaned_tech_stack.split()) < 20:
-            # If the tech stack is too short, provide a more detailed fallback
-            cleaned_tech_stack = "StoreDot's technology stack appears to be based on silicon-dominant anode technology with NMC cathode chemistry, enabling extreme fast charging capabilities. The company utilizes AI/ML optimization systems for battery performance and manufacturing process control. The technology is designed to be compatible with standard lithium-ion manufacturing lines, allowing for scalable production without requiring significant capital expenditure on new equipment."
-        
-        bullets.append(f"• Tech Stack: {cleaned_tech_stack}")
-    bullets.append(f"• Complexity: {complexity or 'Not specified.'}")
-    bullets.append(f"• Security: {security or 'Product safety, data, and IP protection should be addressed.'}")
-    bullets.append(f"• Implementation: {implementation or 'Implementation details not specified.'}")
-    bullets.append(f"• Regulatory: {regulatory or 'Compliance with industry standards and certifications is required.'}")
-    bullets.append(f"• Testing: {testing or 'Independent validation and certification are recommended.'}")
-    bullets.append("• Further technical due diligence is required, including independent validation of performance claims, cycle life, and safety.")
-    lines = []
+        if len(cleaned_tech_stack.split()) >= 20:
+            lines.append("Technical Specifications")
+            lines.append(cleaned_tech_stack)
+            lines.append("")
+    
+    # Add product roadmap if available or generate a basic one based on tech maturity
+    roadmap = getattr(profile, 'product_roadmap', None)
+    if not roadmap and tech:
+        # Generate a basic roadmap based on tech maturity
+        if 'prototype' in tech.lower() or 'early' in tech.lower():
+            roadmap = "Current Phase: Prototype development and initial testing. Next Phase: Beta testing with select partners. Future Phase: Commercial production and market launch."
+        elif 'beta' in tech.lower() or 'testing' in tech.lower():
+            roadmap = "Current Phase: Beta testing and partner validation. Next Phase: Pilot production and certification. Future Phase: Full commercial launch."
+        elif 'production' in tech.lower() or 'commercial' in tech.lower():
+            roadmap = "Current Phase: Commercial production and market deployment. Next Phase: Scale manufacturing and expand partnerships. Future Phase: Technology iteration and new product development."
+        else:
+            roadmap = "Product roadmap details require additional research to understand current development stage and future milestones."
+    
+    if roadmap:
+        lines.append("Product Roadmap")
+        lines.append(roadmap)
+        lines.append("")
+    
+    # Add patent portfolio if available
+    patent_portfolio = getattr(profile, 'patent_portfolio', None)
+    if patent_portfolio and len(patent_portfolio.strip()) > 20:
+        lines.append("Patent Portfolio")
+        lines.append(patent_portfolio)
+        lines.append("")
+    
+    # Add the narrative if available
     if narrative:
         lines.append(narrative.strip())
+        lines.append("")
+    
+    # Add structured assessment bullets
+    bullets = []
+    
+    # Technical feasibility assessment
+    if tech and tech.lower() != 'n/a':
+        bullets.append(f"• Technical Feasibility and Performance: {tech}")
+    else:
+        bullets.append("• Technical Feasibility and Performance: Assessment requires additional technical documentation and independent validation")
+    
+    # Moat analysis
+    if moat and moat.strip():
+        bullets.append(f"• Moat: {moat}")
+    else:
+        bullets.append("• Moat: Technology moat analysis requires deeper technical assessment and competitive positioning review")
+    
+    # Complexity assessment
+    if complexity and complexity.strip():
+        bullets.append(f"• Complexity: {complexity}")
+    else:
+        bullets.append("• Complexity: Technical complexity assessment needed based on product architecture and implementation requirements")
+    
+    # Security considerations
+    if security and security.strip():
+        bullets.append(f"• Security: {security}")
+    else:
+        bullets.append("• Security: Product safety, data protection, and IP security measures should be thoroughly evaluated")
+    
+    # Implementation details
+    if implementation and implementation.strip():
+        bullets.append(f"• Implementation: {implementation}")
+    else:
+        bullets.append("• Implementation: Detailed implementation roadmap and technical architecture review required")
+    
+    # Regulatory compliance
+    if regulatory and regulatory.strip():
+        bullets.append(f"• Regulatory: {regulatory}")
+    else:
+        bullets.append("• Regulatory: Compliance with industry standards, safety certifications, and regulatory requirements must be verified")
+    
+    # Testing and validation
+    if testing and testing.strip():
+        bullets.append(f"• Testing: {testing}")
+    else:
+        bullets.append("• Testing: Independent validation, performance testing, and certification processes should be reviewed")
+    
+    bullets.append("• Further technical due diligence is required, including independent validation of performance claims, cycle life, and safety")
+    
     lines.extend(bullets)
-    return '\n'.join(lines)
+    
+    # Final cleanup: remove any remaining standalone bullet points
+    result = '\n'.join(lines)
+    import re
+    # Remove lines that are just bullet points
+    result = re.sub(r'^\s*•\s*$', '', result, flags=re.MULTILINE)
+    # Remove bullet points at the beginning of lines with no content
+    result = re.sub(r'^\s*•\s+(?=\s*$)', '', result, flags=re.MULTILINE)
+    # Clean up extra whitespace
+    result = re.sub(r'\n\s*\n', '\n\n', result)
+    result = result.strip()
+    
+    return result
 
 
 def build_technical_dd_agent(profile: StartupProfile, trace_id=None):

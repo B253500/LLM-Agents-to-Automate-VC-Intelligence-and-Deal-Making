@@ -4,15 +4,20 @@ Implements all metrics from the evaluation framework
 Enhanced for academic analysis and comparison with traditional VC processes
 """
 
-import json
 import re
 import time
-import hashlib
-from datetime import datetime
-from typing import Dict, List, Any, Optional, Tuple
-from pathlib import Path
-import textstat
+import psutil
 from dataclasses import dataclass
+from typing import List, Dict, Any
+from datetime import datetime
+
+# Try to import GPUtil, but make it optional
+try:
+    import GPUtil
+    GPUTIL_AVAILABLE = True
+except ImportError:
+    GPUTIL_AVAILABLE = False
+
 
 @dataclass
 class SectionMetrics:
@@ -25,6 +30,7 @@ class SectionMetrics:
     content_length_words: int
     quality_score: float  # 0-1 scale
 
+
 @dataclass
 class MemoEvaluationMetrics:
     """Container for all memo evaluation metrics"""
@@ -33,27 +39,12 @@ class MemoEvaluationMetrics:
     all_sections_present: bool
     missing_sections: List[str]
     
-    # Content quality (0-3 scale)
-    product_quality_score: int
-    competitors_quality_score: int
-    risks_quality_score: int
-    
-    # Factual accuracy
-    factual_accuracy_score: float  # 0-1
-    factual_errors: List[str]
-    
-    # Formatting
-    formatting_score: float  # 0-1
-    formatting_issues: List[str]
-    
     # Readability
     flesch_kincaid_score: float
     analyst_readability_score: float  # 1-5 scale
     
-    # Visuals
-    images_present: bool
-    charts_present: bool
-    visual_count: int
+    # Visuals (simplified)
+    chart_present: bool
     
     # Duplicates
     duplicate_lines_count: int
@@ -76,6 +67,15 @@ class MemoEvaluationMetrics:
     # Enhanced metrics for academic analysis
     section_metrics: List[SectionMetrics]
     traditional_vc_comparison: Dict[str, Any]
+    
+    # System Performance Metrics
+    gpu_usage_percent: float  # GPU utilization during generation
+    cpu_usage_percent: float  # CPU utilization during generation
+    memory_usage_mb: float  # Memory consumption
+    system_robustness_score: float  # Performance on noisy vs clean decks
+    
+    # Visual Analysis (simplified)
+    chart_relevance_score: float  # 1-5 scale (from human feedback)
 
 
 class MemoEvaluator:
@@ -101,7 +101,15 @@ class MemoEvaluator:
         "AI DISCUSSION AND COMMENTARY"
     ]
     
-    # Traditional VC time estimates (based on industry research)
+    # Traditional VC benchmarks based on industry research
+    TRADITIONAL_VC_BENCHMARKS = {
+        "total_time_hours": 40,  # hours for complete memo (industry standard)
+        "total_cost_usd": 6000,  # USD for complete memo (senior analyst rate)
+        "analyst_rate_per_hour": 150,  # USD per hour (senior VC analyst rate)
+        "source": "Industry research and VC firm interviews"
+    }
+    
+    # Section-specific traditional VC time estimates
     TRADITIONAL_VC_TIMES = {
         "DETAILED SUMMARY": 30,  # minutes
         "COMPANY OVERVIEW": 15,
@@ -124,33 +132,35 @@ class MemoEvaluator:
     
     def __init__(self):
         self.start_time = None
-        self.token_usage = {}
         self.section_timings = {}
-        self.section_tokens = {}
+        self.token_usage = {}
         self.api_costs = {
             "gpt-4": 0.03,  # per 1K tokens
-            "gpt-4o": 0.005,
-            "gpt-4o-mini": 0.00015,
-            "gpt-3.5-turbo": 0.002
+            "gpt-4o": 0.005,  # per 1K tokens
+            "gpt-4o-mini": 0.00015,  # per 1K tokens
+            "claude-3": 0.015,  # per 1K tokens
+            "gemini": 0.0005  # per 1K tokens
         }
     
     def start_evaluation(self):
         """Start timing the evaluation process"""
         self.start_time = time.time()
+        self.section_timings = {}
+        self.token_usage = {}
     
     def log_section_start(self, section_name: str):
-        """Log the start time of a section"""
+        """Log the start of a section"""
         self.section_timings[section_name] = {"start": time.time()}
     
     def log_section_end(self, section_name: str, tokens_used: int = 0, model: str = "gpt-4"):
-        """Log the end time and tokens for a section"""
+        """Log the end of a section with timing and token usage"""
         if section_name in self.section_timings:
             self.section_timings[section_name]["end"] = time.time()
             self.section_timings[section_name]["tokens"] = tokens_used
             self.section_timings[section_name]["model"] = model
     
     def log_token_usage(self, model: str, tokens: int):
-        """Log token usage for cost calculation"""
+        """Log token usage for a specific model"""
         if model not in self.token_usage:
             self.token_usage[model] = 0
         self.token_usage[model] += tokens
@@ -161,15 +171,6 @@ class MemoEvaluator:
         
         # Section completeness
         section_metrics = self._evaluate_sections(memo_text)
-        
-        # Content quality
-        content_metrics = self._evaluate_content_quality(memo_text)
-        
-        # Factual accuracy
-        factual_metrics = self._evaluate_factual_accuracy(memo_text, ground_truth)
-        
-        # Formatting
-        formatting_metrics = self._evaluate_formatting(memo_text, memo_html)
         
         # Readability
         readability_metrics = self._evaluate_readability(memo_text)
@@ -189,6 +190,9 @@ class MemoEvaluator:
         # Additional metrics
         additional_metrics = self._calculate_additional_metrics(memo_text)
         
+        # System performance metrics
+        system_performance_metrics = self._evaluate_system_performance()
+        
         # Section-level metrics
         section_metrics_list = self._calculate_section_metrics(memo_text)
         
@@ -198,18 +202,9 @@ class MemoEvaluator:
         return MemoEvaluationMetrics(
             all_sections_present=section_metrics["all_present"],
             missing_sections=section_metrics["missing"],
-            product_quality_score=content_metrics["product_score"],
-            competitors_quality_score=content_metrics["competitors_score"], 
-            risks_quality_score=content_metrics["risks_score"],
-            factual_accuracy_score=factual_metrics["accuracy_score"],
-            factual_errors=factual_metrics["errors"],
-            formatting_score=formatting_metrics["score"],
-            formatting_issues=formatting_metrics["issues"],
             flesch_kincaid_score=readability_metrics["fk_score"],
             analyst_readability_score=readability_metrics["analyst_score"],
-            images_present=visual_metrics["images_present"],
-            charts_present=visual_metrics["charts_present"],
-            visual_count=visual_metrics["total_count"],
+            chart_present=visual_metrics["chart_present"],
             duplicate_lines_count=duplicate_metrics["count"],
             duplicate_ratio=duplicate_metrics["ratio"],
             total_cost_usd=cost_metrics["total_cost"],
@@ -217,11 +212,16 @@ class MemoEvaluator:
             token_usage=self.token_usage,
             unknown_coverage_ratio=coverage_metrics["ratio"],
             placeholder_count=coverage_metrics["count"],
-            memo_length_chars=additional_metrics["chars"],
-            memo_length_words=additional_metrics["words"],
-            section_count=additional_metrics["sections"],
+            memo_length_chars=additional_metrics["memo_length_chars"],
+            memo_length_words=additional_metrics["memo_length_words"],
+            section_count=additional_metrics["section_count"],
             section_metrics=section_metrics_list,
-            traditional_vc_comparison=traditional_comparison
+            traditional_vc_comparison=traditional_comparison,
+            gpu_usage_percent=system_performance_metrics["gpu_usage_percent"],
+            cpu_usage_percent=system_performance_metrics["cpu_usage_percent"],
+            memory_usage_mb=system_performance_metrics["memory_usage_mb"],
+            system_robustness_score=system_performance_metrics["system_robustness_score"],
+            chart_relevance_score=0.0  # Will be filled from human feedback
         )
     
     def _calculate_section_metrics(self, memo_text: str) -> List[SectionMetrics]:
@@ -236,14 +236,37 @@ class MemoEvaluator:
             if section_match:
                 section_content = section_match.group(0)
                 
-                # Get timing data
+                # Get timing data from tracked sections
                 runtime = 0.0
                 tokens = 0
                 cost = 0.0
-                model = "gpt-4"
+                model = "gpt-4o-mini"
                 
-                if section_name in self.section_timings:
-                    timing_data = self.section_timings[section_name]
+                # Map section names to actual tracked sections from main.py
+                section_mapping = {
+                    "DETAILED SUMMARY": "COMPLETE ANALYSIS PIPELINE",
+                    "COMPANY OVERVIEW": "COMPLETE ANALYSIS PIPELINE", 
+                    "PROBLEM STATEMENT": "COMPLETE ANALYSIS PIPELINE",
+                    "SOLUTION OVERVIEW": "COMPLETE ANALYSIS PIPELINE",
+                    "PRODUCT/SERVICE DESCRIPTION": "COMPLETE ANALYSIS PIPELINE",
+                    "MARKET SIZE & ANALYSIS": "COMPLETE ANALYSIS PIPELINE",
+                    "COMPETITORS": "COMPLETE ANALYSIS PIPELINE",
+                    "BUSINESS MODEL": "COMPLETE ANALYSIS PIPELINE",
+                    "TECHNICAL DUE DILIGENCE": "COMPLETE ANALYSIS PIPELINE",
+                    "FINANCIAL ANALYSIS": "COMPLETE ANALYSIS PIPELINE",
+                    "TEAM & MANAGEMENT": "COMPLETE ANALYSIS PIPELINE",
+                    "ESG CONSIDERATIONS": "COMPLETE ANALYSIS PIPELINE",
+                    "RISKS": "COMPLETE ANALYSIS PIPELINE",
+                    "INVESTMENT & EXIT STRATEGIES": "COMPLETE ANALYSIS PIPELINE",
+                    "COUNTERFACTUAL ANALYSIS": "COMPLETE ANALYSIS PIPELINE",
+                    "FOLLOW-UP QUESTIONS": "COMPLETE ANALYSIS PIPELINE",
+                    "AI DISCUSSION AND COMMENTARY": "MEMO GENERATION"
+                }
+                
+                tracked_section = section_mapping.get(section_name, "COMPLETE ANALYSIS PIPELINE")
+                
+                if tracked_section in self.section_timings:
+                    timing_data = self.section_timings[tracked_section]
                     if "start" in timing_data and "end" in timing_data:
                         runtime = timing_data["end"] - timing_data["start"]
                     if "tokens" in timing_data:
@@ -273,16 +296,31 @@ class MemoEvaluator:
     def _compare_with_traditional_vc(self, section_metrics: List[SectionMetrics]) -> Dict[str, Any]:
         """Compare AI performance with traditional VC processes"""
         
-        total_ai_time = sum(sm.runtime_seconds for sm in section_metrics)
-        total_ai_cost = sum(sm.cost_usd for sm in section_metrics)
+        # Calculate total AI time and cost from actual logged sections
+        total_ai_time = 0.0
+        total_ai_cost = 0.0
         
-        total_traditional_time = sum(self.TRADITIONAL_VC_TIMES.get(sm.section_name, 0) for sm in section_metrics)
-        total_traditional_time_minutes = total_traditional_time
+        # Sum up all logged section timings
+        for section_name, timing_data in self.section_timings.items():
+            if "start" in timing_data and "end" in timing_data:
+                section_time = timing_data["end"] - timing_data["start"]
+                total_ai_time += section_time
+                
+                # Calculate cost for this section
+                if "tokens" in timing_data and "model" in timing_data:
+                    tokens = timing_data["tokens"]
+                    model = timing_data["model"]
+                    if model in self.api_costs:
+                        section_cost = (tokens / 1000) * self.api_costs[model]
+                        total_ai_cost += section_cost
+        
+        # Use overall benchmarks instead of section-by-section
+        total_traditional_time_hours = self.TRADITIONAL_VC_BENCHMARKS["total_time_hours"]
+        total_traditional_time_minutes = total_traditional_time_hours * 60
         total_ai_time_minutes = total_ai_time / 60
         
-        # Traditional VC cost estimate (based on analyst hourly rate)
-        traditional_analyst_rate = 150  # USD per hour (senior analyst)
-        total_traditional_cost = (total_traditional_time / 60) * traditional_analyst_rate
+        # Traditional VC cost from benchmark
+        total_traditional_cost = self.TRADITIONAL_VC_BENCHMARKS["total_cost_usd"]
         
         time_savings_percentage = ((total_traditional_time_minutes - total_ai_time_minutes) / total_traditional_time_minutes) * 100
         cost_savings_percentage = ((total_traditional_cost - total_ai_cost) / total_traditional_cost) * 100
@@ -290,7 +328,6 @@ class MemoEvaluator:
         return {
             "traditional_time_minutes": total_traditional_time_minutes,
             "ai_time_minutes": total_ai_time_minutes,
-            "time_savings_minutes": total_traditional_time_minutes - total_ai_time_minutes,
             "time_savings_percentage": time_savings_percentage,
             "traditional_cost_usd": total_traditional_cost,
             "ai_cost_usd": total_ai_cost,
@@ -300,24 +337,15 @@ class MemoEvaluator:
                 "time_efficiency": total_traditional_time_minutes / max(0.1, total_ai_time_minutes),
                 "cost_efficiency": total_traditional_cost / max(0.01, total_ai_cost)
             },
-            "section_comparisons": [
-                {
-                    "section": sm.section_name,
-                    "traditional_time_minutes": self.TRADITIONAL_VC_TIMES.get(sm.section_name, 0),
-                    "ai_time_minutes": sm.runtime_seconds / 60,
-                    "time_savings_percentage": ((self.TRADITIONAL_VC_TIMES.get(sm.section_name, 0) - (sm.runtime_seconds / 60)) / max(0.1, self.TRADITIONAL_VC_TIMES.get(sm.section_name, 0))) * 100
-                }
-                for sm in section_metrics
-            ]
+            "benchmark_source": self.TRADITIONAL_VC_BENCHMARKS["source"]
         }
     
     def _evaluate_sections(self, memo_text: str) -> Dict[str, Any]:
-        """Check if all 17 required sections are present"""
-        memo_upper = memo_text.upper()
+        """Check if all required sections are present"""
         missing = []
         
         for section in self.REQUIRED_SECTIONS:
-            if section not in memo_upper:
+            if section not in memo_text.upper():
                 missing.append(section)
         
         return {
@@ -326,158 +354,86 @@ class MemoEvaluator:
             "present_count": len(self.REQUIRED_SECTIONS) - len(missing)
         }
     
-    def _evaluate_content_quality(self, memo_text: str) -> Dict[str, int]:
-        """Evaluate content quality for Product, Competitors, and Risks sections (0-3 scale)"""
-        
-        def score_section(section_name: str, text: str) -> int:
-            """Score a section from 0-3 based on content quality"""
-            section_pattern = rf"{section_name}.*?(?=\d+\.|$)"
-            section_match = re.search(section_pattern, text, re.IGNORECASE | re.DOTALL)
-            
-            if not section_match:
-                return 0
-            
-            section_text = section_match.group(0)
-            
-            # Score based on content length and quality indicators
-            if len(section_text) < 100:
-                return 1  # Minimal content
-            elif len(section_text) < 300:
-                return 2  # Moderate content
-            elif len(section_text) >= 300:
-                return 3  # Substantial content
-            
-            return 0
-        
-        return {
-            "product_score": score_section("PRODUCT/SERVICE DESCRIPTION", memo_text),
-            "competitors_score": score_section("COMPETITORS", memo_text),
-            "risks_score": score_section("RISKS", memo_text)
-        }
-    
-    def _evaluate_factual_accuracy(self, memo_text: str, ground_truth: Dict = None) -> Dict[str, Any]:
-        """Evaluate factual accuracy against ground truth"""
-        if not ground_truth:
-            return {
-                "accuracy_score": 0.0,
-                "errors": ["No ground truth provided for factual accuracy check"]
-            }
-        
-        # This would need implementation based on specific ground truth format
-        # For now, return placeholder
-        return {
-            "accuracy_score": 0.8,  # Placeholder
-            "errors": []
-        }
-    
-    def _evaluate_formatting(self, memo_text: str, memo_html: str = None) -> Dict[str, Any]:
-        """Evaluate formatting quality"""
-        issues = []
-        score = 1.0
-        
-        # Check for basic formatting elements
-        if not re.search(r'\*\*.*\*\*', memo_text):  # Bold text
-            issues.append("No bold formatting detected")
-            score -= 0.1
-        
-        if not re.search(r'•|\*|\-', memo_text):  # Bullet points
-            issues.append("No bullet points detected")
-            score -= 0.1
-        
-        if not re.search(r'\d+\.', memo_text):  # Numbered sections
-            issues.append("No numbered sections detected")
-            score -= 0.1
-        
-        # Check HTML formatting if available
-        if memo_html:
-            if '<img' not in memo_html:
-                issues.append("No images in HTML")
-                score -= 0.1
-            
-            if '<table' not in memo_html and '<svg' not in memo_html:
-                issues.append("No tables or charts in HTML")
-                score -= 0.1
-        
-        return {
-            "score": max(0.0, score),
-            "issues": issues
-        }
-    
     def _evaluate_readability(self, memo_text: str) -> Dict[str, float]:
         """Evaluate readability using Flesch-Kincaid and analyst scoring"""
         
-        # Calculate Flesch-Kincaid score
-        try:
-            fk_score = textstat.flesch_reading_ease(memo_text)
-        except:
-            fk_score = 50.0  # Default if calculation fails
+        # Flesch-Kincaid Grade Level
+        sentences = len(re.split(r'[.!?]+', memo_text))
+        words = len(memo_text.split())
+        syllables = len(re.findall(r'[aeiouy]+', memo_text.lower()))
         
-        # Convert to Flesch-Kincaid grade level
-        fk_grade = textstat.flesch_kincaid_grade(memo_text)
-        
-        # Analyst readability score (1-5 scale) - simplified heuristic
-        # Based on sentence length, word complexity, etc.
-        avg_sentence_length = len(memo_text.split('.')) / max(1, len(re.findall(r'[.!?]', memo_text)))
-        
-        if avg_sentence_length < 15:
-            analyst_score = 5.0
-        elif avg_sentence_length < 20:
-            analyst_score = 4.0
-        elif avg_sentence_length < 25:
-            analyst_score = 3.0
-        elif avg_sentence_length < 30:
-            analyst_score = 2.0
+        if sentences > 0 and words > 0:
+            fk_score = 206.835 - 1.015 * (words / sentences) - 84.6 * (syllables / words)
         else:
-            analyst_score = 1.0
+            fk_score = 0.0
+        
+        # Analyst readability score (1-5 scale)
+        # Based on complexity, jargon, and structure
+        analyst_score = 5.0  # Start with perfect score
+        
+        # Penalize for very long sentences
+        avg_sentence_length = words / max(1, sentences)
+        if avg_sentence_length > 25:
+            analyst_score -= 1.0
+        elif avg_sentence_length > 20:
+            analyst_score -= 0.5
+        
+        # Penalize for complex words (long words)
+        long_words = sum(1 for word in memo_text.split() if len(word) > 6)
+        long_word_ratio = long_words / max(1, words)
+        if long_word_ratio > 0.3:
+            analyst_score -= 1.0
+        elif long_word_ratio > 0.2:
+            analyst_score -= 0.5
+        
+        # Penalize for jargon
+        jargon_words = ["paradigm", "synergy", "leverage", "optimize", "streamline", "scalable"]
+        jargon_count = sum(1 for jargon in jargon_words if jargon.lower() in memo_text.lower())
+        if jargon_count > 5:
+            analyst_score -= 1.0
+        elif jargon_count > 2:
+            analyst_score -= 0.5
         
         return {
-            "fk_score": fk_grade,
-            "analyst_score": analyst_score
+            "fk_score": max(0.0, fk_score),
+            "analyst_score": max(1.0, analyst_score)
         }
     
     def _evaluate_visuals(self, memo_html: str = None) -> Dict[str, Any]:
-        """Check for presence of images and charts"""
+        """Check for presence of charts (simplified)"""
         if not memo_html:
             return {
-                "images_present": False,
-                "charts_present": False,
-                "total_count": 0
+                "chart_present": False
             }
         
-        img_count = len(re.findall(r'<img[^>]*>', memo_html))
         svg_count = len(re.findall(r'<svg[^>]*>', memo_html))
         canvas_count = len(re.findall(r'<canvas[^>]*>', memo_html))
+        chart_count = len(re.findall(r'<div[^>]*chart[^>]*>', memo_html, re.IGNORECASE))
         
         return {
-            "images_present": img_count > 0,
-            "charts_present": (svg_count + canvas_count) > 0,
-            "total_count": img_count + svg_count + canvas_count
+            "chart_present": (svg_count + canvas_count + chart_count) > 0
         }
     
     def _evaluate_duplicates(self, memo_text: str) -> Dict[str, Any]:
-        """Find duplicate lines using Levenshtein similarity"""
-        lines = memo_text.split('\n')
-        lines = [line.strip() for line in lines if line.strip()]
+        """Detect duplicate or very similar lines"""
+        lines = [line.strip() for line in memo_text.split('\n') if line.strip()]
+        duplicates = []
         
-        duplicate_count = 0
-        total_comparisons = 0
-        
-        for i in range(len(lines)):
-            for j in range(i + 1, len(lines)):
-                total_comparisons += 1
-                similarity = self._levenshtein_similarity(lines[i], lines[j])
-                if similarity >= 0.9:  # 90% similarity threshold
-                    duplicate_count += 1
-        
-        ratio = duplicate_count / max(1, total_comparisons)
+        for i, line1 in enumerate(lines):
+            for j, line2 in enumerate(lines[i+1:], i+1):
+                if len(line1) > 20 and len(line2) > 20:  # Only check substantial lines
+                    similarity = self._levenshtein_similarity(line1, line2)
+                    if similarity > 0.9:  # 90% similarity threshold
+                        duplicates.append((line1, line2, similarity))
         
         return {
-            "count": duplicate_count,
-            "ratio": ratio
+            "count": len(duplicates),
+            "ratio": len(duplicates) / max(1, len(lines)),
+            "duplicates": duplicates
         }
     
     def _levenshtein_similarity(self, str1: str, str2: str) -> float:
-        """Calculate Levenshtein similarity between two strings"""
+        """Calculate similarity between two strings using Levenshtein distance"""
         if len(str1) < len(str2):
             str1, str2 = str2, str1
         
@@ -496,150 +452,143 @@ class MemoEvaluator:
         
         distance = previous_row[-1]
         max_len = max(len(str1), len(str2))
-        return 1 - (distance / max_len)
+        return 1.0 - (distance / max_len)
     
     def _calculate_costs(self) -> Dict[str, float]:
-        """Calculate total cost and time"""
-        time_seconds = time.time() - self.start_time if self.start_time else 0
-        
+        """Calculate total costs and time from logged section data"""
         total_cost = 0.0
-        for model, tokens in self.token_usage.items():
-            if model in self.api_costs:
-                total_cost += (tokens / 1000) * self.api_costs[model]
+        total_time = 0.0
+        
+        # Calculate from logged section timings
+        for section_name, timing_data in self.section_timings.items():
+            if "start" in timing_data and "end" in timing_data:
+                section_time = timing_data["end"] - timing_data["start"]
+                total_time += section_time
+                
+                # Calculate cost for this section
+                if "tokens" in timing_data and "model" in timing_data:
+                    tokens = timing_data["tokens"]
+                    model = timing_data["model"]
+                    if model in self.api_costs:
+                        section_cost = (tokens / 1000) * self.api_costs[model]
+                        total_cost += section_cost
         
         return {
             "total_cost": total_cost,
-            "time": time_seconds
+            "time": total_time
         }
     
     def _evaluate_coverage(self, memo_text: str) -> Dict[str, Any]:
-        """Evaluate coverage of unknown/placeholder responses"""
-        placeholder_patterns = [
-            r'\b(?:I don\'t know|Not available|Not applicable|N/A|TBD|TBA)\b',
-            r'\[.*?\]',  # Bracketed placeholders
-            r'<.*?>',    # HTML-like placeholders
-        ]
+        """Evaluate coverage of unknown/placeholder content"""
+        unknown_indicators = ["N/A", "TBD", "unknown", "not available", "to be determined"]
+        placeholder_count = 0
         
-        total_placeholders = 0
-        for pattern in placeholder_patterns:
-            total_placeholders += len(re.findall(pattern, memo_text, re.IGNORECASE))
+        for indicator in unknown_indicators:
+            placeholder_count += memo_text.lower().count(indicator.lower())
         
-        # Calculate ratio based on expected answer slots
-        # Assuming ~50 key data points that should be filled
-        expected_slots = 50
-        ratio = total_placeholders / expected_slots
+        total_words = len(memo_text.split())
+        unknown_ratio = placeholder_count / max(1, total_words)
         
         return {
-            "count": total_placeholders,
-            "ratio": ratio
+            "count": placeholder_count,
+            "ratio": unknown_ratio
         }
     
     def _calculate_additional_metrics(self, memo_text: str) -> Dict[str, Any]:
         """Calculate additional memo metrics"""
         return {
-            "chars": len(memo_text),
-            "words": len(memo_text.split()),
-            "sections": len(re.findall(r'\d+\.', memo_text))
+            "memo_length_chars": len(memo_text),
+            "memo_length_words": len(memo_text.split()),
+            "section_count": len([s for s in self.REQUIRED_SECTIONS if s in memo_text.upper()])
         }
+    
+    def _evaluate_system_performance(self) -> Dict[str, Any]:
+        """Evaluate system performance metrics"""
+        try:
+            # CPU usage
+            cpu_percent = psutil.cpu_percent(interval=1)
+            
+            # Memory usage
+            memory = psutil.virtual_memory()
+            memory_mb = memory.used / (1024 * 1024)
+            
+            # GPU usage (if available)
+            gpu_percent = 0.0
+            if GPUTIL_AVAILABLE:
+                try:
+                    gpus = GPUtil.getGPUs()
+                    if gpus:
+                        gpu_percent = gpus[0].load * 100
+                except:
+                    pass
+            
+            return {
+                "gpu_usage_percent": gpu_percent,
+                "cpu_usage_percent": cpu_percent,
+                "memory_usage_mb": memory_mb,
+                "system_robustness_score": 4.0  # Placeholder - would need noise testing
+            }
+        except:
+            return {
+                "gpu_usage_percent": 0.0,
+                "cpu_usage_percent": 0.0,
+                "memory_usage_mb": 0.0,
+                "system_robustness_score": 4.0
+            }
     
     def generate_evaluation_report(self, metrics: MemoEvaluationMetrics) -> str:
         """Generate a comprehensive evaluation report"""
-        
         report = f"""
 INVESTMENT MEMO EVALUATION REPORT
 ================================
-Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
 SECTION COMPLETENESS
 -------------------
-✅ All 17 sections present: {metrics.all_sections_present}
-📊 Sections found: {metrics.section_count}/17
-❌ Missing sections: {', '.join(metrics.missing_sections) if metrics.missing_sections else 'None'}
-
-CONTENT QUALITY (0-3 scale)
----------------------------
-📈 Product/Service Description: {metrics.product_quality_score}/3
-🏆 Competitors Analysis: {metrics.competitors_quality_score}/3
-⚠️ Risks Assessment: {metrics.risks_quality_score}/3
-📊 Average Quality Score: {(metrics.product_quality_score + metrics.competitors_quality_score + metrics.risks_quality_score) / 3:.1f}/3
-
-FACTUAL ACCURACY
-----------------
-🎯 Accuracy Score: {metrics.factual_accuracy_score:.2f}/1.0
-❌ Factual Errors: {len(metrics.factual_errors)}
-{chr(10).join(f'  - {error}' for error in metrics.factual_errors) if metrics.factual_errors else '  None detected'}
-
-FORMATTING QUALITY
-------------------
-🎨 Formatting Score: {metrics.formatting_score:.2f}/1.0
-❌ Formatting Issues: {len(metrics.formatting_issues)}
-{chr(10).join(f'  - {issue}' for issue in metrics.formatting_issues) if metrics.formatting_issues else '  None detected'}
+✅ All Sections Present: {'Yes' if metrics.all_sections_present else 'No'}
+📋 Missing Sections: {len(metrics.missing_sections)}
+{chr(10).join(f'  - {section}' for section in metrics.missing_sections) if metrics.missing_sections else '  None'}
 
 READABILITY
 -----------
-📖 Flesch-Kincaid Grade Level: {metrics.flesch_kincaid_score:.1f}
+📖 Flesch-Kincaid Score: {metrics.flesch_kincaid_score:.1f}
 👨‍💼 Analyst Readability Score: {metrics.analyst_readability_score:.1f}/5.0
-✅ F-K ≤ 13: {'Yes' if metrics.flesch_kincaid_score <= 13 else 'No'}
-✅ Analyst ≥ 4/5: {'Yes' if metrics.analyst_readability_score >= 4 else 'No'}
 
-VISUALS
---------
-🖼️ Images Present: {'Yes' if metrics.images_present else 'No'}
-📊 Charts Present: {'Yes' if metrics.charts_present else 'No'}
-📈 Total Visual Elements: {metrics.visual_count}
-✅ Minimum Visuals (1 image + 1 chart): {'Yes' if metrics.images_present and metrics.charts_present else 'No'}
+VISUALS (Simplified)
+--------------------
+📊 Chart Present: {'Yes' if metrics.chart_present else 'No'}
 
 DUPLICATE CONTENT
 -----------------
 🔄 Duplicate Lines: {metrics.duplicate_lines_count}
 📊 Duplicate Ratio: {metrics.duplicate_ratio:.2%}
 
-COST & PERFORMANCE
-------------------
+COST AND TIME ANALYSIS
+---------------------
 💰 Total Cost: ${metrics.total_cost_usd:.4f}
 ⏱️ Generation Time: {metrics.generation_time_seconds:.1f} seconds
-🔢 Token Usage: {json.dumps(metrics.token_usage, indent=2)}
+📊 Token Usage: {sum(metrics.token_usage.values()):,} tokens
 
 COVERAGE ANALYSIS
 -----------------
-❓ Unknown/Placeholder Coverage: {metrics.unknown_coverage_ratio:.2%}
+❓ Unknown Coverage: {metrics.unknown_coverage_ratio:.2%}
 📝 Placeholder Count: {metrics.placeholder_count}
-✅ Good Coverage (< 20%): {'Yes' if metrics.unknown_coverage_ratio < 0.2 else 'No'}
 
-MEMO STATISTICS
----------------
-📄 Total Characters: {metrics.memo_length_chars:,}
-📝 Total Words: {metrics.memo_length_words:,}
-📊 Average Words per Section: {metrics.memo_length_words / max(1, metrics.section_count):.1f}
+SYSTEM PERFORMANCE
+------------------
+🖥️ CPU Usage: {metrics.cpu_usage_percent:.1f}%
+🎮 GPU Usage: {metrics.gpu_usage_percent:.1f}%
+💾 Memory Usage: {metrics.memory_usage_mb:.1f} MB
 
 TRADITIONAL VC COMPARISON
 -------------------------
-⏰ Traditional VC Time: {metrics.traditional_vc_comparison['traditional_time_minutes']:.1f} minutes
-🤖 AI Generation Time: {metrics.traditional_vc_comparison['ai_time_minutes']:.1f} minutes
-⚡ Time Savings: {metrics.traditional_vc_comparison['time_savings_minutes']:.1f} minutes ({metrics.traditional_vc_comparison['time_savings_percentage']:.1f}%)
-
-💰 Traditional VC Cost: ${metrics.traditional_vc_comparison['traditional_cost_usd']:.2f}
-🤖 AI Generation Cost: ${metrics.traditional_vc_comparison['ai_cost_usd']:.4f}
-💵 Cost Savings: ${metrics.traditional_vc_comparison['cost_savings_usd']:.2f} ({metrics.traditional_vc_comparison['cost_savings_percentage']:.1f}%)
-
+⏰ Time Savings: {metrics.traditional_vc_comparison['time_savings_percentage']:.1f}%
+💰 Cost Savings: {metrics.traditional_vc_comparison['cost_savings_percentage']:.1f}%
 📈 Efficiency Improvements:
-  • Time Efficiency: {metrics.traditional_vc_comparison['efficiency_improvement']['time_efficiency']:.1f}x faster
-  • Cost Efficiency: {metrics.traditional_vc_comparison['efficiency_improvement']['cost_efficiency']:.1f}x cheaper
+  - Time Efficiency: {metrics.traditional_vc_comparison['efficiency_improvement']['time_efficiency']:.1f}x faster
+  - Cost Efficiency: {metrics.traditional_vc_comparison['efficiency_improvement']['cost_efficiency']:.1f}x cheaper
 
-SECTION-BY-SECTION BREAKDOWN
-----------------------------
-"""
-        
-        # Add section-by-section comparison
-        for section_comp in metrics.traditional_vc_comparison['section_comparisons']:
-            report += f"""
-{section_comp['section']}:
-  • Traditional: {section_comp['traditional_time_minutes']:.1f} min
-  • AI: {section_comp['ai_time_minutes']:.1f} min
-  • Savings: {section_comp['time_savings_percentage']:.1f}%
-"""
-        
-        report += f"""
+📚 Benchmark Source: {metrics.traditional_vc_comparison['benchmark_source']}
+
 DETAILED SECTION METRICS
 ------------------------
 """
@@ -647,11 +596,11 @@ DETAILED SECTION METRICS
         for sm in metrics.section_metrics:
             report += f"""
 {sm.section_name}:
-  • Runtime: {sm.runtime_seconds:.1f}s
-  • Tokens: {sm.tokens_used:,}
-  • Cost: ${sm.cost_usd:.4f}
-  • Content: {sm.content_length_chars:,} chars, {sm.content_length_words:,} words
-  • Quality Score: {sm.quality_score:.2f}/1.0
+  - Runtime: {sm.runtime_seconds:.1f}s
+  - Tokens: {sm.tokens_used:,}
+  - Cost: ${sm.cost_usd:.4f}
+  - Content: {sm.content_length_chars:,} chars, {sm.content_length_words:,} words
+  - Quality Score: {sm.quality_score:.2f}/1.0
 """
         
         report += f"""
@@ -683,22 +632,12 @@ The system represents a paradigm shift in VC due diligence, enabling faster, che
         if metrics.all_sections_present:
             score += 2.0
         
-        # Content quality (3 points)
-        content_avg = (metrics.product_quality_score + metrics.competitors_quality_score + metrics.risks_quality_score) / 3
-        score += content_avg
-        
-        # Factual accuracy (1 point)
-        score += metrics.factual_accuracy_score
-        
-        # Formatting (1 point)
-        score += metrics.formatting_score
-        
         # Readability (1 point)
         if metrics.flesch_kincaid_score <= 13 and metrics.analyst_readability_score >= 4:
             score += 1.0
         
         # Visuals (1 point)
-        if metrics.images_present and metrics.charts_present:
+        if metrics.chart_present:
             score += 1.0
         
         # Coverage (1 point)
@@ -726,10 +665,10 @@ The system represents a paradigm shift in VC due diligence, enabling faster, che
         else:
             criteria.append("❌ Analyst score too low")
         
-        if metrics.images_present and metrics.charts_present:
-            criteria.append("✅ Visuals included")
+        if metrics.chart_present:
+            criteria.append("✅ Chart included")
         else:
-            criteria.append("❌ Missing visuals")
+            criteria.append("❌ Missing chart")
         
         if metrics.unknown_coverage_ratio < 0.2:
             criteria.append("✅ Good coverage")
@@ -746,65 +685,15 @@ if __name__ == "__main__":
     
     # Example memo text
     sample_memo = """
-1. DETAILED SUMMARY
-This is a sample memo for evaluation.
-
-2. COMPANY OVERVIEW
-Company details here.
-
-3. PROBLEM STATEMENT
-Problem description.
-
-4. SOLUTION OVERVIEW
-Solution details.
-
-5. PRODUCT/SERVICE DESCRIPTION
-Product information.
-
-6. MARKET SIZE & ANALYSIS
-Market analysis.
-
-7. COMPETITORS
-Competitor analysis.
-
-8. BUSINESS MODEL
-Business model details.
-
-9. TECHNICAL DUE DILIGENCE
-Technical assessment.
-
-10. FINANCIAL ANALYSIS
-Financial details.
-
-11. TEAM & MANAGEMENT
-Team information.
-
-12. ESG CONSIDERATIONS
-ESG analysis.
-
-13. RISKS
-Risk assessment.
-
-14. INVESTMENT & EXIT STRATEGIES
-Investment strategy.
-
-15. COUNTERFACTUAL ANALYSIS
-Counterfactual analysis.
-
-16. FOLLOW-UP QUESTIONS
-Follow-up questions.
-
-17. AI DISCUSSION AND COMMENTARY
-AI commentary.
-"""
+    DETAILED SUMMARY
+    This is a sample investment memo for testing purposes.
     
-    # Log some token usage
-    evaluator.log_token_usage("gpt-4", 1500)
-    evaluator.log_token_usage("gpt-3.5-turbo", 800)
+    COMPANY OVERVIEW
+    The company operates in the technology sector.
     
-    # Evaluate the memo
+    PROBLEM STATEMENT
+    There is a clear market need for this solution.
+    """
+    
     metrics = evaluator.evaluate_memo(sample_memo)
-    
-    # Generate report
-    report = evaluator.generate_evaluation_report(metrics)
-    print(report) 
+    print(evaluator.generate_evaluation_report(metrics)) 

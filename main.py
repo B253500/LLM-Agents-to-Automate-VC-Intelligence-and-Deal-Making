@@ -284,6 +284,35 @@ def format_financials_section(profile, current_date):
         ("Last Round Amount", getattr(profile, 'last_funding_round_amount_raised', None)),
         ("Last Round Date", getattr(profile, 'last_funding_round_announced_date', None)),
     ]
+    
+    # Check for Crunchbase-sourced valuation data
+    crunchbase_valuation = None
+    web_sources = []
+    
+    if hasattr(profile, 'funding_rounds') and profile.funding_rounds:
+        try:
+            import json
+            funding_rounds = json.loads(profile.funding_rounds) if isinstance(profile.funding_rounds, str) else profile.funding_rounds
+            
+            # Look for the most recent significant funding round
+            for round_data in funding_rounds:
+                if isinstance(round_data, dict) and round_data.get('last_round_money_raised'):
+                    crunchbase_valuation = {
+                        'amount': round_data.get('last_round_money_raised'),
+                        'type': round_data.get('last_round_type'),
+                        'date': round_data.get('last_round_date'),
+                        'url': round_data.get('cb_url')
+                    }
+                    break
+        except Exception as e:
+            print(f"[Financial Formatting] Error processing funding rounds: {e}")
+    
+    # Check for web search sources in financial summary
+    if hasattr(profile, 'financial_summary') and profile.financial_summary:
+        import re
+        # Extract URLs from financial summary
+        urls = re.findall(r'https?://[^\s]+', profile.financial_summary)
+        web_sources = urls[:3]  # Limit to first 3 sources
     # Cap Table/Investors
     major_investors = getattr(profile, 'major_investors', None)
     ownership_breakdown = getattr(profile, 'ownership_breakdown', None)
@@ -293,9 +322,20 @@ def format_financials_section(profile, current_date):
         return f"Company has not released financials as of {current_date}. No detailed financials were disclosed in the deck or public sources. We recommend requesting a financial summary from the company, including revenue, burn rate, runway, and recent funding rounds. Independent verification of financials is advised before proceeding."
     # Table header
     lines = ["| Metric | Value |", "|--------|-------|"]
+    
+    # Add Crunchbase-sourced funding data prominently if available
+    if crunchbase_valuation:
+        lines.append(f"| **Latest Funding Round** | **{crunchbase_valuation['type']}** |")
+        lines.append(f"| **Funding Amount** | **{crunchbase_valuation['amount']}** |")
+        lines.append(f"| **Funding Date** | **{crunchbase_valuation['date']}** |")
+        if crunchbase_valuation['url']:
+            lines.append(f"| **Source** | **[Crunchbase]({crunchbase_valuation['url']})** |")
+        lines.append("| **---** | **---** |")  # Separator
+    
     for label, value in metrics:
         if value is not None and value != '':
             lines.append(f"| {label} | {value} |")
+    
     # Cap Table/Investors
     if major_investors:
         lines.append(f"| Major Investors | {', '.join(major_investors)} |")
@@ -304,6 +344,14 @@ def format_financials_section(profile, current_date):
             name = owner.get('name', 'Unknown')
             percent = owner.get('percent', '')
             lines.append(f"| Ownership: {name} | {percent} |")
+    
+    # Add web sources if available
+    if web_sources:
+        lines.append("| **---** | **---** |")  # Separator
+        lines.append("| **Data Sources** | **Web Research** |")
+        for i, source in enumerate(web_sources, 1):
+            lines.append(f"| Source {i} | {source} |")
+    
     return '\n'.join(lines)
 
 def format_risk_score(profile):
@@ -585,7 +633,14 @@ def clean_discussion_section(discussion):
         if cleaned == [] and line.strip().startswith('•'):
             line = line.lstrip('•').strip()
         cleaned.append(line)
-    return '\n'.join(cleaned)
+    
+    # Remove redundant conclusion at the bottom
+    result = '\n'.join(cleaned)
+    
+    # Remove the redundant "Conclusion:" line at the bottom
+    result = re.sub(r'\n\s*Conclusion:\s*\n\s*Based on the analysis above, this investment opportunity presents both significant potential and notable risks that require careful consideration\.\s*$', '', result, flags=re.MULTILINE)
+    
+    return result
 
 def clean_blank_bullets(text):
     lines = text.split('\n')
@@ -607,7 +662,15 @@ def clean_blank_bullets(text):
 def format_memo(profile: StartupProfile) -> str:
     current_date = datetime.now().strftime("%B %d, %Y")
     def clean(text):
-        return text if isinstance(text, str) else text
+        """Clean up text by removing hashtags, special markers, and normalizing formatting."""
+        if not isinstance(text, str):
+            return text
+        # Remove hashtags only
+        text = re.sub(r'#+\s*[A-Za-z\s]+', '', text)
+        # Remove extra whitespace and normalize line breaks
+        text = re.sub(r'\n\s*\n', '\n\n', text)
+        text = re.sub(r' +', ' ', text)
+        return text.strip()
     # --- Team line for Company Overview ---
     execs = getattr(profile, 'executives', []) or []
     if execs:
@@ -932,6 +995,117 @@ def convert_docx_to_pdf(docx_path, output_dir=None):
         return None
 
 
+# --- Excel evaluation output ---
+def generate_excel_output(metrics, company_name, timestamp, output_dir):
+    """Generate comprehensive Excel analysis"""
+    try:
+        import pandas as pd
+        
+        excel_file = os.path.join(output_dir, f"memo_evaluation_{company_name}_{timestamp}.xlsx")
+        
+        with pd.ExcelWriter(excel_file, engine='openpyxl') as writer:
+            
+            # Summary sheet
+            summary_data = {
+                "Metric": [
+                    "Company Name",
+                    "Generation Time (minutes)",
+                    "Total Tokens",
+                    "Total Cost (USD)",
+                    "Quality Score (/10)",
+                    "Time Savings vs Traditional VC (%)",
+                    "Cost Savings vs Traditional VC (%)",
+                    "Efficiency Improvement (x)",
+                    "Sections Present",
+                    "Readability Score"
+                ],
+                "Value": [
+                    company_name,
+                    f"{metrics.generation_time_seconds / 60:.2f}",
+                    f"{sum(metrics.token_usage.values()):,}",
+                    f"${metrics.total_cost_usd:.4f}",
+                    f"{metrics.analyst_readability_score:.1f}",
+                    f"{metrics.traditional_vc_comparison['time_savings_percentage']:.1f}%",
+                    f"{metrics.traditional_vc_comparison['cost_savings_percentage']:.1f}%",
+                    f"{metrics.traditional_vc_comparison['efficiency_improvement']['time_efficiency']:.1f}x",
+                    f"{metrics.section_count}/17",
+                    f"{metrics.flesch_kincaid_score:.1f}"
+                ]
+            }
+            
+            summary_df = pd.DataFrame(summary_data)
+            summary_df.to_excel(writer, sheet_name="Summary", index=False)
+            
+            # Traditional VC comparison sheet
+            vc_comp = metrics.traditional_vc_comparison
+            comparison_data = {
+                "Metric": [
+                    "Traditional VC Time (minutes)",
+                    "AI System Time (minutes)",
+                    "Time Savings (minutes)",
+                    "Time Savings (%)",
+                    "Traditional VC Cost (USD)",
+                    "AI System Cost (USD)",
+                    "Cost Savings (USD)",
+                    "Cost Savings (%)",
+                    "Time Efficiency (x)",
+                    "Cost Efficiency (x)"
+                ],
+                "Value": [
+                    vc_comp["traditional_time_minutes"],
+                    vc_comp["ai_time_minutes"],
+                    vc_comp["traditional_time_minutes"] - vc_comp["ai_time_minutes"],
+                    f"{vc_comp['time_savings_percentage']:.1f}%",
+                    f"${vc_comp['traditional_cost_usd']:.2f}",
+                    f"${vc_comp['ai_cost_usd']:.4f}",
+                    f"${vc_comp['cost_savings_usd']:.2f}",
+                    f"{vc_comp['cost_savings_percentage']:.1f}%",
+                    f"{vc_comp['efficiency_improvement']['time_efficiency']:.1f}x",
+                    f"{vc_comp['efficiency_improvement']['cost_efficiency']:.1f}x"
+                ]
+            }
+            
+            comparison_df = pd.DataFrame(comparison_data)
+            comparison_df.to_excel(writer, sheet_name="VC Comparison", index=False)
+            
+            # Performance metrics sheet
+            performance_data = {
+                "Metric": [
+                    "Total Generation Time (seconds)",
+                    "Total Generation Time (minutes)",
+                    "Total Tokens Used",
+                    "Total Cost (USD)",
+                    "CPU Usage (%)",
+                    "GPU Usage (%)",
+                    "Memory Usage (MB)",
+                    "Section Completeness",
+                    "Duplicate Content Ratio",
+                    "Unknown Coverage Ratio"
+                ],
+                "Value": [
+                    metrics.generation_time_seconds,
+                    metrics.generation_time_seconds / 60,
+                    sum(metrics.token_usage.values()),
+                    metrics.total_cost_usd,
+                    metrics.cpu_usage_percent,
+                    metrics.gpu_usage_percent,
+                    metrics.memory_usage_mb,
+                    "Complete" if metrics.all_sections_present else "Incomplete",
+                    f"{metrics.duplicate_ratio:.2%}",
+                    f"{metrics.unknown_coverage_ratio:.2%}"
+                ]
+            }
+            
+            performance_df = pd.DataFrame(performance_data)
+            performance_df.to_excel(writer, sheet_name="Performance Metrics", index=False)
+        
+        return excel_file
+        
+    except Exception as e:
+        print(f"❌ Error generating Excel output: {e}")
+        return None
+
+
 
 def main():
     if len(sys.argv) < 2:
@@ -962,10 +1136,20 @@ def main():
         clear_collection()
         profile = StartupProfile()
         
-        # Track the main analysis pipeline
-        # tracker.start_section("COMPLETE ANALYSIS PIPELINE") # Removed
+        # Initialize evaluation tracker with real-time tracking
+        from evaluation_metrics import MemoEvaluator
+        evaluator = MemoEvaluator()
+        evaluator.start_evaluation()
+        
+        # Track the main analysis pipeline with real timing
+        evaluator.log_section_start("COMPLETE ANALYSIS PIPELINE")
+        start_time = time.time()
         profile = run_all_sequential_with_text(text, profile, file_path)
-        # tracker.end_section("COMPLETE ANALYSIS PIPELINE", tokens_used=5000, model="gpt-4o-mini") # Removed
+        pipeline_time = time.time() - start_time
+        
+        # Estimate tokens based on text length and processing time
+        estimated_tokens = min(len(text) // 2, 8000)  # Conservative estimate
+        evaluator.log_section_end("COMPLETE ANALYSIS PIPELINE", tokens_used=estimated_tokens, model="gpt-4o-mini")
         
         # Populate structured data
         profile.tables = tables
@@ -977,7 +1161,7 @@ def main():
         output_dir = "out"
         os.makedirs(output_dir, exist_ok=True)
         
-        # tracker.start_section("VISUAL EXTRACTION") # Removed
+        evaluator.log_section_start("VISUAL EXTRACTION")
         extracted_image_paths = extract_images_from_pdf(file_path, intermediate_dir)
         company_name = profile.name or "unknown_company"
         date_str = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -986,51 +1170,80 @@ def main():
             chart_path = os.path.join(output_dir, f"{company_name.replace(' ', '_')}_market_chart_{date_str}.png")
             generate_sample_market_chart(profile.market_size_by_year, chart_path)
             market_chart_path = chart_path
-        # tracker.end_section("VISUAL EXTRACTION", tokens_used=0, model="local") # Removed
+        evaluator.log_section_end("VISUAL EXTRACTION", tokens_used=0, model="local")
         
         # Attach visuals to profile for use in memo formatting
         profile.extracted_image_paths = extracted_image_paths
         profile.market_chart_path = market_chart_path
         
-        # Track memo generation
-        # tracker.start_section("MEMO GENERATION") # Removed
+        # Track memo generation with real timing
+        evaluator.log_section_start("MEMO GENERATION")
+        memo_start_time = time.time()
         memo_text = format_memo(profile)
-        # tracker.end_section("MEMO GENERATION", tokens_used=2000, model="gpt-4o") # Removed
+        memo_time = time.time() - memo_start_time
+        
+        # Estimate tokens for memo generation based on content length
+        memo_tokens = len(memo_text) // 3  # Rough estimate: 1 token per 3 characters
+        evaluator.log_section_end("MEMO GENERATION", tokens_used=memo_tokens, model="gpt-4o")
         
         print(memo_text)
         
+        print("\n" + "="*80)
+        print("EVALUATION METRICS")
+        print("="*80)
+        
         # Track document creation
-        # tracker.start_section("DOCUMENT CREATION") # Removed
+        evaluator.log_section_start("DOCUMENT CREATION")
         docx_filename = f"memo_{company_name.replace(' ', '_')}_{date_str}.docx"
         docx_path = os.path.join(output_dir, docx_filename)
         save_memo_with_template(memo_text, profile, docx_path)
         convert_docx_to_pdf(docx_path)
-        # tracker.end_section("DOCUMENT CREATION", tokens_used=0, model="local") # Removed
+        evaluator.log_section_end("DOCUMENT CREATION", tokens_used=0, model="local")
         
-        # Evaluate the complete memo
-        # print("\n🔍 Evaluating memo quality and performance...") # Removed
-        # metrics = tracker.evaluate_memo(memo_text) # Removed
+        # Evaluate the complete memo (using tracked data)
+        print("\n🔍 Evaluating memo quality and performance...")
+        metrics = evaluator.evaluate_memo(memo_text)
         
         # Save detailed metrics for academic analysis
-        # evaluation_dir = "evaluation_results" # Removed
-        # pdf_name = Path(file_path).stem # Removed
-        # metrics_file = tracker.save_metrics(metrics, evaluation_dir, pdf_name) # Removed
+        evaluation_dir = "evaluation_results"
+        pdf_name = Path(file_path).stem
+        os.makedirs(evaluation_dir, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        metrics_file = os.path.join(evaluation_dir, f"detailed_metrics_{pdf_name}_{timestamp}.json")
+        
+        # Save metrics to JSON
+        with open(metrics_file, 'w') as f:
+            json.dump(metrics.__dict__, f, indent=2, default=str)
         
         # Generate academic summary
-        # summary_file = create_academic_summary(metrics_file, evaluation_dir) # Removed
+        from integrate_evaluation import create_academic_summary
+        summary_file = create_academic_summary(metrics_file, evaluation_dir)
         
         # Print key results for supervisor
-        # print(f"\n🎯 KEY RESULTS FOR SUPERVISOR:") # Removed
-        # print(f"⏰ Time Savings: {metrics.traditional_vc_comparison['time_savings_percentage']:.1f}%") # Removed
-        # print(f"💰 Cost Savings: {metrics.traditional_vc_comparison['cost_savings_percentage']:.1f}%") # Removed
-        # print(f"📊 Quality Score: {tracker.evaluator._calculate_overall_score(metrics):.1f}/10") # Removed
-        # print(f"📈 Efficiency: {metrics.traditional_vc_comparison['efficiency_improvement']['time_efficiency']:.1f}x faster") # Removed
-        # print(f"📋 Sections: {metrics.section_count}/17 present") # Removed
-        # print(f"💵 Total Cost: ${metrics.total_cost_usd:.4f}") # Removed
-        # print(f"⏱️ Total Time: {metrics.generation_time_seconds:.1f} seconds") # Removed
+        print(f"\n🎯 KEY RESULTS:")
+        print(f"⏰ Time Savings: {metrics.traditional_vc_comparison['time_savings_percentage']:.1f}%")
+        print(f"💰 Cost Savings: {metrics.traditional_vc_comparison['cost_savings_percentage']:.1f}%")
+        print(f"📊 Quality Score: {evaluator._calculate_overall_score(metrics):.1f}/10")
+        print(f"📈 Efficiency: {metrics.traditional_vc_comparison['efficiency_improvement']['time_efficiency']:.1f}x faster")
+        print(f"📋 Sections: {metrics.section_count}/17 present")
+        print(f"💵 Total Cost: ${metrics.total_cost_usd:.4f}")
+        print(f"⏱️ Total Time: {metrics.generation_time_seconds:.1f} seconds")
+        print(f"🖥️ CPU Usage: {metrics.cpu_usage_percent:.1f}%")
+        print(f"🎮 GPU Usage: {metrics.gpu_usage_percent:.1f}%")
+        print(f"💾 Memory Usage: {metrics.memory_usage_mb:.1f} MB")
         
-        # print(f"\n📊 Detailed metrics saved to: {metrics_file}") # Removed
-        # print(f"📚 Academic summary saved to: {summary_file}") # Removed
+        print(f"\n📊 Detailed metrics saved to: {metrics_file}")
+        print(f"📚 Academic summary saved to: {summary_file}")
+        
+        # Generate Excel output with comprehensive analysis
+        try:
+            excel_file = generate_excel_output(metrics, company_name, date_str, evaluation_dir)
+            if excel_file:
+                print(f"📈 Excel analysis saved to: {excel_file}")
+        except ImportError:
+            print("⚠️ pandas not available - skipping Excel output")
+        except Exception as e:
+            print(f"⚠️ Error generating Excel output: {e}")
 
 
 if __name__ == "__main__":

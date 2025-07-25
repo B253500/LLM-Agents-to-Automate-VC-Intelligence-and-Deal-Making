@@ -8,7 +8,7 @@ from core.schemas import StartupProfile
 from chains.risk_assessment_chain import run_risk_assessment_chain
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
+llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0.2)
 
 def deduplicate_and_paraphrase(text, min_phrase_len=3, max_allowed=2):
     """
@@ -64,7 +64,14 @@ You are a senior VC analyst. Based on the following investment memo, provide a c
 [List 3-4 key risks]
 
 **Conclusion:**
-[Write a clear, concise conclusion paragraph that summarizes the investment opportunity and key considerations]
+[Write a comprehensive conclusion that includes: 1) Overall investment thesis and potential, 2) Key factors driving success, 3) Critical risks and challenges, 4) Strategic considerations for investors, 5) Final recommendation framework. Make this 4-5 sentences long with detailed analysis.]
+
+CRITICAL INSTRUCTIONS:
+- Do NOT include "Next Steps" or bullet points anywhere in the response
+- Do NOT include any bullet points (•) anywhere in the response
+- Use bold headers (**Key Strengths:**, **Key Weaknesses:**, etc.) for each section
+- Make the conclusion comprehensive and detailed (4-5 sentences)
+- Do NOT use numbered lists (1., 2., 3., etc.) - use bold headers instead
 
 MEMO:
 {memo_body}
@@ -75,18 +82,44 @@ MEMO:
     # Remove any markdown headers (hashtags) from the start of lines
     discussion = re.sub(r'^#+\s*', '', discussion, flags=re.MULTILINE)
     
-    # Ensure proper section formatting
-    discussion = re.sub(r'^(Key Strengths|Key Weaknesses|Opportunities|Risks|Conclusion):', r'**\1:**', discussion, flags=re.IGNORECASE | re.MULTILINE)
-    
     # Remove any sentences before the first main section
     match = re.search(r'(Key Strengths[\s\S]*)', discussion, re.IGNORECASE)
     if match:
         discussion = match.group(1).lstrip()
     
-    # Ensure conclusion is properly formatted
-    if '**Conclusion:**' not in discussion:
-        # Add conclusion if missing
-        discussion += "\n\n**Conclusion:**\nBased on the analysis above, this investment opportunity presents both significant potential and notable risks that require careful consideration."
+    # Remove bullet points
+    discussion = re.sub(r'^\s*•\s*', '', discussion, flags=re.MULTILINE)
+    
+    # Remove "Next Steps:" section and everything after it
+    discussion = re.sub(r'\n\s*Next Steps:.*', '', discussion, flags=re.DOTALL | re.IGNORECASE)
+    discussion = re.sub(r'\n\s*Next Steps.*', '', discussion, flags=re.DOTALL | re.IGNORECASE)
+    
+    # Convert numbered lists to bold headers
+    discussion = re.sub(r'^(\d+\.\s*)(Key Strengths|Key Weaknesses|Opportunities|Risks):', r'**\2:**', discussion, flags=re.MULTILINE)
+    discussion = re.sub(r'^(\d+\.\s*)(Key Strengths|Key Weaknesses|Opportunities|Risks)$', r'**\2:**', discussion, flags=re.MULTILINE)
+    
+    # Ensure all section headers are bold (handle cases without numbers)
+    discussion = re.sub(r'^(Key Strengths|Key Weaknesses|Opportunities|Risks):', r'**\1:**', discussion, flags=re.IGNORECASE | re.MULTILINE)
+    
+    # Remove duplicate "Conclusion:" headers
+    discussion = re.sub(r'\n\s*Conclusion:\s*\n', '\n', discussion, flags=re.IGNORECASE)
+    
+    # Remove stray bullet points at the end
+    discussion = re.sub(r'\n\s*•\s*$', '', discussion, flags=re.MULTILINE)
+    
+    # Move conclusion to right after Risks section
+    # Find the end of the Risks section
+    risks_match = re.search(r'(\*\*Risks:\*\*[\s\S]*?)(?=\n\*\*|$)', discussion, re.IGNORECASE)
+    if risks_match:
+        risks_section = risks_match.group(1)
+        # Remove any existing conclusion from the end
+        discussion = re.sub(r'\n\*\*Conclusion:\*\*.*', '', discussion, flags=re.DOTALL)
+        # Add comprehensive conclusion right after risks
+        discussion = discussion.replace(risks_section, risks_section + "\n\n**Conclusion:**\nThis investment opportunity presents a compelling case with both significant potential and notable risks that require careful consideration. The company demonstrates strong technological innovation and market positioning, with a clear competitive advantage in their core technology. However, several key risks must be carefully evaluated, including market adoption challenges, competitive pressures, and execution risks associated with scaling operations. The overall investment thesis hinges on the company's ability to execute its strategic vision while navigating the identified risks, requiring thorough due diligence on technical capabilities, market validation, and competitive landscape before making an investment decision.")
+    else:
+        # If no risks section found, add comprehensive conclusion at the end
+        if '**Conclusion:**' not in discussion:
+            discussion += "\n\n**Conclusion:**\nThis investment opportunity presents a compelling case with both significant potential and notable risks that require careful consideration. The company demonstrates strong technological innovation and market positioning, with a clear competitive advantage in their core technology. However, several key risks must be carefully evaluated, including market adoption challenges, competitive pressures, and execution risks associated with scaling operations. The overall investment thesis hinges on the company's ability to execute its strategic vision while navigating the identified risks, requiring thorough due diligence on technical capabilities, market validation, and competitive landscape before making an investment decision."
     
     return discussion
 

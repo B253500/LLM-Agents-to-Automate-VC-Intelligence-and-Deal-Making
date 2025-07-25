@@ -145,23 +145,21 @@ This analysis demonstrates the quantitative improvements achieved by implementin
 ### Time Efficiency
 - **Traditional VC Process**: {data['traditional_vc_comparison']['traditional_time_minutes']:.1f} minutes per memo
 - **AI-Powered System**: {data['traditional_vc_comparison']['ai_time_minutes']:.1f} minutes per memo
-- **Time Savings**: {data['traditional_vc_comparison']['time_savings_minutes']:.1f} minutes ({data['traditional_vc_comparison']['time_savings_percentage']:.1f}% reduction)
+- **Time Savings**: {data['traditional_vc_comparison']['time_savings_percentage']:.1f}% reduction
 - **Efficiency Improvement**: {data['traditional_vc_comparison']['efficiency_improvement']['time_efficiency']:.1f}x faster
 
 ### Cost Efficiency
 - **Traditional VC Cost**: ${data['traditional_vc_comparison']['traditional_cost_usd']:.2f} per memo
 - **AI System Cost**: ${data['traditional_vc_comparison']['ai_cost_usd']:.4f} per memo
-- **Cost Savings**: ${data['traditional_vc_comparison']['cost_savings_usd']:.2f} ({data['traditional_vc_comparison']['cost_savings_percentage']:.1f}% reduction)
+- **Cost Savings**: {data['traditional_vc_comparison']['cost_savings_percentage']:.1f}% reduction
 - **Cost Efficiency**: {data['traditional_vc_comparison']['efficiency_improvement']['cost_efficiency']:.1f}x cheaper
 
 ### Quality Metrics
-- **Section Completeness**: {data['quality_metrics']['all_sections_present']}
-- **Overall Quality Score**: {data['quality_metrics']['overall_quality_score']:.1f}/10
-- **Readability**: Flesch-Kincaid Grade {data['quality_metrics']['flesch_kincaid_score']:.1f}
-- **Content Quality Scores**:
-  - Product Description: {data['quality_metrics']['product_quality_score']}/3
-  - Competitors Analysis: {data['quality_metrics']['competitors_quality_score']}/3
-  - Risk Assessment: {data['quality_metrics']['risks_quality_score']}/3
+- **Section Completeness**: {data['all_sections_present']}
+- **Overall Quality Score**: {data.get('overall_quality_score', 'N/A')}
+- **Readability**: Flesch-Kincaid Grade {data['flesch_kincaid_score']:.1f}
+- **Chart Present**: {'Yes' if data['chart_present'] else 'No'}
+- **Duplicate Content**: {data['duplicate_ratio']:.2%}
 
 ## Section-by-Section Analysis
 
@@ -170,15 +168,32 @@ This analysis demonstrates the quantitative improvements achieved by implementin
 """
     
     for section in data['section_metrics']:
-        summary += f"| {section['section_name']} | {section['traditional_time_minutes']:.1f} | {section['runtime_seconds']/60:.1f} | {section['time_savings_percentage']:.1f}% | ${section['cost_usd']:.4f} |\n"
+        # Handle both object and string representations
+        if isinstance(section, str):
+            # Parse string representation like "SectionMetrics(section_name='...', runtime_seconds=0.0, ...)"
+            import re
+            section_name_match = re.search(r"section_name='([^']*)'", section)
+            runtime_match = re.search(r"runtime_seconds=([0-9.]+)", section)
+            cost_match = re.search(r"cost_usd=([0-9.]+)", section)
+            
+            section_name = section_name_match.group(1) if section_name_match else "Unknown"
+            runtime_seconds = float(runtime_match.group(1)) if runtime_match else 0.0
+            cost_usd = float(cost_match.group(1)) if cost_match else 0.0
+        else:
+            # Handle object representation
+            section_name = section.section_name
+            runtime_seconds = section.runtime_seconds
+            cost_usd = section.cost_usd
+            
+        summary += f"| {section_name} | N/A | {runtime_seconds/60:.1f} | N/A | ${cost_usd:.4f} |\n"
     
     summary += f"""
 ## ROI Analysis
 
 ### Break-Even Analysis
-- **Traditional Cost per Memo**: ${data['academic_analysis']['roi_analysis']['traditional_cost_per_memo']:.2f}
-- **AI Cost per Memo**: ${data['academic_analysis']['roi_analysis']['ai_cost_per_memo']:.4f}
-- **Break-Even Point**: {data['academic_analysis']['roi_analysis']['break_even_memos']:.1f} memos
+- **Traditional Cost per Memo**: ${data['traditional_vc_comparison']['traditional_cost_usd']:.2f}
+- **AI Cost per Memo**: ${data['traditional_vc_comparison']['ai_cost_usd']:.4f}
+- **Cost Savings**: ${data['traditional_vc_comparison']['cost_savings_usd']:.2f} per memo
 
 ### Scalability Benefits
 - **Concurrent Processing**: Multiple companies can be analyzed simultaneously

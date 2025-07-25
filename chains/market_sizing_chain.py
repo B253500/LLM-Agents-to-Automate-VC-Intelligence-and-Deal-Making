@@ -10,7 +10,7 @@ from core.hybrid_context import get_hybrid_context
 from core.perplexity_utils import search_perplexity
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
+llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0.2)
 
 def web_search_market_context(company_name, sector):
     if not company_name and not sector:

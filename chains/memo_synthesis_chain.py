@@ -86,7 +86,9 @@ graph TD;
 - If a Mermaid diagram is not possible, provide only the description.
 - Use plain, non-marketing language.
 - CRITICAL: Use bold formatting (**text**) for ALL section headers, NOT markdown headers (###).
-- Common headers to bold: **Business Model Overview**, **Potential Revenue Streams**, **Customer Segments**, **Go-to-Market Strategies**, **Business Model Schema**, **Additional Research Needed**
+- Common headers to bold: **Business Model Overview**, **Potential Revenue Streams**, **Customer Segments**, **Strategy**, **Business Model Schema**, **Additional Research Needed**
+- IMPORTANT: Use "Strategy" instead of "Go-to-Market Strategies" as the header
+- For "Additional Research Needed" section, provide ONLY ONE SENTENCE summarizing what additional information is needed
 - If information is limited, explicitly state what additional research is needed
 Context:
 Company: {getattr(profile, 'name', '')}
@@ -119,13 +121,29 @@ Partners: {getattr(profile, 'partners', '')}
     raw = re.sub(r'^Business Model Overview$', r'**Business Model Overview**', raw, flags=re.MULTILINE)
     raw = re.sub(r'^Potential Revenue Streams$', r'**Potential Revenue Streams**', raw, flags=re.MULTILINE)
     raw = re.sub(r'^Customer Segments$', r'**Customer Segments**', raw, flags=re.MULTILINE)
-    raw = re.sub(r'^Go-to-Market Strategies$', r'**Go-to-Market Strategies**', raw, flags=re.MULTILINE)
+    raw = re.sub(r'^Go-to-Market Strategies$', r'**Strategy**', raw, flags=re.MULTILINE)
+    raw = re.sub(r'^Strategy$', r'**Strategy**', raw, flags=re.MULTILINE)
     raw = re.sub(r'^Business Model Schema$', r'**Business Model Schema**', raw, flags=re.MULTILINE)
     raw = re.sub(r'^Additional Research Needed$', r'**Additional Research Needed**', raw, flags=re.MULTILINE)
     
     # Convert any remaining plain text headers that might be missed
     raw = re.sub(r'^([A-Z][a-z\s]+):$', r'**\1:**', raw, flags=re.MULTILINE)
     raw = re.sub(r'^([A-Z][A-Za-z\s]+)$', r'**\1**', raw, flags=re.MULTILINE)
+    
+    # Simplify "Additional Research Needed" section to one sentence
+    if "**Additional Research Needed**" in raw:
+        # Find the section and replace it with a simplified version
+        pattern = r'\*\*Additional Research Needed\*\*\s*\n(.*?)(?=\n\*\*|\n\n|$)'
+        match = re.search(pattern, raw, re.DOTALL)
+        if match:
+            current_content = match.group(1).strip()
+            # Extract the first sentence or create a summary
+            sentences = re.split(r'[.!?]+', current_content)
+            first_sentence = sentences[0].strip() if sentences[0].strip() else "Additional research is needed to better understand the company's business model and revenue streams."
+            if not first_sentence.endswith('.'):
+                first_sentence += '.'
+            simplified_section = f"**Additional Research Needed**\n{first_sentence}"
+            raw = re.sub(pattern, simplified_section, raw, flags=re.DOTALL)
     
     return raw
 
@@ -134,23 +152,23 @@ def run_risks_section_chain(profile: StartupProfile) -> str:
     llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
     prompt = f"""
 You are a VC analyst writing the Risks section for an investment memo.
+- Organize risks into clear categories: **Market Risks**, **Technical Risks**, **Operational Risks**, **Regulatory Risks**, **Financial Risks**
 - List the POTENTIAL risks relevant to this company and product, sector with a specific explanation for each risk.
 - Make each risk specific to the company's technology, market, or business context. Avoid generic or boilerplate risks.
-- If possible cover market, technical, operational, regulatory and financial risks. Use a critical, VC-style lens.
 - Use bullet points, with each risk followed by a short, specific explanation.
 - Use plain, non-marketing language.
-- Use bold formatting (**text**) for headers, NOT markdown headers (###).
+- CRITICAL: Use bold formatting (**text**) for ALL category headers, NOT markdown headers (###).
 
 IMPORTANT: Use tentative language and clearly indicate when you are making assumptions or interpretations.
 - Use phrases like "appears to be", "seems to", "may be", "could be", "based on available information"
 - Do not present assumptions as facts about current risks
 - If information is limited, explicitly state what additional research is needed
+- DO NOT include any risk score or numerical risk assessment - focus on qualitative risk descriptions
 
 Context:
 Company: {getattr(profile, 'name', '')}
 Sector: {getattr(profile, 'sector', '')}
 Risks: {getattr(profile, 'risk_flags', '')}
-Risk Score: {getattr(profile, 'risk_score', '')}
 Risk Summary: {getattr(profile, 'risk_summary', '')}
 Financials: {getattr(profile, 'financials', '')}
 Technical: {getattr(profile, 'tech_maturity', '')}
@@ -159,9 +177,22 @@ Regulatory: {getattr(profile, 'regulatory', '')}
 """
     response = llm.invoke(prompt)
     raw = response.content.strip() if hasattr(response, 'content') else str(response)
+    
     # Convert markdown headers to bold formatting
     raw = re.sub(r'^###\s*\*\*(.*?)\*\*', r'**\1**', raw, flags=re.MULTILINE)
     raw = re.sub(r'^###\s*(.*?)$', r'**\1**', raw, flags=re.MULTILINE)
+    
+    # Also convert plain text category headers to bold formatting
+    raw = re.sub(r'^Market Risks$', r'**Market Risks**', raw, flags=re.MULTILINE)
+    raw = re.sub(r'^Technical Risks$', r'**Technical Risks**', raw, flags=re.MULTILINE)
+    raw = re.sub(r'^Operational Risks$', r'**Operational Risks**', raw, flags=re.MULTILINE)
+    raw = re.sub(r'^Regulatory Risks$', r'**Regulatory Risks**', raw, flags=re.MULTILINE)
+    raw = re.sub(r'^Financial Risks$', r'**Financial Risks**', raw, flags=re.MULTILINE)
+    
+    # Remove any risk score mentions
+    raw = re.sub(r'Risk Score of [0-9.]+', '', raw, flags=re.IGNORECASE)
+    raw = re.sub(r'risk score.*?[0-9.]+', '', raw, flags=re.IGNORECASE)
+    
     return raw
 
 def run_team_section_chain(profile: StartupProfile) -> str:
@@ -281,10 +312,12 @@ def run_followup_section_chain(profile: StartupProfile) -> str:
     llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
     prompt = f"""
 You are a VC analyst writing the Follow-up Questions & Next Steps section for an investment memo.
-- Organize the section by topic, using bold headers (e.g., **Technology Validation & IP**, **OEM & Manufacturing Partnerships**).
+- Organize the section by topic, using bold headers (e.g., **Technology Validation & IP**, **Financials & Funding Stage**, **Competitive Landscape**, **OEM & Manufacturing Partnerships**, **Regulatory & Market Timing**).
 - Do NOT use bullet points for headers—only for the actual questions or action items under each header.
 - For each topic, list 2-4 specific, actionable follow-up questions or next steps as bullet points.
 - Use plain, non-marketing language.
+- CRITICAL: ALL category headers MUST be in bold format (**Header**), not plain text.
+
 Context:
 Company: {getattr(profile, 'name', '')}
 Sector: {getattr(profile, 'sector', '')}
@@ -295,8 +328,10 @@ Competitive: {getattr(profile, 'top_competitors', '')}
 Regulatory: {getattr(profile, 'regulatory', '')}
 """
     response = llm.invoke(prompt)
+    raw = response.content.strip() if hasattr(response, 'content') else str(response)
+    
     # Post-process: ensure headers are bold and not bulleted
-    lines = response.content.strip().split('\n') if hasattr(response, 'content') else str(response).split('\n')
+    lines = raw.split('\n')
     formatted = []
     for i, line in enumerate(lines):
         if line.strip().startswith('•') and not line.strip().startswith('••'):
@@ -308,4 +343,22 @@ Regulatory: {getattr(profile, 'regulatory', '')}
             formatted.append(header)
         else:
             formatted.append(line)
-    return '\n'.join(formatted) 
+    
+    # Additional post-processing to ensure common headers are bold
+    result = '\n'.join(formatted)
+    
+    # Convert common headers to bold if they're not already
+    common_headers = [
+        "Technology Validation & IP",
+        "Financials & Funding Stage", 
+        "Competitive Landscape",
+        "OEM & Manufacturing Partnerships",
+        "Regulatory & Market Timing"
+    ]
+    
+    for header in common_headers:
+        # Replace non-bold versions with bold versions
+        result = re.sub(rf'^{re.escape(header)}$', f'**{header}**', result, flags=re.MULTILINE)
+        result = re.sub(rf'^{re.escape(header)}\s*$', f'**{header}**', result, flags=re.MULTILINE)
+    
+    return result 

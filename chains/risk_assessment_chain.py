@@ -14,7 +14,7 @@ from langchain.prompts import ChatPromptTemplate
 from core.schemas import StartupProfile
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
+llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0.2)
 
 SYSTEM = """\
 You are an investment-risk officer specializing in startup risk assessment.
@@ -22,7 +22,6 @@ Analyze the startup profile and identify potential risk factors.
 
 Return JSON with:
   risk_flags – array of short risk descriptions (≤5 words each)
-  risk_score – float 0-1 (0 = low risk, 1 = high risk)
   risk_summary – brief summary of key risks
 
 Consider factors like:
@@ -33,7 +32,8 @@ Consider factors like:
 - Regulatory risks
 - Market timing
 
-If insufficient data to assess risks, set risk_score to null and risk_flags to empty array.
+If insufficient data to assess risks, set risk_flags to empty array.
+Note: Do not provide a numerical risk score as it would be unreliable without clear methodology.
 """
 
 PROMPT = ChatPromptTemplate.from_messages(
@@ -52,7 +52,6 @@ def run_risk_assessment_chain(profile: StartupProfile) -> StartupProfile:
             "funding_stage": profile.funding_stage,
             "TAM": profile.TAM,
             "revenue": profile.revenue,
-            "risk_score": profile.risk_score,
             "top_competitors": profile.top_competitors[:3] if profile.top_competitors else None,  # Limit competitors
             "executives": profile.executives[:5] if profile.executives else None  # Limit executives
         }
@@ -65,9 +64,7 @@ def run_risk_assessment_chain(profile: StartupProfile) -> StartupProfile:
     try:
         data = json.loads(txt[first : last + 1])
         profile.risk_flags = data.get("risk_flags", [])
-        risk_score = data.get("risk_score")
-        if risk_score is not None:
-            profile.risk_score = float(risk_score)
+        # Note: risk_score is intentionally not set as it's unreliable without clear methodology
     except:
         pass
     if not profile.startup_id:
@@ -85,9 +82,7 @@ def run_risk_assessment_chain_with_text(full_text: str, profile: StartupProfile)
     try:
         data = json.loads(txt[first : last + 1])
         profile.risk_flags = data.get("risk_flags", [])
-        risk_score = data.get("risk_score")
-        if risk_score is not None:
-            profile.risk_score = float(risk_score)
+        # Note: risk_score is intentionally not set as it's unreliable without clear methodology
     except:
         pass
     if not profile.startup_id:

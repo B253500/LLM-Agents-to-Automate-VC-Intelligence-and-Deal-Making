@@ -54,6 +54,8 @@ class StartupProfile(BaseModel):
     follow_up_questions: Optional[str] = None
     tech_stack: Optional[str] = None  # Added for technical stack descriptions
     product_description: Optional[str] = None  # Description of the core product/service
+    product_roadmap: Optional[str] = None  # Product development roadmap and milestones
+    patent_portfolio: Optional[str] = None  # Patent portfolio assessment and analysis
     executives: Optional[List[dict]] = []
     prior_exit_details: Optional[List[dict]] = []
 
@@ -66,7 +68,6 @@ class StartupProfile(BaseModel):
     revenue_estimate: Optional[float] = None
     revenue_currency: Optional[str] = None
     revenue_source: Optional[str] = None
-    tech_stack: Optional[list] = None
     size_range: Optional[str] = None
     status: Optional[str] = None
     parent_id: Optional[str] = None
