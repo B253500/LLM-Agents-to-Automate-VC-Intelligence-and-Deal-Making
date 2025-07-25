@@ -1,18 +1,22 @@
 # CrewAI agent and tool definitions, ported from memo_generator/agents.py
 import os
+from pathlib import Path
+from dotenv import load_dotenv
 from crewai import Agent
 from langchain_openai import ChatOpenAI
 from langchain.tools import Tool
 from crewai_tools import EXASearchTool
 import requests
 from chains.technical_dd_chain import run_technical_dd_chain
-from chains.founder_profiling_chain import run_founder_profiling_chain
+from agents.founder_profiling_agent import run_founder_profiling_chain
 from chains.market_sizing_chain import run_market_sizing_chain
 from chains.financial_analysis_chain import run_financial_analysis_chain
 from chains.competitive_intel_chain import run_competitive_intel_chain
 from chains.risk_assessment_chain import run_risk_assessment_chain
 from core.schemas import StartupProfile
 import json
+
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 # Update environment variable lookups to use old names
 # Portkey, fallback to direct OpenAI if not available

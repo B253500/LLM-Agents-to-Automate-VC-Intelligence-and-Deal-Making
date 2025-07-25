@@ -7,7 +7,7 @@ from langchain.prompts import ChatPromptTemplate
 from core.schemas import StartupProfile
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
-llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0.2)
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
 
 def web_search_esg_context(company_name):
     # Placeholder: Integrate EXA, Perplexity, or other API here

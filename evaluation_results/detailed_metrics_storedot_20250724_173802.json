@@ -1,0 +1,345 @@
+{
+  "memo_info": {
+    "pdf_name": "storedot",
+    "generation_timestamp": "20250724_173802",
+    "total_runtime_seconds": 471.06356930732727,
+    "total_cost_usd": 0.0,
+    "total_tokens": 0,
+    "section_count": 64
+  },
+  "quality_metrics": {
+    "all_sections_present": true,
+    "missing_sections": [],
+    "product_quality_score": 3,
+    "competitors_quality_score": 3,
+    "risks_quality_score": 1,
+    "factual_accuracy_score": 0.0,
+    "formatting_score": 1.0,
+    "flesch_kincaid_score": 15.118995170719309,
+    "analyst_readability_score": 5.0,
+    "overall_quality_score": 5.333333333333334
+  },
+  "performance_metrics": {
+    "token_usage_by_model": {},
+    "cost_breakdown": {}
+  },
+  "traditional_vc_comparison": {
+    "traditional_time_minutes": 670,
+    "ai_time_minutes": 0.0,
+    "time_savings_minutes": 670.0,
+    "time_savings_percentage": 100.0,
+    "traditional_cost_usd": 1675.0,
+    "ai_cost_usd": 0.0,
+    "cost_savings_usd": 1675.0,
+    "cost_savings_percentage": 100.0,
+    "efficiency_improvement": {
+      "time_efficiency": 6700.0,
+      "cost_efficiency": 167500.0
+    },
+    "section_comparisons": [
+      {
+        "section": "DETAILED SUMMARY",
+        "traditional_time_minutes": 30,
+        "ai_time_minutes": 0.0,
+        "time_savings_percentage": 100.0
+      },
+      {
+        "section": "COMPANY OVERVIEW",
+        "traditional_time_minutes": 15,
+        "ai_time_minutes": 0.0,
+        "time_savings_percentage": 100.0
+      },
+      {
+        "section": "PROBLEM STATEMENT",
+        "traditional_time_minutes": 20,
+        "ai_time_minutes": 0.0,
+        "time_savings_percentage": 100.0
+      },
+      {
+        "section": "SOLUTION OVERVIEW",
+        "traditional_time_minutes": 25,
+        "ai_time_minutes": 0.0,
+        "time_savings_percentage": 100.0
+      },
+      {
+        "section": "PRODUCT/SERVICE DESCRIPTION",
+        "traditional_time_minutes": 45,
+        "ai_time_minutes": 0.0,
+        "time_savings_percentage": 100.0
+      },
+      {
+        "section": "MARKET SIZE & ANALYSIS",
+        "traditional_time_minutes": 60,
+        "ai_time_minutes": 0.0,
+        "time_savings_percentage": 100.0
+      },
+      {
+        "section": "COMPETITORS",
+        "traditional_time_minutes": 40,
+        "ai_time_minutes": 0.0,
+        "time_savings_percentage": 100.0
+      },
+      {
+        "section": "BUSINESS MODEL",
+        "traditional_time_minutes": 30,
+        "ai_time_minutes": 0.0,
+        "time_savings_percentage": 100.0
+      },
+      {
+        "section": "TECHNICAL DUE DILIGENCE",
+        "traditional_time_minutes": 90,
+        "ai_time_minutes": 0.0,
+        "time_savings_percentage": 100.0
+      },
+      {
+        "section": "FINANCIAL ANALYSIS",
+        "traditional_time_minutes": 75,
+        "ai_time_minutes": 0.0,
+        "time_savings_percentage": 100.0
+      },
+      {
+        "section": "TEAM & MANAGEMENT",
+        "traditional_time_minutes": 45,
+        "ai_time_minutes": 0.0,
+        "time_savings_percentage": 100.0
+      },
+      {
+        "section": "ESG CONSIDERATIONS",
+        "traditional_time_minutes": 30,
+        "ai_time_minutes": 0.0,
+        "time_savings_percentage": 100.0
+      },
+      {
+        "section": "RISKS & MITIGATIONS",
+        "traditional_time_minutes": 35,
+        "ai_time_minutes": 0.0,
+        "time_savings_percentage": 100.0
+      },
+      {
+        "section": "INVESTMENT & EXIT STRATEGIES",
+        "traditional_time_minutes": 40,
+        "ai_time_minutes": 0.0,
+        "time_savings_percentage": 100.0
+      },
+      {
+        "section": "COUNTERFACTUAL ANALYSIS",
+        "traditional_time_minutes": 25,
+        "ai_time_minutes": 0.0,
+        "time_savings_percentage": 100.0
+      },
+      {
+        "section": "FOLLOW-UP QUESTIONS",
+        "traditional_time_minutes": 20,
+        "ai_time_minutes": 0.0,
+        "time_savings_percentage": 100.0
+      },
+      {
+        "section": "AI DISCUSSION AND COMMENTARY",
+        "traditional_time_minutes": 45,
+        "ai_time_minutes": 0.0,
+        "time_savings_percentage": 100.0
+      }
+    ]
+  },
+  "section_metrics": [
+    {
+      "section_name": "DETAILED SUMMARY",
+      "runtime_seconds": 0.0,
+      "tokens_used": 0,
+      "cost_usd": 0.0,
+      "content_length_chars": 895,
+      "content_length_words": 124,
+      "quality_score": 1.0,
+      "traditional_time_minutes": 30,
+      "time_savings_percentage": 100.0
+    },
+    {
+      "section_name": "COMPANY OVERVIEW",
+      "runtime_seconds": 0.0,
+      "tokens_used": 0,
+      "cost_usd": 0.0,
+      "content_length_chars": 503,
+      "content_length_words": 67,
+      "quality_score": 1.0,
+      "traditional_time_minutes": 15,
+      "time_savings_percentage": 100.0
+    },
+    {
+      "section_name": "PROBLEM STATEMENT",
+      "runtime_seconds": 0.0,
+      "tokens_used": 0,
+      "cost_usd": 0.0,
+      "content_length_chars": 1014,
+      "content_length_words": 138,
+      "quality_score": 1.0,
+      "traditional_time_minutes": 20,
+      "time_savings_percentage": 100.0
+    },
+    {
+      "section_name": "SOLUTION OVERVIEW",
+      "runtime_seconds": 0.0,
+      "tokens_used": 0,
+      "cost_usd": 0.0,
+      "content_length_chars": 828,
+      "content_length_words": 111,
+      "quality_score": 1.0,
+      "traditional_time_minutes": 25,
+      "time_savings_percentage": 100.0
+    },
+    {
+      "section_name": "PRODUCT/SERVICE DESCRIPTION",
+      "runtime_seconds": 0.0,
+      "tokens_used": 0,
+      "cost_usd": 0.0,
+      "content_length_chars": 1059,
+      "content_length_words": 146,
+      "quality_score": 1.0,
+      "traditional_time_minutes": 45,
+      "time_savings_percentage": 100.0
+    },
+    {
+      "section_name": "MARKET SIZE & ANALYSIS",
+      "runtime_seconds": 0.0,
+      "tokens_used": 0,
+      "cost_usd": 0.0,
+      "content_length_chars": 1056,
+      "content_length_words": 147,
+      "quality_score": 1.0,
+      "traditional_time_minutes": 60,
+      "time_savings_percentage": 100.0
+    },
+    {
+      "section_name": "COMPETITORS",
+      "runtime_seconds": 0.0,
+      "tokens_used": 0,
+      "cost_usd": 0.0,
+      "content_length_chars": 300,
+      "content_length_words": 42,
+      "quality_score": 0.6,
+      "traditional_time_minutes": 40,
+      "time_savings_percentage": 100.0
+    },
+    {
+      "section_name": "BUSINESS MODEL",
+      "runtime_seconds": 0.0,
+      "tokens_used": 0,
+      "cost_usd": 0.0,
+      "content_length_chars": 780,
+      "content_length_words": 115,
+      "quality_score": 1.0,
+      "traditional_time_minutes": 30,
+      "time_savings_percentage": 100.0
+    },
+    {
+      "section_name": "TECHNICAL DUE DILIGENCE",
+      "runtime_seconds": 0.0,
+      "tokens_used": 0,
+      "cost_usd": 0.0,
+      "content_length_chars": 2139,
+      "content_length_words": 307,
+      "quality_score": 1.0,
+      "traditional_time_minutes": 90,
+      "time_savings_percentage": 100.0
+    },
+    {
+      "section_name": "FINANCIAL ANALYSIS",
+      "runtime_seconds": 0.0,
+      "tokens_used": 0,
+      "cost_usd": 0.0,
+      "content_length_chars": 70,
+      "content_length_words": 11,
+      "quality_score": 0.14,
+      "traditional_time_minutes": 75,
+      "time_savings_percentage": 100.0
+    },
+    {
+      "section_name": "TEAM & MANAGEMENT",
+      "runtime_seconds": 0.0,
+      "tokens_used": 0,
+      "cost_usd": 0.0,
+      "content_length_chars": 511,
+      "content_length_words": 79,
+      "quality_score": 1.0,
+      "traditional_time_minutes": 45,
+      "time_savings_percentage": 100.0
+    },
+    {
+      "section_name": "ESG CONSIDERATIONS",
+      "runtime_seconds": 0.0,
+      "tokens_used": 0,
+      "cost_usd": 0.0,
+      "content_length_chars": 704,
+      "content_length_words": 90,
+      "quality_score": 1.0,
+      "traditional_time_minutes": 30,
+      "time_savings_percentage": 100.0
+    },
+    {
+      "section_name": "RISKS & MITIGATIONS",
+      "runtime_seconds": 0.0,
+      "tokens_used": 0,
+      "cost_usd": 0.0,
+      "content_length_chars": 2939,
+      "content_length_words": 399,
+      "quality_score": 1.0,
+      "traditional_time_minutes": 35,
+      "time_savings_percentage": 100.0
+    },
+    {
+      "section_name": "INVESTMENT & EXIT STRATEGIES",
+      "runtime_seconds": 0.0,
+      "tokens_used": 0,
+      "cost_usd": 0.0,
+      "content_length_chars": 790,
+      "content_length_words": 107,
+      "quality_score": 1.0,
+      "traditional_time_minutes": 40,
+      "time_savings_percentage": 100.0
+    },
+    {
+      "section_name": "COUNTERFACTUAL ANALYSIS",
+      "runtime_seconds": 0.0,
+      "tokens_used": 0,
+      "cost_usd": 0.0,
+      "content_length_chars": 1063,
+      "content_length_words": 154,
+      "quality_score": 1.0,
+      "traditional_time_minutes": 25,
+      "time_savings_percentage": 100.0
+    },
+    {
+      "section_name": "FOLLOW-UP QUESTIONS",
+      "runtime_seconds": 0.0,
+      "tokens_used": 0,
+      "cost_usd": 0.0,
+      "content_length_chars": 1917,
+      "content_length_words": 258,
+      "quality_score": 1.0,
+      "traditional_time_minutes": 20,
+      "time_savings_percentage": 100.0
+    },
+    {
+      "section_name": "AI DISCUSSION AND COMMENTARY",
+      "runtime_seconds": 0.0,
+      "tokens_used": 0,
+      "cost_usd": 0.0,
+      "content_length_chars": 46,
+      "content_length_words": 6,
+      "quality_score": 0.092,
+      "traditional_time_minutes": 45,
+      "time_savings_percentage": 100.0
+    }
+  ],
+  "academic_analysis": {
+    "time_efficiency_improvement": 6700.0,
+    "cost_efficiency_improvement": 167500.0,
+    "total_time_savings_minutes": 670.0,
+    "total_cost_savings_usd": 1675.0,
+    "roi_analysis": {
+      "traditional_cost_per_memo": 1675.0,
+      "ai_cost_per_memo": 0.0,
+      "cost_savings_percentage": 100.0,
+      "break_even_memos": 167500.0
+    }
+  }
+}

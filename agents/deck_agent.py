@@ -5,11 +5,14 @@ Only the callback's return value is surfaced to the caller.
 
 from crewai import Agent, Task, Crew
 from langchain_openai import ChatOpenAI
+from dotenv import load_dotenv
+from pathlib import Path
 from chains.pitch_deck_chain import run_pitch_deck_chain
 from core.visual_utils import extract_images_from_pdf, filter_graphs_and_tables
 from core.download_utils import extract_text_from_image
 import pdfplumber
 
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 llm = ChatOpenAI(model="gpt-4", temperature=0.2)
 
 

@@ -30,32 +30,6 @@ def exa_search_competitors(query, num_results=5):
         print(f"EXA API exception: {e}")
         return []
 
-# --- Proxycurl LinkedIn Enrichment ---
-def proxycurl_linkedin_profile(name, company=None):
-    """
-    Use Proxycurl to fetch LinkedIn profile data for a person (optionally at a company).
-    Returns a dict with profile info or None.
-    """
-    api_key = os.getenv("PROXYCURL_API_KEY")
-    if not api_key:
-        print("[Warning] PROXYCURL_API_KEY not set in environment.")
-        return None
-    url = "https://nubela.co/proxycurl/api/v2/linkedin/person"
-    headers = {"Authorization": f"Bearer {api_key}"}
-    params = {"first_name": name.split()[0], "last_name": name.split()[-1]}
-    if company:
-        params["company"] = company
-    try:
-        response = requests.get(url, headers=headers, params=params)
-        if response.status_code == 200:
-            return response.json()
-        else:
-            print(f"Proxycurl error: {response.status_code} {response.text}")
-            return None
-    except Exception as e:
-        print(f"Proxycurl exception: {e}")
-        return None
-
 def is_website_match(website_url, company_name, context_snippet=None):
     """
     Fetch the homepage and check if the company name or context appears in the text.

@@ -14,7 +14,7 @@ from langchain.prompts import ChatPromptTemplate
 from core.schemas import StartupProfile
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
-llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.2)
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
 
 SYSTEM = """\
 You are an investment-risk officer specializing in startup risk assessment.
@@ -42,7 +42,23 @@ PROMPT = ChatPromptTemplate.from_messages(
 
 
 def run_risk_assessment_chain(profile: StartupProfile) -> StartupProfile:
-    txt = llm.invoke(PROMPT.format(profile=profile.model_dump_json())).content.strip()
+    # Truncate profile data if it's too large to avoid context length exceeded
+    profile_json = profile.model_dump_json()
+    if len(profile_json) > 10000:  # If profile is very large, use a summary
+        # Create a simplified profile with key fields only
+        simplified_profile = {
+            "name": profile.name,
+            "sector": profile.sector,
+            "funding_stage": profile.funding_stage,
+            "TAM": profile.TAM,
+            "revenue": profile.revenue,
+            "risk_score": profile.risk_score,
+            "top_competitors": profile.top_competitors[:3] if profile.top_competitors else None,  # Limit competitors
+            "executives": profile.executives[:5] if profile.executives else None  # Limit executives
+        }
+        profile_json = json.dumps(simplified_profile)
+    
+    txt = llm.invoke(PROMPT.format(profile=profile_json)).content.strip()
     first, last = txt.find("{"), txt.rfind("}")
     if first == -1 or last == -1:
         return profile

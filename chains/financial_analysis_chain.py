@@ -18,7 +18,7 @@ from core.hybrid_context import get_hybrid_context
 
 # ------------------------------------------------------------------
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
-llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0.2)
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
 
 def web_search_financial_context(company_name):
     # Placeholder: Integrate EXA, Perplexity, or other API here
@@ -65,13 +65,24 @@ def extract_financials_from_text(text):
         (r"GMV[^\d$]*\$?([\d\.]+)\s*([KMB]?)", "gmv"),
         (r"gross profit[^\d$]*\$?([\d\.]+)\s*([KMB]?)", "gross_profit"),
         (r"cash burn[^\d$]*\$?([\d\.]+)\s*([KMB]?)", "cash_burn_12m"),
-        (r"runway[^\d$]*([\d\.]+)\s*(months|mo)?", "runway_months"),
+        (r"runway[^\d$]*([\d\.]+)\s*(months|mo|month)(?:\s|$)", "runway_months"),
         (r"implied valuation[^\d$]*\$?([\d\.]+)\s*([KMB]?)", "implied_valuation"),
     ]
+    
+    # Additional validation: exclude technical specifications
+    technical_indicators = ['wh/l', 'wh/kg', 'watt', 'voltage', 'current', 'capacity', 'density', 'energy density']
+    
     results = {}
     for pat, field in patterns:
         match = re.search(pat, text, re.IGNORECASE)
         if match:
+            # Get the full matched text for context validation
+            full_match = match.group(0)
+            
+            # Skip if the match contains technical indicators
+            if any(indicator in full_match.lower() for indicator in technical_indicators):
+                continue
+                
             if field == "runway_months":
                 num = match.group(1)
                 results[field] = float(num)
@@ -127,6 +138,8 @@ Sector: {getattr(profile, 'sector', '')}
     summary_text = txt if isinstance(txt, str) else ""
     extracted = extract_financials_from_text(summary_text)
     print("[Financial Chain] Regex extracted:", extracted)
+    if extracted:
+        print("[Financial Chain] Context for extraction:", summary_text[:500] + "..." if len(summary_text) > 500 else summary_text)
     for k, v in extracted.items():
         if hasattr(profile, k) and v and value_in_text(v, context):
             setattr(profile, k, v)

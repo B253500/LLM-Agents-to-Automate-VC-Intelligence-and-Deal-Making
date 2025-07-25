@@ -1,9 +1,12 @@
 from crewai import Agent, Task
 from langchain_openai import ChatOpenAI
+from dotenv import load_dotenv
+from pathlib import Path
 
 from core.schemas import StartupProfile
 from chains.financial_analysis_chain import run_financial_analysis_chain
 
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 llm = ChatOpenAI(model="gpt-4", temperature=0.2)
 
 

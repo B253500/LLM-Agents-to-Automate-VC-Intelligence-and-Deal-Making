@@ -1,6 +1,6 @@
 from core.schemas import StartupProfile
 from core.vector_store import add_doc
-from chains.founder_profiling_chain import run_founder_profiling_chain
+from agents.founder_profiling_agent import run_founder_profiling_chain
 
 from langchain_openai import ChatOpenAI
 from langchain.schema import AIMessage
