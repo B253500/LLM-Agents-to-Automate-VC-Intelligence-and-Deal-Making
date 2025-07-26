@@ -3,7 +3,7 @@ from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
 from pathlib import Path
 from core.schemas import StartupProfile
-from chains.technical_dd_chain import run_technical_dd_chain
+from chains.technical_dd_chain import run_technical_dd_chain, run_technical_dd_chain_with_text
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 llm = ChatOpenAI(model="gpt-4", temperature=0.2)
@@ -22,6 +22,13 @@ def format_technical_dd_section(profile):
     implementation = getattr(profile, 'implementation', None)
     
     lines = []
+    
+    # Add product specifications if available
+    product_specs = getattr(profile, 'product_specifications', None)
+    if product_specs and len(product_specs.strip()) > 50:
+        lines.append("Product Technical Specifications")
+        lines.append(product_specs)
+        lines.append("")
     
     # Add technical specifications paragraph if we have meaningful tech stack info
     if tech_stack and len(tech_stack.strip()) > 50:
@@ -157,7 +164,14 @@ def build_technical_dd_agent(profile: StartupProfile, trace_id=None):
     )
 
     def _callback(*_):
-        updated = run_technical_dd_chain(profile)
+        # Try to get full text from the profile if available
+        full_text = getattr(profile, '_full_text', None)
+        if full_text:
+            # Use the full text version for better patent and roadmap extraction
+            updated = run_technical_dd_chain_with_text(full_text, profile)
+        else:
+            # Fall back to hybrid context
+            updated = run_technical_dd_chain(profile)
         return updated.model_dump_json(indent=2)
 
     task = Task(

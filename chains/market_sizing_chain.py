@@ -21,12 +21,29 @@ def web_search_market_context(company_name, sector):
 
 SYSTEM = """
 You are a market research analyst for venture capital.
-For the given company and sector, provide a detailed, structured market analysis including:
-- Challenges: A bulleted list of the main pain points and obstacles in the market.
-- Drivers: A bulleted list of growth drivers and positive trends.
-- Size: A narrative paragraph with the latest available numbers (TAM, SAM, SOM if possible), growth rates (CAGR), and sources. If specific data is unavailable, explain why and provide the closest relevant market size.
-Leave the current Discussion logic in place.
-Return your answer as a multi-section, multi-bullet, multi-paragraph analysis suitable for a VC investment memo.
+For the given company and sector, provide a detailed, structured market analysis.
+
+IMPORTANT: Return your analysis in the following JSON format:
+{
+    "TAM": <numeric value in billions or millions>,
+    "SAM": <numeric value in billions or millions>,
+    "SOM": <numeric value in billions or millions>,
+    "TAM_original": "<original string with units from source>",
+    "SAM_original": "<original string with units from source>", 
+    "SOM_original": "<original string with units from source>",
+    "summary": "<narrative market analysis paragraph>",
+    "reasoning": "<explanation of how market sizes were determined>"
+}
+
+Guidelines:
+- Use realistic market size values (TAM should be largest, SAM smaller, SOM smallest)
+- If specific data is unavailable, use reasonable estimates based on the sector
+- TAM should typically be in billions for major sectors
+- SAM should be 10-50% of TAM
+- SOM should be 1-10% of TAM
+- Include original strings with units (e.g., "$160B", "$50M") in the _original fields
+- Provide a narrative summary in the summary field
+- Explain your reasoning in the reasoning field
 """
 
 PROMPT = ChatPromptTemplate.from_messages([
@@ -55,12 +72,38 @@ def run_market_sizing_chain(profile: StartupProfile) -> StartupProfile:
         return profile
     try:
         data = json.loads(txt[first : last + 1])
+        
+        # Validate and set TAM
         if data.get("TAM") is not None and data.get("TAM", 0) > 0:
-            profile.TAM = float(data.get("TAM"))
+            tam_value = float(data.get("TAM"))
+            # Validate TAM is reasonable (should be in billions for major sectors)
+            if tam_value < 1:  # If less than 1 billion, likely an error
+                print(f"[Market Sizing] Warning: TAM value {tam_value} seems too small, skipping")
+            else:
+                profile.TAM = tam_value
+        
+        # Validate and set SAM
         if data.get("SAM") is not None and data.get("SAM", 0) > 0:
-            profile.SAM = float(data.get("SAM"))
+            sam_value = float(data.get("SAM"))
+            # Validate SAM is reasonable (should be smaller than TAM)
+            if profile.TAM and sam_value >= profile.TAM:
+                print(f"[Market Sizing] Warning: SAM value {sam_value} is >= TAM {profile.TAM}, skipping")
+            elif sam_value < 0.1:  # If less than 100M, likely an error
+                print(f"[Market Sizing] Warning: SAM value {sam_value} seems too small, skipping")
+            else:
+                profile.SAM = sam_value
+        
+        # Validate and set SOM
         if data.get("SOM") is not None and data.get("SOM", 0) > 0:
-            profile.SOM = float(data.get("SOM"))
+            som_value = float(data.get("SOM"))
+            # Validate SOM is reasonable (should be smaller than SAM)
+            if profile.SAM and som_value >= profile.SAM:
+                print(f"[Market Sizing] Warning: SOM value {som_value} is >= SAM {profile.SAM}, skipping")
+            elif som_value < 0.01:  # If less than 10M, likely an error
+                print(f"[Market Sizing] Warning: SOM value {som_value} seems too small, skipping")
+            else:
+                profile.SOM = som_value
+        
         if data.get("summary"):
             profile.market_summary = data.get("summary")
         # Store original strings and reasoning if present
@@ -88,12 +131,38 @@ def run_market_sizing_chain_with_text(full_text: str, profile: StartupProfile) -
         return profile
     try:
         data = json.loads(txt[first : last + 1])
+        
+        # Validate and set TAM
         if data.get("TAM") is not None and data.get("TAM", 0) > 0:
-            profile.TAM = float(data.get("TAM"))
+            tam_value = float(data.get("TAM"))
+            # Validate TAM is reasonable (should be in billions for major sectors)
+            if tam_value < 1:  # If less than 1 billion, likely an error
+                print(f"[Market Sizing] Warning: TAM value {tam_value} seems too small, skipping")
+            else:
+                profile.TAM = tam_value
+        
+        # Validate and set SAM
         if data.get("SAM") is not None and data.get("SAM", 0) > 0:
-            profile.SAM = float(data.get("SAM"))
+            sam_value = float(data.get("SAM"))
+            # Validate SAM is reasonable (should be smaller than TAM)
+            if profile.TAM and sam_value >= profile.TAM:
+                print(f"[Market Sizing] Warning: SAM value {sam_value} is >= TAM {profile.TAM}, skipping")
+            elif sam_value < 0.1:  # If less than 100M, likely an error
+                print(f"[Market Sizing] Warning: SAM value {sam_value} seems too small, skipping")
+            else:
+                profile.SAM = sam_value
+        
+        # Validate and set SOM
         if data.get("SOM") is not None and data.get("SOM", 0) > 0:
-            profile.SOM = float(data.get("SOM"))
+            som_value = float(data.get("SOM"))
+            # Validate SOM is reasonable (should be smaller than SAM)
+            if profile.SAM and som_value >= profile.SAM:
+                print(f"[Market Sizing] Warning: SOM value {som_value} is >= SAM {profile.SAM}, skipping")
+            elif som_value < 0.01:  # If less than 10M, likely an error
+                print(f"[Market Sizing] Warning: SOM value {som_value} seems too small, skipping")
+            else:
+                profile.SOM = som_value
+        
         if data.get("summary"):
             profile.market_summary = data.get("summary")
         # Store original strings and reasoning if present

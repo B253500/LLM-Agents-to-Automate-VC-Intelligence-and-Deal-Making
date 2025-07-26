@@ -136,6 +136,7 @@ class StartupProfile(BaseModel):
     implementation: Optional[str] = None
     regulatory: Optional[str] = None
     testing: Optional[str] = None
+    product_specifications: Optional[str] = None
     
     # --- Additional fields used in main.py ---
     size: Optional[str] = None
@@ -149,6 +150,7 @@ class StartupProfile(BaseModel):
     
     # --- Financial analysis fields ---
     web_sources: Optional[list[str]] = None
+    web_financial_data: Optional[str] = None
     
     # --- Market sizing fields ---
     TAM_original: Optional[str] = None

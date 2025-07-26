@@ -323,8 +323,9 @@ Crunchbase Funding Data:
             import re
             urls = re.findall(r'https?://[^\s]+', web_search_data)
             web_sources = list(set(urls))  # Remove duplicates
-            # Store web sources in profile
+            # Store web sources and data in profile
             profile.web_sources = web_sources
+            profile.web_financial_data = web_search_data
         else:
             print(f"[Financial Analysis] No web search data found for {company_name}")
     

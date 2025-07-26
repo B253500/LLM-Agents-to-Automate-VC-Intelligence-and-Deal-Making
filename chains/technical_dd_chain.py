@@ -21,28 +21,48 @@ IMPORTANT: Use tentative language and clearly indicate when you are making assum
 - Do not present assumptions as facts
 - If information is limited, explicitly state what additional research is needed
 
+CRITICAL REQUIREMENTS:
+1. CAREFULLY EXTRACT ALL PATENT INFORMATION from the provided context
+2. CAREFULLY EXTRACT ALL PRODUCT ROADMAP INFORMATION from the provided context
+3. CAREFULLY EXTRACT ALL PRODUCT TECHNICAL SPECIFICATIONS from the provided context
+4. Look for specific patent numbers, filing dates, patent areas, and patent status
+5. Look for development phases, milestones, timelines, and commercialization plans
+6. Look for technical specifications, performance metrics, materials, dimensions, capabilities
+7. If the context contains patent, roadmap, or technical specification information, USE IT - do not say "requires additional research"
+
 TECH STACK REQUIREMENTS:
 - Provide a detailed 3-4 sentence description of the technology stack
 - Cover core technologies, infrastructure, and technical approach
 - Include specific technologies, frameworks, or methodologies mentioned
 - Be comprehensive but avoid speculation
 
+PRODUCT TECHNICAL SPECIFICATIONS REQUIREMENTS:
+- Extract and summarize all product technical specifications from the context
+- Include performance metrics, materials, dimensions, capabilities, and key features
+- Look for specific numbers, measurements, performance data, and technical parameters
+- Cover energy density, cycle life, charging speed, temperature range, safety features
+- Include any technical comparisons or benchmarks mentioned
+- If technical specifications are present in the context, provide specific details
+
 PRODUCT ROADMAP REQUIREMENTS:
-- If available, provide a brief product development roadmap
+- Extract and summarize any product development roadmap information from the context
 - Include current phase, next milestones, and future development stages
 - Focus on technical milestones and commercialization timeline
+- If roadmap information is present in the context, provide specific details
 
 PATENT ANALYSIS REQUIREMENTS:
-- If available, provide a brief assessment of the company's patent portfolio
+- Extract and summarize any patent portfolio information from the context
 - Include number of patents, key patent areas, and patent strength
+- Look for specific patent numbers, filing dates, and patent descriptions
 - Assess patent defensibility and potential for licensing revenue
-- Note if patent information is limited or unavailable
+- If patent information is present in the context, provide specific details
 
 Return your analysis in the following JSON format:
 {
     "tech_maturity": "Brief assessment of technical maturity (e.g., 'Early-stage prototype', 'Production-ready', 'Lab-scale')",
     "moat_strength": "Assessment of technical moat and defensibility",
     "tech_stack": "Detailed description of the technology stack and architecture (3-4 sentences covering core technologies, infrastructure, and technical approach)",
+    "product_specifications": "Detailed product technical specifications including performance metrics, materials, dimensions, capabilities, and key features (3-4 sentences with specific numbers and data)",
     "product_roadmap": "Brief product development roadmap with current phase and future milestones (2-3 sentences)",
     "patent_portfolio": "Assessment of patent portfolio including number of patents, key areas, and strength (2-3 sentences)",
     "complexity": "Assessment of technical complexity",
@@ -106,8 +126,11 @@ def clean_llm_output(text):
 
 def run_technical_dd_chain(profile: StartupProfile) -> StartupProfile:
     context = get_hybrid_context(
-        profile, "technology stack OR product OR patents OR patent portfolio OR intellectual property OR IP", 3, 3
+        profile, "patents OR patent portfolio OR intellectual property OR IP OR product roadmap OR development timeline OR technical milestones OR technology stack OR product development OR technical specifications OR performance metrics OR energy density OR cycle life OR charging speed OR temperature range OR safety features OR materials OR dimensions OR capabilities", 5, 3
     )
+    
+    # Debug: Print a snippet of the context to see what's being passed
+    print(f"[Technical DD] Context snippet: {context[:500]}...")
     
     try:
         # Clean the context to avoid formatting issues
@@ -148,6 +171,7 @@ def run_technical_dd_chain(profile: StartupProfile) -> StartupProfile:
         profile.tech_maturity = "Technical assessment unavailable"
         profile.moat_strength = "Moat analysis unavailable"
         profile.tech_stack = "Technology stack details require additional research"
+        profile.product_specifications = "Product technical specifications require additional research"
         profile.product_roadmap = "Product roadmap information requires additional research"
         profile.patent_portfolio = "Patent portfolio information requires additional research"
         profile.complexity = "Technical complexity assessment requires additional research"
@@ -164,7 +188,11 @@ def run_technical_dd_chain(profile: StartupProfile) -> StartupProfile:
 
 def run_technical_dd_chain_with_text(full_text: str, profile: StartupProfile) -> StartupProfile:
     """Run technical due diligence using extracted text as context."""
-    context = full_text[:5000]  # Truncate if needed for prompt size
+    # Use more text to capture patent and roadmap information
+    context = full_text[:8000]  # Increased from 5000 to capture more content
+    
+    # Debug: Print a snippet of the context to see what's being passed
+    print(f"[Technical DD] Full text context snippet: {context[:500]}...")
     
     try:
         # Clean the context to avoid formatting issues

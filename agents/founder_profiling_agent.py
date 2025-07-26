@@ -354,6 +354,7 @@ def enrich_executives_with_perplexity(company_name, existing_execs):
 
 def enrich_executive_details_with_perplexity(company_name, executives):
     """Enrich executive details with LinkedIn URLs and bios using Perplexity."""
+    import re
     enriched = []
     for exec in executives:
         name = exec.get('name', '').strip()
@@ -395,7 +396,6 @@ def enrich_executive_details_with_perplexity(company_name, executives):
             result = search_perplexity(query)
             if result and len(result.split()) > 15:
                 # Clean the bio by removing thinking process markers
-                import re
                 bio = result.strip()
                 # Remove <think> tags and their content
                 bio = re.sub(r'<think>.*?</think>', '', bio, flags=re.DOTALL)

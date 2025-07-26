@@ -217,6 +217,9 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
             print(f"[Website Enrichment] Error: {e}")
 
     # Technical Due Diligence (agent only)
+    # Store full text in profile for technical DD agent to use
+    if full_text:
+        profile._full_text = full_text
     tech_agent, tech_task = build_technical_dd_agent(profile)
     tech_agent_output = tech_task.callback()
     try:

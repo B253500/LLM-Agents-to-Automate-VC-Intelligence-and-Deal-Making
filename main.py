@@ -2,6 +2,10 @@
 from dotenv import load_dotenv
 load_dotenv()
 
+# Suppress SWIG deprecation warnings
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning, module=".*swig.*")
+
 # Standard library imports
 import sys
 import os
@@ -14,8 +18,9 @@ from pathlib import Path
 
 # Third-party imports
 from docx import Document
-from docx.shared import Inches, Pt
+from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml.shared import OxmlElement, qn
 from fpdf import FPDF
 import requests
 
@@ -61,6 +66,107 @@ from agents.deck_agent import build_deck_agent
 
 CACHE_DIR = "extraction_cache"
 os.makedirs(CACHE_DIR, exist_ok=True)
+
+
+def add_hyperlink(paragraph, text, url):
+    """Add a hyperlink to a paragraph with blue color and underline."""
+    # Create a proper hyperlink using the document's hyperlink collection
+    try:
+        # Get the document
+        doc = paragraph._element.getparent().getparent()
+        if hasattr(doc, 'part'):
+            doc = doc.part
+        
+        # Add the hyperlink relationship
+        if hasattr(doc, 'rels'):
+            r_id = doc.rels.add_hyperlink(url, url)
+            
+            # Create the hyperlink element
+            hyperlink = OxmlElement('w:hyperlink')
+            hyperlink.set(qn('r:id'), r_id)
+            
+            # Create the run element
+            new_run = OxmlElement('w:r')
+            rPr = OxmlElement('w:rPr')
+            
+            # Add blue color
+            color = OxmlElement('w:color')
+            color.set(qn('w:val'), '0563C1')  # Blue color
+            rPr.append(color)
+            
+            # Add underline
+            underline = OxmlElement('w:u')
+            underline.set(qn('w:val'), 'single')
+            rPr.append(underline)
+            
+            # Add the text
+            text_element = OxmlElement('w:t')
+            text_element.text = text
+            new_run.append(rPr)
+            new_run.append(text_element)
+            hyperlink.append(new_run)
+            
+            # Add to paragraph
+            paragraph._element.append(hyperlink)
+        else:
+            # Fallback: add as blue underlined text
+            run = paragraph.add_run(text)
+            run.font.name = 'Times New Roman'
+            run.font.size = Pt(12)
+            run.font.color.rgb = RGBColor(5, 99, 193)  # Blue color
+            run.font.underline = True
+    except Exception as e:
+        # Fallback: add as blue underlined text
+        run = paragraph.add_run(text)
+        run.font.name = 'Times New Roman'
+        run.font.size = Pt(12)
+        run.font.color.rgb = RGBColor(5, 99, 193)  # Blue color
+        run.font.underline = True
+
+
+def process_text_with_hyperlinks(paragraph, text):
+    """Process text and convert markdown links to DOCX hyperlinks."""
+    import re
+    
+    # Pattern to match markdown links: [text](url)
+    link_pattern = r'\[([^\]]+)\]\(([^)]+)\)'
+    
+    # Find all links in the text
+    links = list(re.finditer(link_pattern, text))
+    
+    if not links:
+        # No links found, just add the text normally
+        run = paragraph.add_run(text)
+        run.font.name = 'Times New Roman'
+        run.font.size = Pt(12)
+        return
+    
+    # Process text with links
+    last_end = 0
+    for match in links:
+        link_text = match.group(1)
+        link_url = match.group(2)
+        
+        # Add text before the link
+        if match.start() > last_end:
+            before_text = text[last_end:match.start()]
+            if before_text.strip():
+                run = paragraph.add_run(before_text)
+                run.font.name = 'Times New Roman'
+                run.font.size = Pt(12)
+        
+        # Add the hyperlink
+        add_hyperlink(paragraph, link_text, link_url)
+        
+        last_end = match.end()
+    
+    # Add any remaining text after the last link
+    if last_end < len(text):
+        remaining_text = text[last_end:]
+        if remaining_text.strip():
+            run = paragraph.add_run(remaining_text)
+            run.font.name = 'Times New Roman'
+            run.font.size = Pt(12)
 
 
 def run_pitch_deck_chain_with_text(full_text: str, profile: StartupProfile) -> StartupProfile:
@@ -160,9 +266,60 @@ def format_company_overview_section(profile):
                 lines.append(f"Office Location: {primary_location} (and {len(loc_strs)-1} other locations)")
             else:
                 lines.append(f"Office Location: {primary_location}")
-    # Funding Stage
-    if getattr(profile, 'funding_stage', None):
-        lines.append(f"Funding Stage: {profile.funding_stage}")
+    # Funding Stage - Enhanced to show latest significant funding
+    funding_stage = format_funding_stage(profile)
+    
+    # Try to get more detailed funding info from funding rounds
+    latest_funding_info = ""
+    if hasattr(profile, 'funding_rounds') and profile.funding_rounds:
+        try:
+            import json
+            funding_rounds = json.loads(profile.funding_rounds) if isinstance(profile.funding_rounds, str) else profile.funding_rounds
+            
+            if funding_rounds and isinstance(funding_rounds, list):
+                # Find the most recent significant funding round
+                for round_data in funding_rounds:
+                    if isinstance(round_data, dict):
+                        round_type = round_data.get('last_round_type') or round_data.get('round_type')
+                        round_amount = round_data.get('last_round_money_raised') or round_data.get('amount_usd')
+                        round_date = round_data.get('last_round_date') or round_data.get('date')
+                        
+                        if round_type and round_amount and round_date:
+                            # Format the date
+                            try:
+                                if isinstance(round_date, str) and len(round_date) == 8 and round_date.isdigit():
+                                    # Format like "20180522" to "May 2018"
+                                    from datetime import datetime
+                                    date_obj = datetime.strptime(round_date, '%Y%m%d')
+                                    formatted_date = date_obj.strftime('%B %Y')
+                                elif isinstance(round_date, str) and '-' in round_date:
+                                    # Format like "2018-05-22" to "May 2018"
+                                    from datetime import datetime
+                                    date_obj = datetime.strptime(round_date.split(' ')[0], '%Y-%m-%d')
+                                    formatted_date = date_obj.strftime('%B %Y')
+                                else:
+                                    formatted_date = str(round_date)
+                            except:
+                                formatted_date = str(round_date)
+                            
+                            # Format the amount
+                            try:
+                                amount_float = float(round_amount)
+                                if amount_float >= 1_000_000:
+                                    formatted_amount = f"${amount_float/1_000_000:.1f}M"
+                                elif amount_float >= 1_000:
+                                    formatted_amount = f"${amount_float/1_000:.1f}K"
+                                else:
+                                    formatted_amount = f"${amount_float:.0f}"
+                            except:
+                                formatted_amount = str(round_amount)
+                            
+                            latest_funding_info = f" ({round_type} - {formatted_amount} - {formatted_date})"
+                            break
+        except Exception as e:
+            print(f"[Company Overview] Error processing funding rounds: {e}")
+    
+    lines.append(f"Funding Stage: {funding_stage}{latest_funding_info}")
     # Team
     execs = getattr(profile, 'executives', []) or []
     if execs:
@@ -307,12 +464,16 @@ def format_financials_section(profile, current_date):
         except Exception as e:
             print(f"[Financial Formatting] Error processing funding rounds: {e}")
     
-    # Check for web search sources in financial summary
-    if hasattr(profile, 'financial_summary') and profile.financial_summary:
+    # Check for web search sources from financial analysis chain
+    if hasattr(profile, 'web_sources') and profile.web_sources:
+        web_sources = profile.web_sources[:5]  # Use up to 5 sources from financial analysis
+    elif hasattr(profile, 'financial_summary') and profile.financial_summary:
         import re
-        # Extract URLs from financial summary
+        # Extract URLs from financial summary as fallback
         urls = re.findall(r'https?://[^\s]+', profile.financial_summary)
         web_sources = urls[:3]  # Limit to first 3 sources
+    else:
+        web_sources = []
     # Cap Table/Investors
     major_investors = getattr(profile, 'major_investors', None)
     ownership_breakdown = getattr(profile, 'ownership_breakdown', None)
@@ -330,6 +491,19 @@ def format_financials_section(profile, current_date):
         lines.append(f"| **Funding Date** | **{crunchbase_valuation['date']}** |")
         if crunchbase_valuation['url']:
             lines.append(f"| **Source** | **[Crunchbase]({crunchbase_valuation['url']})** |")
+        lines.append("| **---** | **---** |")  # Separator
+    
+    # Add web-sourced financial data if available
+    if hasattr(profile, 'financial_summary') and profile.financial_summary and 'Web Search Results' in profile.financial_summary:
+        lines.append("| **Web-Sourced Financial Data** | **External Research** |")
+        # Extract key financial information from web search results
+        web_summary = profile.financial_summary
+        if 'valuation' in web_summary.lower():
+            lines.append("| **Valuation Data** | **Available from web sources** |")
+        if 'funding' in web_summary.lower():
+            lines.append("| **Funding History** | **Available from web sources** |")
+        if 'revenue' in web_summary.lower():
+            lines.append("| **Revenue Data** | **Available from web sources** |")
         lines.append("| **---** | **---** |")  # Separator
     
     for label, value in metrics:
@@ -350,7 +524,17 @@ def format_financials_section(profile, current_date):
         lines.append("| **---** | **---** |")  # Separator
         lines.append("| **Data Sources** | **Web Research** |")
         for i, source in enumerate(web_sources, 1):
-            lines.append(f"| Source {i} | {source} |")
+            # Extract domain name for better display
+            try:
+                from urllib.parse import urlparse
+                domain = urlparse(source).netloc
+                if domain.startswith('www.'):
+                    domain = domain[4:]
+                source_name = domain.replace('.com', '').replace('.co', '').title()
+            except:
+                source_name = f"Source {i}"
+            
+            lines.append(f"| {source_name} | [{source}]({source}) |")
     
     return '\n'.join(lines)
 
@@ -373,7 +557,12 @@ def deduplicate_memo(text):
             seen.add(l)
         elif l and len(l) > 30 and not any(l in r for r in result):
             result.append(line)
-    return '\n'.join(result)
+    
+    # Apply additional cleaning to remove redundant elements
+    result_text = '\n'.join(result)
+    result_text = clean_blank_bullets(result_text)
+    
+    return result_text
 
 def format_risk_section(profile):
     risk_flags = getattr(profile, 'risk_flags', [])
@@ -640,6 +829,17 @@ def clean_discussion_section(discussion):
     # Remove the redundant "Conclusion:" line at the bottom
     result = re.sub(r'\n\s*Conclusion:\s*\n\s*Based on the analysis above, this investment opportunity presents both significant potential and notable risks that require careful consideration\.\s*$', '', result, flags=re.MULTILINE)
     
+    # Remove trailing bullet points and redundant elements
+    result = re.sub(r'\n\s*•\s*$', '', result, flags=re.MULTILINE)  # Remove trailing bullet point
+    result = re.sub(r'\n\s*-\s*$', '', result, flags=re.MULTILINE)   # Remove trailing dash
+    result = re.sub(r'\n\s*\*\s*$', '', result, flags=re.MULTILINE)  # Remove trailing asterisk
+    
+    # Remove multiple consecutive blank lines at the end
+    result = re.sub(r'\n\s*\n\s*$', '\n', result, flags=re.MULTILINE)
+    
+    # Remove any trailing whitespace
+    result = result.rstrip()
+    
     return result
 
 def clean_blank_bullets(text):
@@ -647,15 +847,31 @@ def clean_blank_bullets(text):
     cleaned = []
     for i, line in enumerate(lines):
         # Remove lines that are just a bullet or a bullet with whitespace
-        if line.strip() in ['•', '-']:
+        if line.strip() in ['•', '-', '*']:
             # Also skip if the next line is blank or whitespace
             if i + 1 < len(lines) and not lines[i + 1].strip():
                 continue
             # Or if it's the last line
             if i + 1 == len(lines):
                 continue
+            # Or if it's followed by another bullet point
+            if i + 1 < len(lines) and lines[i + 1].strip() in ['•', '-', '*']:
+                continue
         cleaned.append(line)
-    return '\n'.join(cleaned)
+    
+    # Remove trailing bullet points and redundant elements
+    result = '\n'.join(cleaned)
+    result = re.sub(r'\n\s*•\s*$', '', result, flags=re.MULTILINE)  # Remove trailing bullet point
+    result = re.sub(r'\n\s*-\s*$', '', result, flags=re.MULTILINE)   # Remove trailing dash
+    result = re.sub(r'\n\s*\*\s*$', '', result, flags=re.MULTILINE)  # Remove trailing asterisk
+    
+    # Remove multiple consecutive blank lines at the end
+    result = re.sub(r'\n\s*\n\s*$', '\n', result, flags=re.MULTILINE)
+    
+    # Remove any trailing whitespace
+    result = result.rstrip()
+    
+    return result
 
 
 
@@ -948,9 +1164,8 @@ def save_memo_with_template(memo_text, profile, output_path):
                         if not bullet_line.startswith('•'):
                             bullet_line = '• ' + bullet_line.lstrip()
                         para = doc.add_paragraph()
-                        run = para.add_run(bullet_line)
-                        run.font.name = 'Times New Roman'
-                        run.font.size = Pt(12)
+                        # Use the new function to process text with hyperlinks
+                        process_text_with_hyperlinks(para, bullet_line)
                         para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
                         para.paragraph_format.line_spacing = 1.5
                         para.paragraph_format.first_line_indent = Pt(0)
@@ -958,9 +1173,8 @@ def save_memo_with_template(memo_text, profile, output_path):
                         continue
                     # Normal paragraph
                     para = doc.add_paragraph()
-                    run = para.add_run(line_stripped)
-                    run.font.name = 'Times New Roman'
-                    run.font.size = Pt(12)
+                    # Use the new function to process text with hyperlinks
+                    process_text_with_hyperlinks(para, line_stripped)
                     para.alignment = alignment if alignment is not None else WD_ALIGN_PARAGRAPH.JUSTIFY
                     para.paragraph_format.line_spacing = 1.5
                     para.paragraph_format.first_line_indent = Pt(0)
