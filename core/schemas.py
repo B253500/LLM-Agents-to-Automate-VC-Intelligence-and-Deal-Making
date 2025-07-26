@@ -129,3 +129,37 @@ class StartupProfile(BaseModel):
     financials_by_year: Optional[dict] = None
     market_summary: Optional[str] = None
     market_reasoning: Optional[str] = None
+    
+    # --- Technical DD fields ---
+    complexity: Optional[str] = None
+    security: Optional[str] = None
+    implementation: Optional[str] = None
+    regulatory: Optional[str] = None
+    testing: Optional[str] = None
+    
+    # --- Additional fields used in main.py ---
+    size: Optional[str] = None
+    founded: Optional[str] = None
+    followers: Optional[int] = None
+    employees_count: Optional[int] = None
+    website_traffic: Optional[str] = None
+    funding_amount: Optional[str] = None
+    funding_source: Optional[str] = None
+    market_size_by_year: Optional[dict] = None
+    
+    # --- Financial analysis fields ---
+    web_sources: Optional[list[str]] = None
+    
+    # --- Market sizing fields ---
+    TAM_original: Optional[str] = None
+    SAM_original: Optional[str] = None
+    SOM_original: Optional[str] = None
+    market_reasoning: Optional[str] = None
+    
+    # --- Founder profiling fields ---
+    founder_linkedin_data: Optional[dict] = None
+    founder_linkedin_formatted: Optional[str] = None
+    
+    # --- Document processing fields ---
+    figures_ocr: Optional[str] = None
+    tables_text: Optional[str] = None

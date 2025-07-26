@@ -57,7 +57,7 @@ Focus on actionable insights for VC investment decision-making.
 """
 
 PROMPT = ChatPromptTemplate.from_messages(
-    [("system", SYSTEM), ("human", "Startup info:\n{context}\n")]
+    [("system", SYSTEM), ("human", "Startup info:\n{context}")]
 )
 
 
@@ -110,7 +110,9 @@ def run_technical_dd_chain(profile: StartupProfile) -> StartupProfile:
     )
     
     try:
-        txt = llm.invoke(PROMPT.format(context=context)).content.strip()
+        # Clean the context to avoid formatting issues
+        clean_context = context.replace('"', "'").replace('\n', ' ').strip()
+        txt = llm.invoke(PROMPT.format(context=clean_context)).content.strip()
         data = clean_llm_output(txt)
         
         if data:
@@ -153,14 +155,6 @@ def run_technical_dd_chain(profile: StartupProfile) -> StartupProfile:
         profile.implementation = "Implementation details require additional research"
         profile.regulatory = "Regulatory compliance information requires additional research"
         profile.testing = "Testing and validation information requires additional research"
-        profile.tech_stack = "Technology stack details require additional research"
-        profile.product_roadmap = "Product roadmap information requires additional research"
-        profile.patent_portfolio = "Patent portfolio information requires additional research"
-        profile.complexity = "Technical complexity assessment requires additional research"
-        profile.security = "Security considerations require additional research"
-        profile.implementation = "Implementation details require additional research"
-        profile.regulatory = "Regulatory compliance information requires additional research"
-        profile.testing = "Testing and validation information requires additional research"
     
     if not profile.startup_id:
         profile.startup_id = sha1((profile.name or context[:40]).encode()).hexdigest()[:10]
@@ -173,7 +167,9 @@ def run_technical_dd_chain_with_text(full_text: str, profile: StartupProfile) ->
     context = full_text[:5000]  # Truncate if needed for prompt size
     
     try:
-        txt = llm.invoke(PROMPT.format(context=context)).content.strip()
+        # Clean the context to avoid formatting issues
+        clean_context = context.replace('"', "'").replace('\n', ' ').strip()
+        txt = llm.invoke(PROMPT.format(context=clean_context)).content.strip()
         data = clean_llm_output(txt)
         
         if data:
