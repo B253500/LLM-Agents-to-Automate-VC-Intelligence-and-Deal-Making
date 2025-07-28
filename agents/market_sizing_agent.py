@@ -180,22 +180,20 @@ def generate_market_size_section(profile: StartupProfile) -> str:
                     search_results = search_perplexity(query, num_results=3)
                     
                     if search_results:
-                        # Clean the response
-                        cleaned_results = clean_perplexity_response(search_results)
-                        
-                        # Improved URL extraction from Perplexity results
+                        # Extract URLs BEFORE cleaning the response
                         import re
-                        # Look for markdown links first: [text](url)
-                        markdown_links = re.findall(r'\[([^\]]+)\]\((https?://[^\)]+)\)', cleaned_results)
+                        
+                        # Look for markdown links first: [text](url) - BEFORE cleaning
+                        markdown_links = re.findall(r'\[([^\]]+)\]\((https?://[^\)]+)\)', search_results)
                         for text, url in markdown_links:
                             market_research_urls.append(url)
                             if len(market_research_urls) >= 3:
                                 break
                         
-                        # If not enough markdown links, look for plain URLs
+                        # If not enough markdown links, look for plain URLs - BEFORE cleaning
                         if len(market_research_urls) < 3:
                             # More comprehensive URL regex
-                            urls = re.findall(r'https?://[^\s\)\]<>"]+', cleaned_results)
+                            urls = re.findall(r'https?://[^\s\)\]<>"]+', search_results)
                             # Filter for market research domains
                             market_domains = ['statista', 'grandviewresearch', 'marketsandmarkets', 'mckinsey', 'bain', 'bcg', 'deloitte', 'pwc', 'kpmg', 'ey', 'forrester', 'gartner', 'idc', 'frost', 'technavio', 'ibisworld', 'marketresearch', 'researchandmarkets', 'alliedmarketresearch', 'persistencemarketresearch', 'factmr', 'coherentmarketinsights', 'transparencymarketresearch', 'emergenresearch', 'precedenceresearch', 'verifiedmarketresearch', 'marketdataforecast', 'marketresearchfuture', '360marketupdates', 'marketwatch', 'bloomberg', 'reuters', 'cnbc', 'wsj', 'ft', 'forbes', 'techcrunch', 'venturebeat']
                             
@@ -225,13 +223,11 @@ def generate_market_size_section(profile: StartupProfile) -> str:
             search_results = search_perplexity(search_query, num_results=2)
             
             if search_results:
-                # Clean the response
-                cleaned_results = clean_perplexity_response(search_results)
-                
-                # Improved URL extraction from sector analysis
+                # Extract URLs BEFORE cleaning the response
                 import re
-                # Look for markdown links first: [text](url)
-                markdown_links = re.findall(r'\[([^\]]+)\]\((https?://[^\)]+)\)', cleaned_results)
+                
+                # Look for markdown links first: [text](url) - BEFORE cleaning
+                markdown_links = re.findall(r'\[([^\]]+)\]\((https?://[^\)]+)\)', search_results)
                 for text, url in markdown_links:
                     # Ensure we have a complete URL
                     if url.startswith('http') and len(url) > 10:
@@ -239,15 +235,18 @@ def generate_market_size_section(profile: StartupProfile) -> str:
                     if len(sector_sources) >= 2:
                         break
                 
-                # If not enough markdown links, look for plain URLs
+                # If not enough markdown links, look for plain URLs - BEFORE cleaning
                 if len(sector_sources) < 2:
-                    urls = re.findall(r'https?://[^\s\)\]<>"]+', cleaned_results)
+                    urls = re.findall(r'https?://[^\s\)\]<>"]+', search_results)
                     for url in urls:
                         # Ensure we have a complete URL with domain and path
                         if len(url) > 15 and '.' in url.split('/')[2]:
                             sector_sources.append(url)
                         if len(sector_sources) >= 2:
                             break
+                
+                # Clean the response for LLM processing
+                cleaned_results = clean_perplexity_response(search_results)
                 
                 # Use LLM to summarize the analysis
                 summary_prompt = f"""
