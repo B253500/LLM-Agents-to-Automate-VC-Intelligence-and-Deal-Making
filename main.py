@@ -2,7 +2,7 @@
 from dotenv import load_dotenv
 load_dotenv()
 
-# Suppress SWIG deprecation warnings
+# Suppressing SWIG deprecation warnings
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning, module=".*swig.*")
 
@@ -135,13 +135,13 @@ def process_text_with_hyperlinks(paragraph, text):
     links = list(re.finditer(link_pattern, text))
     
     if not links:
-        # No links found, just add the text normally
+        # No links found, just adding the text normally
         run = paragraph.add_run(text)
         run.font.name = 'Times New Roman'
         run.font.size = Pt(12)
         return
     
-    # Process text with links
+    # Processing text with links
     last_end = 0
     for match in links:
         link_text = match.group(1)
@@ -155,12 +155,12 @@ def process_text_with_hyperlinks(paragraph, text):
                 run.font.name = 'Times New Roman'
                 run.font.size = Pt(12)
         
-        # Add the hyperlink
+        # Adding the hyperlink
         add_hyperlink(paragraph, link_text, link_url)
         
         last_end = match.end()
     
-    # Add any remaining text after the last link
+    # Adding any remaining text after the last link
     if last_end < len(text):
         remaining_text = text[last_end:]
         if remaining_text.strip():
@@ -199,7 +199,7 @@ def run_risk_assessment_chain_with_text(full_text: str, profile: StartupProfile)
     return run_risk_assessment_chain(profile)
 
 
-# --- Inline Source Attribution for Market Size & Analysis ---
+# Inline Source Attribution for Market Size & Analysis 
 
 
 def format_company_overview_section(profile):
@@ -249,7 +249,7 @@ def format_company_overview_section(profile):
     # Office locations - check CoreSignal field first, then fallback
     locs = getattr(profile, 'office_locations', None) or getattr(profile, 'company_locations_collection', None)
     if locs and isinstance(locs, list):
-        # Use deduplication function to get unique locations
+        # Using deduplication function to get unique locations
         from core.orchestration import deduplicate_office_locations
         unique_locs = deduplicate_office_locations(locs)
         
@@ -260,7 +260,7 @@ def format_company_overview_section(profile):
                 loc_strs.append(addr.strip())
         
         if loc_strs:
-            # Show only the first (primary) location to avoid clutter
+            # Showing only the first (primary) location to avoid clutter
             primary_location = loc_strs[0]
             if len(loc_strs) > 1:
                 lines.append(f"Office Location: {primary_location} (and {len(loc_strs)-1} other locations)")
@@ -269,7 +269,7 @@ def format_company_overview_section(profile):
     # Funding Stage - Enhanced to show latest significant funding
     funding_stage = format_funding_stage(profile)
     
-    # Try to get more detailed funding info from funding rounds
+    # Trying to get more detailed funding info from funding rounds
     latest_funding_info = ""
     if hasattr(profile, 'funding_rounds') and profile.funding_rounds:
         try:
@@ -277,7 +277,8 @@ def format_company_overview_section(profile):
             funding_rounds = json.loads(profile.funding_rounds) if isinstance(profile.funding_rounds, str) else profile.funding_rounds
             
             if funding_rounds and isinstance(funding_rounds, list):
-                # Find the most recent significant funding round
+                # Finding the most recent significant funding round by sorting by date
+                valid_rounds = []
                 for round_data in funding_rounds:
                     if isinstance(round_data, dict):
                         round_type = round_data.get('last_round_type') or round_data.get('round_type')
@@ -285,37 +286,66 @@ def format_company_overview_section(profile):
                         round_date = round_data.get('last_round_date') or round_data.get('date')
                         
                         if round_type and round_amount and round_date:
-                            # Format the date
+                            # Parsing date for sorting
                             try:
                                 if isinstance(round_date, str) and len(round_date) == 8 and round_date.isdigit():
-                                    # Format like "20180522" to "May 2018"
+                                    # Format like "20180522"
                                     from datetime import datetime
                                     date_obj = datetime.strptime(round_date, '%Y%m%d')
-                                    formatted_date = date_obj.strftime('%B %Y')
                                 elif isinstance(round_date, str) and '-' in round_date:
-                                    # Format like "2018-05-22" to "May 2018"
+                                    # Format like "2018-05-22"
                                     from datetime import datetime
                                     date_obj = datetime.strptime(round_date.split(' ')[0], '%Y-%m-%d')
-                                    formatted_date = date_obj.strftime('%B %Y')
                                 else:
-                                    formatted_date = str(round_date)
+                                    # Trying to parse other date formats
+                                    from datetime import datetime
+                                    date_obj = datetime.strptime(str(round_date), '%Y-%m-%d')
+                                
+                                valid_rounds.append({
+                                    'type': round_type,
+                                    'amount': round_amount,
+                                    'date': round_date,
+                                    'date_obj': date_obj
+                                })
                             except:
-                                formatted_date = str(round_date)
-                            
-                            # Format the amount
-                            try:
-                                amount_float = float(round_amount)
-                                if amount_float >= 1_000_000:
-                                    formatted_amount = f"${amount_float/1_000_000:.1f}M"
-                                elif amount_float >= 1_000:
-                                    formatted_amount = f"${amount_float/1_000:.1f}K"
-                                else:
-                                    formatted_amount = f"${amount_float:.0f}"
-                            except:
-                                formatted_amount = str(round_amount)
-                            
-                            latest_funding_info = f" ({round_type} - {formatted_amount} - {formatted_date})"
-                            break
+                                # Skipping rounds with unparseable dates
+                                continue
+                
+                # Sorting by date (most recent first) and taking the first one
+                if valid_rounds:
+                    valid_rounds.sort(key=lambda x: x['date_obj'], reverse=True)
+                    latest_round = valid_rounds[0]
+                    
+                    # Format the date for display
+                    try:
+                        if isinstance(latest_round['date'], str) and len(latest_round['date']) == 8 and latest_round['date'].isdigit():
+                            # Formatting like "20180522" to "May 2018"
+                            from datetime import datetime
+                            date_obj = datetime.strptime(latest_round['date'], '%Y%m%d')
+                            formatted_date = date_obj.strftime('%B %Y')
+                        elif isinstance(latest_round['date'], str) and '-' in latest_round['date']:
+                            # Formatting like "2018-05-22" to "May 2018"
+                            from datetime import datetime
+                            date_obj = datetime.strptime(latest_round['date'].split(' ')[0], '%Y-%m-%d')
+                            formatted_date = date_obj.strftime('%B %Y')
+                        else:
+                            formatted_date = str(latest_round['date'])
+                    except:
+                        formatted_date = str(latest_round['date'])
+                    
+                    # Formatting the amount
+                    try:
+                        amount_float = float(latest_round['amount'])
+                        if amount_float >= 1_000_000:
+                            formatted_amount = f"${amount_float/1_000_000:.1f}M"
+                        elif amount_float >= 1_000:
+                            formatted_amount = f"${amount_float/1_000:.1f}K"
+                        else:
+                            formatted_amount = f"${amount_float:.0f}"
+                    except:
+                        formatted_amount = str(latest_round['amount'])
+                    
+                    latest_funding_info = f" ({latest_round['type']} - {formatted_amount} - {formatted_date})"
         except Exception as e:
             print(f"[Company Overview] Error processing funding rounds: {e}")
     
@@ -332,7 +362,7 @@ def format_company_overview_section(profile):
 
 
 def format_product_description_section(profile):
-    # Gather all relevant fields
+    # Gathering all relevant fields
     desc = getattr(profile, 'product_description', None)
     specs = getattr(profile, 'product_specs', None)
     roadmap = getattr(profile, 'product_roadmap', None)
@@ -349,12 +379,12 @@ def format_product_description_section(profile):
     testing = getattr(profile, 'testing', None)
     security = getattr(profile, 'security', None)
 
-    # Synthesize a narrative lead sentence
+    # Synthesising a narrative lead sentence
     lead = None
     if desc and len(desc.split()) > 6:
         lead = desc
     else:
-        # Try to synthesize a narrative
+        # Trying to synthesise a narrative
         parts = []
         if cell_format or status:
             parts.append(f"The core product is a {cell_format or ''} {status or ''} battery".strip() + ".")
@@ -386,7 +416,7 @@ def format_product_description_section(profile):
             parts.append(f"Testing: {testing}.")
         if security:
             parts.append(f"Security: {security}.")
-        # Compose a paragraph
+        # Composing a paragraph
         lead = ' '.join(parts)
     if not lead or len(lead.strip()) < 20:
         # Fallback: concatenate all fields if no narrative possible
@@ -400,7 +430,7 @@ def format_product_description_section(profile):
 
 def format_funding_stage(profile):
     funding_stage = getattr(profile, 'funding_stage', None) or 'Undisclosed'
-    # Try to pull from PitchBook if available
+    # Trying to pull from PitchBook if available
     pitchbook_round = getattr(profile, 'pitchbook_last_round', None)
     pitchbook_year = getattr(profile, 'pitchbook_last_year', None)
     if funding_stage.lower() in ['unknown', 'n/a', '']:
@@ -416,7 +446,7 @@ def format_funding_stage(profile):
     return funding_stage
 
 def format_financials_section(profile, current_date):
-    # Collect all financial metrics
+    # Collecting all financial metrics
     metrics = [
         ("Revenue", getattr(profile, 'revenue', None)),
         ("Projected Revenue", getattr(profile, 'projected_revenue', None)),
@@ -442,7 +472,7 @@ def format_financials_section(profile, current_date):
         ("Last Round Date", getattr(profile, 'last_funding_round_announced_date', None)),
     ]
     
-    # Check for Crunchbase-sourced valuation data
+    # Checking for Crunchbase-sourced valuation data
     crunchbase_valuation = None
     web_sources = []
     
@@ -451,7 +481,7 @@ def format_financials_section(profile, current_date):
             import json
             funding_rounds = json.loads(profile.funding_rounds) if isinstance(profile.funding_rounds, str) else profile.funding_rounds
             
-            # Look for the most recent significant funding round
+            # Looking for the most recent significant funding round
             for round_data in funding_rounds:
                 if isinstance(round_data, dict) and round_data.get('last_round_money_raised'):
                     crunchbase_valuation = {
@@ -464,12 +494,12 @@ def format_financials_section(profile, current_date):
         except Exception as e:
             print(f"[Financial Formatting] Error processing funding rounds: {e}")
     
-    # Check for web search sources from financial analysis chain
+    # Checking for web search sources from financial analysis chain
     if hasattr(profile, 'web_sources') and profile.web_sources:
         web_sources = profile.web_sources[:5]  # Use up to 5 sources from financial analysis
     elif hasattr(profile, 'financial_summary') and profile.financial_summary:
         import re
-        # Extract URLs from financial summary as fallback
+        # Extracting URLs from financial summary as fallback
         urls = re.findall(r'https?://[^\s]+', profile.financial_summary)
         web_sources = urls[:3]  # Limit to first 3 sources
     else:
@@ -477,14 +507,14 @@ def format_financials_section(profile, current_date):
     # Cap Table/Investors
     major_investors = getattr(profile, 'major_investors', None)
     ownership_breakdown = getattr(profile, 'ownership_breakdown', None)
-    # Only count as 'present' if not None and not empty string
+    # Only counting as 'present' if not None and not empty string
     present_metrics = [v for _, v in metrics if v not in [None, '']]
     if len(present_metrics) < 3 and not (major_investors or ownership_breakdown):
         return f"Company has not released financials as of {current_date}. No detailed financials were disclosed in the deck or public sources. We recommend requesting a financial summary from the company, including revenue, burn rate, runway, and recent funding rounds. Independent verification of financials is advised before proceeding."
     # Table header
     lines = ["| Metric | Value |", "|--------|-------|"]
     
-    # Add Crunchbase-sourced funding data prominently if available
+    # Adding Crunchbase-sourced funding data prominently if available
     if crunchbase_valuation:
         lines.append(f"| **Latest Funding Round** | **{crunchbase_valuation['type']}** |")
         lines.append(f"| **Funding Amount** | **{crunchbase_valuation['amount']}** |")
@@ -493,10 +523,10 @@ def format_financials_section(profile, current_date):
             lines.append(f"| **Source** | **[Crunchbase]({crunchbase_valuation['url']})** |")
         lines.append("| **---** | **---** |")  # Separator
     
-    # Add web-sourced financial data if available
+    # Adding web-sourced financial data if available
     if hasattr(profile, 'financial_summary') and profile.financial_summary and 'Web Search Results' in profile.financial_summary:
         lines.append("| **Web-Sourced Financial Data** | **External Research** |")
-        # Extract key financial information from web search results
+        # Extracting key financial information from web search results
         web_summary = profile.financial_summary
         if 'valuation' in web_summary.lower():
             lines.append("| **Valuation Data** | **Available from web sources** |")
@@ -519,12 +549,12 @@ def format_financials_section(profile, current_date):
             percent = owner.get('percent', '')
             lines.append(f"| Ownership: {name} | {percent} |")
     
-    # Add web sources if available
+    # Adding web sources if available
     if web_sources:
         lines.append("| **---** | **---** |")  # Separator
         lines.append("| **Data Sources** | **Web Research** |")
         for i, source in enumerate(web_sources, 1):
-            # Extract domain name for better display
+            # Extracting domain name for better display
             try:
                 from urllib.parse import urlparse
                 domain = urlparse(source).netloc
@@ -545,7 +575,7 @@ def format_risk_score(profile):
     else:
         return ""
 
-# --- De-duplication Post-processing ---
+# De-duplication Post-processing 
 def deduplicate_memo(text):
     lines = text.split('\n')
     seen = set()
@@ -558,7 +588,7 @@ def deduplicate_memo(text):
         elif l and len(l) > 30 and not any(l in r for r in result):
             result.append(line)
     
-    # Apply additional cleaning to remove redundant elements
+    # Applying additional cleaning to remove redundant elements
     result_text = '\n'.join(result)
     result_text = clean_blank_bullets(result_text)
     
@@ -576,7 +606,7 @@ def format_risk_section(profile):
             discussion.append(f"• {rf}")
     else:
         discussion.append("• Risks are present but not fully disclosed. Investors should request more information and conduct further diligence.")
-    # Always include regulatory, testing, security
+    # Always including regulatory, testing, security
     discussion.append(f"• Regulatory: {regulatory or 'Compliance with evolving standards and certifications is required.'}")
     discussion.append(f"• Testing: {testing or 'Independent validation and certification are recommended.'}")
     discussion.append(f"• Security: {security or 'Product safety, data, and IP protection should be addressed.'}")
@@ -590,7 +620,7 @@ def format_financial_history_section(profile):
         lines.append("**Funding Rounds:**")
         lines.append("")
         
-        # Clean and deduplicate rounds
+        # Cleaning and deduplicating rounds
         cleaned_rounds = []
         seen_rounds = set()
         
@@ -601,27 +631,27 @@ def format_financial_history_section(profile):
                 amount = r.get('last_round_money_raised') or r.get('amount_usd', '')
                 investors = r.get('last_round_investors_count') or r.get('investors', '')
                 
-                # Clean up the data
+                # Cleaning up the data
                 round_type = str(round_type).strip()
                 date = str(date).strip()
                 amount = str(amount).strip()
                 investors = str(investors).strip()
                 
-                # Filter out unwanted round types
+                # Filtering out unwanted round types
                 unwanted_types = ['Series unknown', 'Non equity assistance', 'Unknown']
                 if round_type in unwanted_types:
                     continue
                 
-                # Filter out corporate rounds without amounts and secondary market rounds
+                # Filtering out corporate rounds without amounts and secondary market rounds
                 if round_type == 'Corporate round' and (not amount or amount == 'None' or amount == ''):
                     continue
                 if 'secondary' in round_type.lower():
                     continue
                 
-                # Format date properly - extract only the date part
+                # Formatting date properly - extracting only the date part
                 if date and date != 'None':
                     try:
-                        # Handle different date formats
+                        # Handling different date formats
                         if ' ' in date:
                             # Remove time component and extract date
                             date_part = date.split(' ')[0]
@@ -636,13 +666,13 @@ def format_financial_history_section(profile):
                             else:
                                 formatted_date = date_part
                         else:
-                            # Handle single date strings
+                            # Handling single date strings
                             if len(date) == 8 and date.isdigit():
-                                # Format like "20180522" to "22 May 2018"
+                                # Formatting like "20180522" to "22 May 2018"
                                 date_obj = datetime.strptime(date, '%Y%m%d')
                                 formatted_date = date_obj.strftime('%d %B %Y')
                             elif len(date) == 10 and '-' in date:
-                                # Format like "2018-05-22" to "22 May 2018"
+                                # Formatting like "2018-05-22" to "22 May 2018"
                                 date_obj = datetime.strptime(date, '%Y-%m-%d')
                                 formatted_date = date_obj.strftime('%d %B %Y')
                             else:
@@ -652,10 +682,10 @@ def format_financial_history_section(profile):
                 else:
                     formatted_date = 'Date not specified'
                 
-                # Format amount properly
+                # Formatting amount properly
                 if amount and amount != 'None':
                     try:
-                        # Convert to float and format as currency
+                        # Converting to float and formatting as currency
                         amount_float = float(amount)
                         if amount_float >= 1_000_000:
                             formatted_amount = f"${amount_float/1_000_000:.1f}M"
@@ -666,16 +696,16 @@ def format_financial_history_section(profile):
                     except:
                         formatted_amount = amount
                 else:
-                    # For secondary rounds, specify "Unknown amount" instead of "Amount not disclosed"
+                    # For secondary rounds, specifying "Unknown amount" instead of "Amount not disclosed"
                     if 'secondary' in round_type.lower():
                         formatted_amount = 'Unknown amount'
                     else:
                         formatted_amount = 'Amount not disclosed'
                 
-                # Create unique identifier for deduplication (by type and date, not amount)
+                # Creating unique identifier for deduplication (by type and date, not amount)
                 round_key = f"{round_type}_{formatted_date}"
                 
-                # Check if we already have this round type and date
+                # Checking if we already have this round type and date
                 existing_round = None
                 for existing in cleaned_rounds:
                     if existing['type'] == round_type and existing['date'] == formatted_date:
@@ -683,16 +713,16 @@ def format_financial_history_section(profile):
                         break
                 
                 if existing_round:
-                    # If we have a duplicate, keep the one with the larger amount
+                    # If we have a duplicate, keeping the one with the larger amount
                     try:
                         current_amount = float(existing_round['amount'].replace('$', '').replace('M', '').replace('K', '').replace(',', ''))
                         new_amount = float(formatted_amount.replace('$', '').replace('M', '').replace('K', '').replace(',', ''))
                         if new_amount > current_amount:
-                            # Replace with the larger amount
+                            # Replacing with the larger amount
                             existing_round['amount'] = formatted_amount
                             existing_round['investors'] = investors
                     except:
-                        # If we can't compare amounts, keep the existing one
+                        # If we can't compare amounts, keeping the existing one
                         pass
                 else:
                     # New round type and date combination
@@ -703,13 +733,13 @@ def format_financial_history_section(profile):
                         'investors': investors
                     })
         
-        # Sort rounds by date (most recent first)
-        # Convert dates back to datetime for proper sorting
+        # Sorting rounds by date (most recent first)
+        # Converting dates back to datetime for proper sorting
         def parse_date_for_sorting(date_str):
             try:
                 if date_str == 'Date not specified':
                     return datetime.min
-                # Try different date formats for sorting
+                # Trying different date formats for sorting
                 for fmt in ['%d %B %Y', '%B %Y', '%Y-%m-%d', '%Y%m%d']:
                     try:
                         return datetime.strptime(date_str, fmt)
@@ -721,7 +751,7 @@ def format_financial_history_section(profile):
         
         cleaned_rounds.sort(key=lambda x: parse_date_for_sorting(x['date']), reverse=True)
         
-        # Display cleaned rounds
+        # Displaying cleaned rounds
         for r in cleaned_rounds[:10]:  # Limit to top 10 rounds
             parts = []
             parts.append(f"**{r['type']}**")
@@ -733,7 +763,7 @@ def format_financial_history_section(profile):
             
             lines.append(f"• {', '.join(parts)}")
     
-    # Add major investors section
+    # Adding major investors section
     investors = getattr(profile, 'company_featured_investors_collection', None)
     if investors and isinstance(investors, list):
         lines.append("")
@@ -747,14 +777,14 @@ def format_financial_history_section(profile):
             
             if name and name not in seen_investors:
                 seen_investors.add(name)
-                # Keep the name as is (including any tokens)
+                # Keeping the name as is (including any tokens)
                 if name and name != 'None':
                     if url:
                         lines.append(f"• **{name}** ([Profile]({url}))")
                     else:
                         lines.append(f"• **{name}**")
     
-    # Add acquisitions if available
+    # Adding acquisitions if available
     acquisitions = getattr(profile, 'acquisitions', None)
     if acquisitions and isinstance(acquisitions, list):
         lines.append("")
@@ -785,11 +815,11 @@ def format_financial_history_section(profile):
 
 def format_followup_section(profile):
     fq = getattr(profile, 'follow_up_questions', None) or ''
-    # Remove all '**' and leading '-' from every line
+    # Removing all '**' and leading '-' from every line
     lines = []
     for line in fq.split('\n'):
         clean_line = line.replace('**', '').strip()
-        # Remove leading '-' and any whitespace after it
+        # Removing leading '-' and any whitespace after it
         if clean_line.startswith('-'):
             clean_line = clean_line[1:].lstrip()
         if clean_line.startswith('• -'):
@@ -815,29 +845,29 @@ def clean_discussion_section(discussion):
     lines = discussion.split('\n')
     cleaned = []
     for line in lines:
-        # Remove lines that are just a bullet or whitespace
+        # Removing lines that are just a bullet or whitespace
         if line.strip() in ['•', '-', '*', '']:
             continue
-        # Remove leading bullet from the first non-empty line
+        # Removing leading bullet from the first non-empty line
         if cleaned == [] and line.strip().startswith('•'):
             line = line.lstrip('•').strip()
         cleaned.append(line)
     
-    # Remove redundant conclusion at the bottom
+    # Removing redundant conclusion at the bottom
     result = '\n'.join(cleaned)
     
-    # Remove the redundant "Conclusion:" line at the bottom
+    # Removing the redundant "Conclusion:" line at the bottom
     result = re.sub(r'\n\s*Conclusion:\s*\n\s*Based on the analysis above, this investment opportunity presents both significant potential and notable risks that require careful consideration\.\s*$', '', result, flags=re.MULTILINE)
     
-    # Remove trailing bullet points and redundant elements
+    # Removing trailing bullet points and redundant elements
     result = re.sub(r'\n\s*•\s*$', '', result, flags=re.MULTILINE)  # Remove trailing bullet point
     result = re.sub(r'\n\s*-\s*$', '', result, flags=re.MULTILINE)   # Remove trailing dash
     result = re.sub(r'\n\s*\*\s*$', '', result, flags=re.MULTILINE)  # Remove trailing asterisk
     
-    # Remove multiple consecutive blank lines at the end
+    # Removing multiple consecutive blank lines at the end
     result = re.sub(r'\n\s*\n\s*$', '\n', result, flags=re.MULTILINE)
     
-    # Remove any trailing whitespace
+    # Removing any trailing whitespace
     result = result.rstrip()
     
     return result
@@ -846,9 +876,9 @@ def clean_blank_bullets(text):
     lines = text.split('\n')
     cleaned = []
     for i, line in enumerate(lines):
-        # Remove lines that are just a bullet or a bullet with whitespace
+        # Removing lines that are just a bullet or a bullet with whitespace
         if line.strip() in ['•', '-', '*']:
-            # Also skip if the next line is blank or whitespace
+            # Also skipping if the next line is blank or whitespace
             if i + 1 < len(lines) and not lines[i + 1].strip():
                 continue
             # Or if it's the last line
@@ -859,16 +889,16 @@ def clean_blank_bullets(text):
                 continue
         cleaned.append(line)
     
-    # Remove trailing bullet points and redundant elements
+    # Removing trailing bullet points and redundant elements
     result = '\n'.join(cleaned)
     result = re.sub(r'\n\s*•\s*$', '', result, flags=re.MULTILINE)  # Remove trailing bullet point
     result = re.sub(r'\n\s*-\s*$', '', result, flags=re.MULTILINE)   # Remove trailing dash
     result = re.sub(r'\n\s*\*\s*$', '', result, flags=re.MULTILINE)  # Remove trailing asterisk
     
-    # Remove multiple consecutive blank lines at the end
+    # Removing multiple consecutive blank lines at the end
     result = re.sub(r'\n\s*\n\s*$', '\n', result, flags=re.MULTILINE)
     
-    # Remove any trailing whitespace
+    # Removing any trailing whitespace
     result = result.rstrip()
     
     return result
@@ -881,13 +911,13 @@ def format_memo(profile: StartupProfile) -> str:
         """Clean up text by removing hashtags, special markers, and normalizing formatting."""
         if not isinstance(text, str):
             return text
-        # Remove hashtags only
+        # Removing hashtags only
         text = re.sub(r'#+\s*[A-Za-z\s]+', '', text)
-        # Remove extra whitespace and normalize line breaks
+        # Removing extra whitespace and normalising line breaks
         text = re.sub(r'\n\s*\n', '\n\n', text)
         text = re.sub(r' +', ' ', text)
         return text.strip()
-    # --- Team line for Company Overview ---
+    # Team line for Company Overview 
     execs = getattr(profile, 'executives', []) or []
     if execs:
         team_line = "Team: " + ", ".join(
@@ -896,7 +926,7 @@ def format_memo(profile: StartupProfile) -> str:
     else:
         team_line = f"Team: {getattr(profile, 'founder_name', 'TBD')}"
 
-    # --- Funding line for Company Overview ---
+    # Funding line for Company Overview 
     funding_line = f"Funding Stage: {getattr(profile, 'funding_stage', 'Undisclosed')}"
     if getattr(profile, 'funding_amount', None):
         funding_line += f", {profile.funding_amount}"
@@ -971,8 +1001,8 @@ def save_memo_as_pdf(text: str, output_path: str):
     pdf.output(output_path)
 
 
-# --- HTML memo generation and conversion DISABLED ---
-# The following code for HTML memo output and HTML-to-PDF conversion is commented out as DOCX is now the primary output.
+# HTML memo generation and conversion DISABLED 
+# The following code for HTML memo output and HTML-to-PDF conversion is commented out as DOCX is now the primary output. But it is possible to unccomment it and use html format if anyone needs it.
 # def save_memo_as_html(...):
 #     ...
 #
@@ -995,14 +1025,14 @@ def save_memo_with_template(memo_text, profile, output_path):
     now = datetime.now().strftime('%B %d, %Y at %I:%M %p')
     company_name = getattr(profile, 'name', 'Company')
 
-    # --- Mermaid diagram rendering automation ---
+    # Mermaid diagram rendering automation 
     mermaid_blocks = list(re.finditer(r'```mermaid\s*([\s\S]+?)```', memo_text))
     mermaid_images = {}
     for idx, match in enumerate(mermaid_blocks):
         code = match.group(1).strip()
         rendered = False
         
-        # Try multiple Mermaid rendering services
+        # Trying multiple Mermaid rendering services
         services = [
             ('https://kroki.io/mermaid/png', 'Kroki.io'),
             ('https://mermaid.ink/img/', 'Mermaid.ink'),
@@ -1039,7 +1069,7 @@ def save_memo_with_template(memo_text, profile, output_path):
             # Store the Mermaid code as text for fallback
             mermaid_images[f'<MERMAID_IMAGE_{idx}>'] = f"MERMAID_TEXT_{idx}"
 
-    # --- Replace {{COVER_TEXT}} in-place, always center-aligned ---
+    # Replacing {{COVER_TEXT}} in-place, always center-aligned 
     cover_found = False
     for i, p in enumerate(doc.paragraphs):
         if '{{COVER_TEXT}}' in p.text:
@@ -1060,7 +1090,7 @@ def save_memo_with_template(memo_text, profile, output_path):
     if not cover_found:
         print("[Warning] {{COVER_TEXT}} placeholder not found in template.")
 
-    # --- Replace {{MEMO_CONTENT}} in-place, inheriting alignment ---
+    # Replacing {{MEMO_CONTENT}} in-place, inheriting alignment 
     memo_found = False
     section_header_pattern = re.compile(r"^\d+\.\s+[A-Z][A-Z &()]+")
     all_caps_pattern = re.compile(r"^[A-Z0-9 &:'\-]+$")
@@ -1083,7 +1113,7 @@ def save_memo_with_template(memo_text, profile, output_path):
             memo_found = True
             alignment = p.alignment
             p.clear()
-            # --- Split memo into text and diagram blocks ---
+            # Splitting memo into text and diagram blocks 
             blocks = re.split(r'(```mermaid[\s\S]+?```)', memo_text)
             mermaid_idx = 0
             for block in blocks:
@@ -1110,7 +1140,7 @@ def save_memo_with_template(memo_text, profile, output_path):
                         run.bold = True
                         para.alignment = WD_ALIGN_PARAGRAPH.CENTER
                         
-                        # Add the Mermaid code in a monospace font
+                        # Adding the Mermaid code in a monospace font
                         code_para = doc.add_paragraph()
                         code_para.paragraph_format.first_line_indent = Pt(0)
                         code_run = code_para.add_run(block)
@@ -1193,7 +1223,7 @@ def save_memo_with_template(memo_text, profile, output_path):
             print(f"[Mermaid] Error deleting temporary image {img_path}: {e}")
 
 
-# --- DOCX to PDF conversion ---
+# DOCX to PDF conversion 
 def convert_docx_to_pdf(docx_path, output_dir=None):
     if output_dir is None:
         output_dir = os.path.dirname(docx_path)
@@ -1209,7 +1239,7 @@ def convert_docx_to_pdf(docx_path, output_dir=None):
         return None
 
 
-# --- Excel evaluation output ---
+# Excel evaluation output 
 def generate_excel_output(metrics, company_name, timestamp, output_dir):
     """Generate comprehensive Excel analysis"""
     try:
@@ -1320,7 +1350,6 @@ def generate_excel_output(metrics, company_name, timestamp, output_dir):
         return None
 
 
-
 def main():
     if len(sys.argv) < 2:
         print("Usage: python main.py <path_to_file1> [<path_to_file2> ...]")
@@ -1336,6 +1365,18 @@ def main():
         if extracted is None:
             try:
                 extracted = extract_text(file_path, return_structured=True)
+                
+                # Validate extraction quality
+                from core.download_utils import validate_extraction_quality
+                quality_report = validate_extraction_quality(extracted)
+                
+                if quality_report["recommendation"] == "reprocess":
+                    print(f"⚠️ [Quality Check] Extraction quality low (score: {quality_report['quality_score']})")
+                    print(f"⚠️ [Quality Check] Missing: {quality_report['missing_critical']}")
+                    print("⚠️ [Quality Check] Consider reprocessing with different extraction method")
+                else:
+                    print(f"✅ [Quality Check] Extraction quality acceptable (score: {quality_report['quality_score']})")
+                
                 save_to_cache(file_path, extracted)
                 print(f"[CACHE] Saved extraction for {file_path}")
             except Exception as e:
@@ -1343,34 +1384,45 @@ def main():
                 continue
         else:
             print(f"[CACHE] Loaded extraction for {file_path}")
+        
         text = extracted["text"]
         tables = extracted["tables"]
         figures = extracted["figures"]
+        
+        # Adding structured data to profile if available
+        structured_data = extracted.get("structured_data", {})
+        if structured_data:
+            print(f"[Structured Data] Found: {list(structured_data.keys())}")
+            for key, value in structured_data.items():
+                if hasattr(profile, key) and value:
+                    setattr(profile, key, value)
+                    setattr(profile, f"{key}_source", "enhanced_extraction")
+                    print(f"[Structured Data] Set {key} = {value}")
 
         clear_collection()
         profile = StartupProfile()
         
-        # Initialize evaluation tracker with real-time tracking
+        # Initialising evaluation tracker with real-time tracking
         from evaluation_metrics import MemoEvaluator
         evaluator = MemoEvaluator()
         evaluator.start_evaluation()
         
-        # Track the main analysis pipeline with real timing
+        # Tracking the main analysis pipeline with real timing
         evaluator.log_section_start("COMPLETE ANALYSIS PIPELINE")
         start_time = time.time()
         profile = run_all_sequential_with_text(text, profile, file_path)
         pipeline_time = time.time() - start_time
         
-        # Estimate tokens based on text length and processing time
+        # Estimating tokens based on text length and processing time
         estimated_tokens = min(len(text) // 2, 8000)  # Conservative estimate
         evaluator.log_section_end("COMPLETE ANALYSIS PIPELINE", tokens_used=estimated_tokens, model="gpt-4o-mini")
         
-        # Populate structured data
+        # Populating structured data
         profile.tables = tables
         profile.figures = figures
 
-        # Extract images from PDF and generate chart 
-        # Use extraction_cache/ for intermediate image extraction only
+        # Extracting images from PDF and generate chart 
+        # Using extraction_cache/ for intermediate image extraction only
         intermediate_dir = CACHE_DIR
         output_dir = "out"
         os.makedirs(output_dir, exist_ok=True)
@@ -1386,17 +1438,17 @@ def main():
             market_chart_path = chart_path
         evaluator.log_section_end("VISUAL EXTRACTION", tokens_used=0, model="local")
         
-        # Attach visuals to profile for use in memo formatting
+        # Attaching visuals to profile for use in memo formatting
         profile.extracted_image_paths = extracted_image_paths
         profile.market_chart_path = market_chart_path
         
-        # Track memo generation with real timing
+        # Tracking memo generation with real timing
         evaluator.log_section_start("MEMO GENERATION")
         memo_start_time = time.time()
         memo_text = format_memo(profile)
         memo_time = time.time() - memo_start_time
         
-        # Estimate tokens for memo generation based on content length
+        # Estimating tokens for memo generation based on content length
         memo_tokens = len(memo_text) // 3  # Rough estimate: 1 token per 3 characters
         evaluator.log_section_end("MEMO GENERATION", tokens_used=memo_tokens, model="gpt-4o")
         
@@ -1406,7 +1458,7 @@ def main():
         print("EVALUATION METRICS")
         print("="*80)
         
-        # Track document creation
+        # Tracking document creation
         evaluator.log_section_start("DOCUMENT CREATION")
         docx_filename = f"memo_{company_name.replace(' ', '_')}_{date_str}.docx"
         docx_path = os.path.join(output_dir, docx_filename)
@@ -1414,26 +1466,26 @@ def main():
         convert_docx_to_pdf(docx_path)
         evaluator.log_section_end("DOCUMENT CREATION", tokens_used=0, model="local")
         
-        # Evaluate the complete memo (using tracked data)
+        # Evaluating the complete memo (using tracked data)
         print("\n🔍 Evaluating memo quality and performance...")
         metrics = evaluator.evaluate_memo(memo_text)
         
-        # Save detailed metrics for academic analysis
+        # Saving detailed metrics for academic analysis
         evaluation_dir = "evaluation_results"
         pdf_name = Path(file_path).stem
         os.makedirs(evaluation_dir, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         metrics_file = os.path.join(evaluation_dir, f"detailed_metrics_{pdf_name}_{timestamp}.json")
         
-        # Save metrics to JSON
+        # Saving metrics to JSON
         with open(metrics_file, 'w') as f:
             json.dump(metrics.__dict__, f, indent=2, default=str)
         
-        # Generate academic summary
+        # Generating summary of evaulation metrics
         from integrate_evaluation import create_academic_summary
         summary_file = create_academic_summary(metrics_file, evaluation_dir)
         
-        # Print key results for supervisor
+        # Print 
         print(f"\n🎯 KEY RESULTS:")
         print(f"⏰ Time Savings: {metrics.traditional_vc_comparison['time_savings_percentage']:.1f}%")
         print(f"💰 Cost Savings: {metrics.traditional_vc_comparison['cost_savings_percentage']:.1f}%")

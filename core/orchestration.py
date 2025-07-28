@@ -114,12 +114,36 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
         if hasattr(profile, k) and v:
             # Use parse_money_string for TAM, SAM, SOM, etc.
             if k in ["TAM", "SAM", "SOM"] and isinstance(v, str):
+                from core.download_utils import parse_money_string
                 parsed = parse_money_string(v)
                 if parsed:
                     v = parsed
             setattr(profile, k, v)
             setattr(profile, f"{k}_source", "deck_text")
             print(f"[Market Size] Found {k}={v} in deck text")
+    
+    # --- NEW: Handle enhanced extraction structured data ---
+    # Check if we have structured data from enhanced extraction
+    if hasattr(profile, 'structured_data') and profile.structured_data:
+        structured_data = profile.structured_data
+        print(f"[Enhanced Data] Processing structured data: {list(structured_data.keys())}")
+        
+        # Map structured data to profile fields
+        field_mapping = {
+            'market_size': 'TAM',
+            'funding': 'funding_amount',
+            'patents': 'patent_count',
+            'employees': 'employee_count',
+            'energy_density': 'energy_density_wh_kg',
+            'cycle_life': 'cycle_life_count'
+        }
+        
+        for source_key, profile_key in field_mapping.items():
+            if source_key in structured_data and hasattr(profile, profile_key):
+                value = structured_data[source_key]
+                setattr(profile, profile_key, value)
+                setattr(profile, f"{profile_key}_source", "enhanced_extraction")
+                print(f"[Enhanced Data] Set {profile_key} = {value}")
     
     # Deck extraction (chain + agent)    
     profile = run_pitch_deck_chain_with_text(full_text, profile, pdf_path=file_path)
