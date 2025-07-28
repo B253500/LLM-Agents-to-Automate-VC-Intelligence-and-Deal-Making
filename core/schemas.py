@@ -152,11 +152,46 @@ class StartupProfile(BaseModel):
     web_sources: Optional[list[str]] = None
     web_financial_data: Optional[str] = None
     
+    # --- Additional financial fields ---
+    total_funding_raised: Optional[float] = None
+    funding_rounds_count: Optional[int] = None
+    latest_round_type: Optional[str] = None
+    latest_round_date: Optional[str] = None
+    latest_round_amount: Optional[float] = None
+    
     # --- Market sizing fields ---
     TAM_original: Optional[str] = None
     SAM_original: Optional[str] = None
     SOM_original: Optional[str] = None
     market_reasoning: Optional[str] = None
+    market_size: Optional[float] = None
+    market_size_source: Optional[str] = None
+    
+    # --- Technical data fields ---
+    energy_density_wh_kg: Optional[float] = None
+    cycle_life_count: Optional[int] = None
+    energy_density_source: Optional[str] = None
+    cycle_life_source: Optional[str] = None
+    
+    # --- Additional technical specifications ---
+    charging_speed_miles: Optional[int] = None
+    charging_speed_minutes: Optional[int] = None
+    low_temp_performance: Optional[str] = None
+    cell_capacity: Optional[int] = None
+    cell_dimensions: Optional[str] = None
+    charging_power: Optional[int] = None
+    power_performance: Optional[str] = None
+    phds: Optional[int] = None
+    professionals: Optional[int] = None
+    
+    # --- Roadmap fields ---
+    roadmap_100in_speed: Optional[int] = None
+    roadmap_100in_year: Optional[int] = None
+    roadmap_production_year: Optional[int] = None
+    roadmap_technologies: Optional[list[str]] = None
+    
+    # --- Financial data fields ---
+    valuation_source: Optional[str] = None
     
     # --- Founder profiling fields ---
     founder_linkedin_data: Optional[dict] = None
@@ -165,3 +200,6 @@ class StartupProfile(BaseModel):
     # --- Document processing fields ---
     figures_ocr: Optional[str] = None
     tables_text: Optional[str] = None
+    
+    # --- Comprehensive extracted data context for agents ---
+    extracted_data_context: Optional[str] = None

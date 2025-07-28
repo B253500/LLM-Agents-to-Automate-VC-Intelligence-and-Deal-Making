@@ -21,6 +21,8 @@ def run_detailed_summary_chain(profile: StartupProfile) -> str:
     - Focus on what the company does, its unique value, business model, and market positioning.
     - Do NOT include technical details, product specs, or deep business model mechanics—leave those for later sections.
     - Use plain, non-marketing language.
+    - DO NOT include any headers or section titles in your response.
+    - Start directly with the summary.
     Context:
     Company: {getattr(profile, 'name', '')}
     Sector: {getattr(profile, 'sector', '')}
@@ -28,7 +30,23 @@ def run_detailed_summary_chain(profile: StartupProfile) -> str:
     Stage: {getattr(profile, 'funding_stage', '')}
     """
     response = llm.invoke(prompt)
-    return response.content.strip() if hasattr(response, 'content') else str(response)
+    content = response.content.strip() if hasattr(response, 'content') else str(response)
+    
+    # Remove any headers that might have been generated
+    import re
+    # Remove common header patterns
+    content = re.sub(r'^#+\s*Detailed Summary\s*$', '', content, flags=re.MULTILINE | re.IGNORECASE)
+    content = re.sub(r'^\*\*Detailed Summary\*\*\s*$', '', content, flags=re.MULTILINE | re.IGNORECASE)
+    content = re.sub(r'^Detailed Summary\s*$', '', content, flags=re.MULTILINE | re.IGNORECASE)
+    content = re.sub(r'^#+\s*DETAILED SUMMARY\s*$', '', content, flags=re.MULTILINE | re.IGNORECASE)
+    content = re.sub(r'^\*\*DETAILED SUMMARY\*\*\s*$', '', content, flags=re.MULTILINE | re.IGNORECASE)
+    content = re.sub(r'^DETAILED SUMMARY\s*$', '', content, flags=re.MULTILINE | re.IGNORECASE)
+    
+    # Clean up any extra whitespace
+    content = re.sub(r'^\s*\n+', '', content)  # Remove leading blank lines
+    content = re.sub(r'\n+\s*$', '', content)  # Remove trailing blank lines
+    
+    return content
 
 def run_problem_statement_chain(profile: StartupProfile) -> str:
     """Generate problem statement for the memo."""
@@ -40,6 +58,8 @@ You are a VC analyst writing the Problem Statement section for an investment mem
 - Do NOT use generic or sector-wide statements—focus on the actual problem this company addresses.
 - Do NOT mention the company's solution or product features—only describe the problem.
 - Use plain, non-marketing language.
+- DO NOT include any headers or section titles in your response.
+- Start directly with the problem description.
 Context:
 Company: {getattr(profile, 'name', '')}
 Sector: {getattr(profile, 'sector', '')}
@@ -49,7 +69,23 @@ Business Model: {getattr(profile, 'business_model', '')}
 Go-to-Market: {getattr(profile, 'go_to_market', '')}
 """
     response = llm.invoke(prompt)
-    return response.content.strip() if hasattr(response, 'content') else str(response)
+    content = response.content.strip() if hasattr(response, 'content') else str(response)
+    
+    # Remove any headers that might have been generated
+    import re
+    # Remove common header patterns
+    content = re.sub(r'^#+\s*Problem Statement\s*$', '', content, flags=re.MULTILINE | re.IGNORECASE)
+    content = re.sub(r'^\*\*Problem Statement\*\*\s*$', '', content, flags=re.MULTILINE | re.IGNORECASE)
+    content = re.sub(r'^Problem Statement\s*$', '', content, flags=re.MULTILINE | re.IGNORECASE)
+    content = re.sub(r'^#+\s*PROBLEM STATEMENT\s*$', '', content, flags=re.MULTILINE | re.IGNORECASE)
+    content = re.sub(r'^\*\*PROBLEM STATEMENT\*\*\s*$', '', content, flags=re.MULTILINE | re.IGNORECASE)
+    content = re.sub(r'^PROBLEM STATEMENT\s*$', '', content, flags=re.MULTILINE | re.IGNORECASE)
+    
+    # Clean up any extra whitespace
+    content = re.sub(r'^\s*\n+', '', content)  # Remove leading blank lines
+    content = re.sub(r'\n+\s*$', '', content)  # Remove trailing blank lines
+    
+    return content
 
 def run_solution_overview_chain(profile: StartupProfile) -> str:
     """Generate solution overview for the memo."""
@@ -59,6 +95,8 @@ You are a VC analyst writing the Solution Overview section for an investment mem
 - Clearly explain how the company's product/service solves the problem described in the Problem Statement.
 - Focus ONLY on the core solution. Don't describe in detail the product, just the solution.
 - Use plain, non-marketing language.
+- DO NOT include any headers or section titles in your response.
+- Start directly with the solution explanation.
 Context:
 Company: {getattr(profile, 'name', '')}
 Sector: {getattr(profile, 'sector', '')}
@@ -66,7 +104,23 @@ Product: {getattr(profile, 'product_description', '')}
 Stage: {getattr(profile, 'funding_stage', '')}
 """
     response = llm.invoke(prompt)
-    return response.content.strip() if hasattr(response, 'content') else str(response)
+    content = response.content.strip() if hasattr(response, 'content') else str(response)
+    
+    # Remove any headers that might have been generated
+    import re
+    # Remove common header patterns
+    content = re.sub(r'^#+\s*Solution Overview\s*$', '', content, flags=re.MULTILINE | re.IGNORECASE)
+    content = re.sub(r'^\*\*Solution Overview\*\*\s*$', '', content, flags=re.MULTILINE | re.IGNORECASE)
+    content = re.sub(r'^Solution Overview\s*$', '', content, flags=re.MULTILINE | re.IGNORECASE)
+    content = re.sub(r'^#+\s*SOLUTION OVERVIEW\s*$', '', content, flags=re.MULTILINE | re.IGNORECASE)
+    content = re.sub(r'^\*\*SOLUTION OVERVIEW\*\*\s*$', '', content, flags=re.MULTILINE | re.IGNORECASE)
+    content = re.sub(r'^SOLUTION OVERVIEW\s*$', '', content, flags=re.MULTILINE | re.IGNORECASE)
+    
+    # Clean up any extra whitespace
+    content = re.sub(r'^\s*\n+', '', content)  # Remove leading blank lines
+    content = re.sub(r'\n+\s*$', '', content)  # Remove trailing blank lines
+    
+    return content
 
 def run_business_model_chain(profile: StartupProfile) -> str:
     """Generate business model section for the memo."""

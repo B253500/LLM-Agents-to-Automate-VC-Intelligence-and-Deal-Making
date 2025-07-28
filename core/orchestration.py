@@ -122,20 +122,39 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
             setattr(profile, f"{k}_source", "deck_text")
             print(f"[Market Size] Found {k}={v} in deck text")
     
+    # Handle new market size fields that might not exist in profile
+    # Dynamically handle any market-related fields from extraction
+    for field_name, field_value in market_vals.items():
+        if field_value and field_value != 0:
+            # Skip if already handled
+            if field_name in ['TAM', 'SAM', 'SOM', 'cagr', 'market_growth_rate']:
+                continue
+                
+            # Set the field and its source
+            setattr(profile, field_name, field_value)
+            setattr(profile, f"{field_name}_source", "deck_text")
+            print(f"[Market Size] Found {field_name}={field_value} in deck text")
+    
     # --- NEW: Handle enhanced extraction structured data ---
     # Check if we have structured data from enhanced extraction
     if hasattr(profile, 'structured_data') and profile.structured_data:
         structured_data = profile.structured_data
         print(f"[Enhanced Data] Processing structured data: {list(structured_data.keys())}")
         
-        # Map structured data to profile fields
+        # Map structured data to profile fields dynamically
         field_mapping = {
             'market_size': 'TAM',
             'funding': 'funding_amount',
             'patents': 'patent_count',
-            'employees': 'employee_count',
+            'employees': 'employees_count',  # Fixed: was 'employee_count'
             'energy_density': 'energy_density_wh_kg',
-            'cycle_life': 'cycle_life_count'
+            'cycle_life': 'cycle_life_count',
+            'cagr': 'cagr',
+            'bev_penetration': 'bev_penetration',
+            'oem_investment': 'oem_investment',
+            'tech_stack': 'tech_stack',
+            'product_roadmap': 'product_roadmap',
+            'product_description': 'product_description'
         }
         
         for source_key, profile_key in field_mapping.items():
@@ -144,7 +163,69 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
                 setattr(profile, profile_key, value)
                 setattr(profile, f"{profile_key}_source", "enhanced_extraction")
                 print(f"[Enhanced Data] Set {profile_key} = {value}")
+        
+        # Store the full structured data for context generation
+        profile.structured_data = structured_data
     
+    # --- IMPROVED: Dynamic context building without hardcoding ---
+    def build_extracted_data_context(profile, full_text):
+        """Build comprehensive context from all extracted data without hardcoding"""
+        context_parts = []
+        
+        # Dynamically discover all profile fields that have valuable data
+        for field_name in profile.model_fields.keys():
+            try:
+                value = getattr(profile, field_name)
+                if value and value not in [None, '', 0, '0', 'Unknown', 'N/A']:
+                    # Skip internal fields that shouldn't be in context
+                    if field_name in ['startup_id', 'structured_data', 'web_sources', 'extracted_data_context']:
+                        continue
+                    
+                    # Format the field name for readability
+                    display_name = field_name.replace('_', ' ').title()
+                    context_parts.append(f"{display_name}: {value}")
+            except Exception:
+                # Skip fields that can't be accessed
+                continue
+        
+        # Add structured data if available (enhanced extraction results)
+        if hasattr(profile, 'structured_data') and profile.structured_data:
+            structured_data = profile.structured_data
+            if isinstance(structured_data, dict):
+                for key, value in structured_data.items():
+                    if value and value not in [None, '', 0, '0']:
+                        display_key = key.replace('_', ' ').title()
+                        context_parts.append(f"{display_key}: {value}")
+        
+        # Add extracted text data
+        if full_text:
+            context_parts.append(f"Extracted Text: {full_text[:2000]}...")
+        
+        # Add tables data if available
+        if hasattr(profile, 'tables_text') and profile.tables_text:
+            context_parts.append(f"Extracted Tables: {profile.tables_text}")
+        
+        # Add figures/OCR data if available
+        if hasattr(profile, 'figures_ocr') and profile.figures_ocr:
+            context_parts.append(f"Extracted Figures: {profile.figures_ocr}")
+        
+        return "\n\n".join(context_parts)
+    
+    # Build comprehensive extracted data context
+    extracted_context = build_extracted_data_context(profile, full_text)
+    print(f"[Extracted Context] Built comprehensive context with {len(extracted_context)} characters")
+    
+    # Debug: Show what's in the context
+    if extracted_context:
+        context_lines = extracted_context.split('\n')
+        print(f"[Extracted Context] Context contains {len(context_lines)} lines")
+        print(f"[Extracted Context] First few lines: {context_lines[:3]}")
+    else:
+        print("[Extracted Context] WARNING: No context generated!")
+    
+    # Store the comprehensive context for agents to use
+    profile.extracted_data_context = extracted_context
+
     # Deck extraction (chain + agent)    
     profile = run_pitch_deck_chain_with_text(full_text, profile, pdf_path=file_path)
     deck_agent, deck_task = build_deck_agent(file_path)

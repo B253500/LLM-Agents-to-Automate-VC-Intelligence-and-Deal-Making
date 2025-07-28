@@ -70,12 +70,20 @@ os.makedirs(CACHE_DIR, exist_ok=True)
 
 def add_hyperlink(paragraph, text, url):
     """Add a hyperlink to a paragraph with blue color and underline."""
+    # Clean and validate URL
+    url = url.strip()
+    if not url.startswith(('http://', 'https://')):
+        url = 'https://' + url
+    
+    # Truncate very long URLs to prevent issues
+    if len(url) > 200:
+        url = url[:200]
+        print(f"[Hyperlink] Truncated long URL to: {url}")
+    
     # Create a proper hyperlink using the document's hyperlink collection
     try:
-        # Get the document
+        # Get the document from the paragraph
         doc = paragraph._element.getparent().getparent()
-        if hasattr(doc, 'part'):
-            doc = doc.part
         
         # Add the hyperlink relationship
         if hasattr(doc, 'rels'):
@@ -108,20 +116,21 @@ def add_hyperlink(paragraph, text, url):
             
             # Add to paragraph
             paragraph._element.append(hyperlink)
+            print(f"[Hyperlink] Successfully created hyperlink: {text} -> {url[:50]}...")
+            return
         else:
-            # Fallback: add as blue underlined text
-            run = paragraph.add_run(text)
-            run.font.name = 'Times New Roman'
-            run.font.size = Pt(12)
-            run.font.color.rgb = RGBColor(5, 99, 193)  # Blue color
-            run.font.underline = True
+            print(f"[Hyperlink] Document rels not available, using fallback")
+            
     except Exception as e:
-        # Fallback: add as blue underlined text
-        run = paragraph.add_run(text)
-        run.font.name = 'Times New Roman'
-        run.font.size = Pt(12)
-        run.font.color.rgb = RGBColor(5, 99, 193)  # Blue color
-        run.font.underline = True
+        print(f"[Hyperlink] Error creating hyperlink: {e}")
+    
+    # Fallback: add as blue underlined text
+    run = paragraph.add_run(text)
+    run.font.name = 'Times New Roman'
+    run.font.size = Pt(12)
+    run.font.color.rgb = RGBColor(5, 99, 193)  # Blue color
+    run.font.underline = True
+    print(f"[Hyperlink] Fallback to blue text: {text} -> {url[:50]}...")
 
 
 def process_text_with_hyperlinks(paragraph, text):
@@ -141,11 +150,15 @@ def process_text_with_hyperlinks(paragraph, text):
         run.font.size = Pt(12)
         return
     
+    print(f"[Hyperlink Processing] Found {len(links)} links in text: {text[:100]}...")
+    
     # Processing text with links
     last_end = 0
     for match in links:
         link_text = match.group(1)
         link_url = match.group(2)
+        
+        print(f"[Hyperlink Processing] Processing link: [{link_text}]({link_url})")
         
         # Add text before the link
         if match.start() > last_end:
@@ -155,8 +168,8 @@ def process_text_with_hyperlinks(paragraph, text):
                 run.font.name = 'Times New Roman'
                 run.font.size = Pt(12)
         
-        # Adding the hyperlink
-        add_hyperlink(paragraph, link_text, link_url)
+        # Adding the hyperlink with URL included
+        add_hyperlink(paragraph, f"{link_text} ({link_url})", link_url)
         
         last_end = match.end()
     
@@ -293,7 +306,7 @@ def format_company_overview_section(profile):
                                     from datetime import datetime
                                     date_obj = datetime.strptime(round_date, '%Y%m%d')
                                 elif isinstance(round_date, str) and '-' in round_date:
-                                    # Format like "2018-05-22"
+                                    # Format like "2018-05-22" to "22 May 2018"
                                     from datetime import datetime
                                     date_obj = datetime.strptime(round_date.split(' ')[0], '%Y-%m-%d')
                                 else:
@@ -445,7 +458,76 @@ def format_funding_stage(profile):
                 funding_stage = "Undisclosed (no public data found)"
     return funding_stage
 
-def format_financials_section(profile, current_date):
+def format_enhanced_financials_section(profile, current_date):
+    """Enhanced financial section using the financial analysis agent."""
+    try:
+        from agents.financial_analysis_agent import build_financial_analysis_agent
+        
+        # Build the financial analysis agent
+        agent, task = build_financial_analysis_agent(profile)
+        
+        # Get the agent output
+        agent_output = task.callback()
+        
+        # Parse the JSON output
+        import json
+        agent_data = json.loads(agent_output)
+        
+        # Update the profile with agent data
+        for key, value in agent_data.items():
+            if hasattr(profile, key) and value is not None:
+                setattr(profile, key, value)
+        
+        # Use the new clean financial formatting
+        return format_clean_financials_section(profile, current_date)
+        
+    except Exception as e:
+        print(f"[Financial Agent] Error: {e}")
+        # Fallback to clean formatting
+        return format_clean_financials_section(profile, current_date)
+
+def format_clean_financials_section(profile, current_date):
+    """Clean, focused financial section with key metrics only."""
+    lines = []
+    
+    # Get key financial metrics
+    implied_valuation = getattr(profile, 'implied_valuation', None)
+    latest_round_amount = getattr(profile, 'latest_round_amount', None)
+    total_funding_raised = getattr(profile, 'total_funding_raised', None)
+    web_sources = getattr(profile, 'web_sources', [])
+    
+    # Check if we have any financial data
+    has_financial_data = any([
+        implied_valuation, latest_round_amount, total_funding_raised
+    ])
+    
+    if not has_financial_data:
+        return f"**📊 Financial Analysis**\n\nNo detailed financials were disclosed in the deck or public sources as of {current_date}. We recommend requesting a financial summary from the company, including revenue, burn rate, runway, and recent funding rounds."
+    
+    lines.append("**📊 Financial Analysis**")
+    lines.append("")
+    
+    # Add key metrics with sources
+    if implied_valuation and isinstance(implied_valuation, (int, float)) and implied_valuation > 1_000_000:
+        lines.append(f"• **Current Valuation**: ${implied_valuation:,.0f}")
+    
+    if latest_round_amount and isinstance(latest_round_amount, (int, float)) and latest_round_amount > 10_000:
+        lines.append(f"• **Latest Funding Round**: ${latest_round_amount:,.0f}")
+    
+    if total_funding_raised and isinstance(total_funding_raised, (int, float)) and total_funding_raised > 100_000:
+        lines.append(f"• **Total Funding Raised**: ${total_funding_raised:,.0f}")
+    
+    # Add data sources if available
+    if web_sources:
+        lines.append("")
+        lines.append("**🔗 Data Sources**")
+        for source in web_sources[:3]:  # Limit to 3 sources
+            if source.startswith('http'):
+                lines.append(f"• {source}")
+    
+    return "\n".join(lines)
+
+def format_financials_section_original(profile, current_date):
     # Collecting all financial metrics
     metrics = [
         ("Revenue", getattr(profile, 'revenue', None)),
@@ -453,6 +535,11 @@ def format_financials_section(profile, current_date):
         ("Cash Burn (12m)", getattr(profile, 'cash_burn_12m', None)),
         ("Runway (months)", getattr(profile, 'runway_months', None)),
         ("Implied Valuation", getattr(profile, 'implied_valuation', None)),
+        ("Total Funding Raised", getattr(profile, 'total_funding_raised', None)),
+        ("Funding Rounds Count", getattr(profile, 'funding_rounds_count', None)),
+        ("Latest Round Type", getattr(profile, 'latest_round_type', None)),
+        ("Latest Round Date", getattr(profile, 'latest_round_date', None)),
+        ("Latest Round Amount", getattr(profile, 'latest_round_amount', None)),
         ("Gross Margin", getattr(profile, 'gross_margin', None)),
         ("EBITDA", getattr(profile, 'ebitda', None)),
         ("Net Income", getattr(profile, 'net_income', None)),
@@ -472,99 +559,226 @@ def format_financials_section(profile, current_date):
         ("Last Round Date", getattr(profile, 'last_funding_round_announced_date', None)),
     ]
     
-    # Checking for Crunchbase-sourced valuation data
-    crunchbase_valuation = None
+    # Get web-sourced financial data from financial analysis chain
+    web_financial_data = getattr(profile, 'web_financial_data', None)
+    valuation_source = getattr(profile, 'valuation_source', None)
+    funding_source = getattr(profile, 'funding_source', None)
+    
+    # Get specific financial metrics from web search
+    implied_valuation = getattr(profile, 'implied_valuation', None)
+    total_funding_raised = getattr(profile, 'total_funding_raised', None)
+    funding_rounds_count = getattr(profile, 'funding_rounds_count', None)
+    latest_round_type = getattr(profile, 'latest_round_type', None)
+    latest_round_date = getattr(profile, 'latest_round_date', None)
+    latest_round_amount = getattr(profile, 'latest_round_amount', None)
+    
+    # Check for web sources from financial analysis
     web_sources = []
-    
-    if hasattr(profile, 'funding_rounds') and profile.funding_rounds:
-        try:
-            import json
-            funding_rounds = json.loads(profile.funding_rounds) if isinstance(profile.funding_rounds, str) else profile.funding_rounds
-            
-            # Looking for the most recent significant funding round
-            for round_data in funding_rounds:
-                if isinstance(round_data, dict) and round_data.get('last_round_money_raised'):
-                    crunchbase_valuation = {
-                        'amount': round_data.get('last_round_money_raised'),
-                        'type': round_data.get('last_round_type'),
-                        'date': round_data.get('last_round_date'),
-                        'url': round_data.get('cb_url')
-                    }
-                    break
-        except Exception as e:
-            print(f"[Financial Formatting] Error processing funding rounds: {e}")
-    
-    # Checking for web search sources from financial analysis chain
     if hasattr(profile, 'web_sources') and profile.web_sources:
-        web_sources = profile.web_sources[:5]  # Use up to 5 sources from financial analysis
+        web_sources = profile.web_sources[:5]
     elif hasattr(profile, 'financial_summary') and profile.financial_summary:
         import re
-        # Extracting URLs from financial summary as fallback
         urls = re.findall(r'https?://[^\s]+', profile.financial_summary)
-        web_sources = urls[:3]  # Limit to first 3 sources
-    else:
-        web_sources = []
+        web_sources = urls[:3]
+    
     # Cap Table/Investors
     major_investors = getattr(profile, 'major_investors', None)
     ownership_breakdown = getattr(profile, 'ownership_breakdown', None)
+    
     # Only counting as 'present' if not None and not empty string
     present_metrics = [v for _, v in metrics if v not in [None, '']]
-    if len(present_metrics) < 3 and not (major_investors or ownership_breakdown):
+    
+    # Check if we have web-sourced financial data
+    has_web_data = (web_financial_data and len(web_financial_data.strip()) > 100) or implied_valuation or total_funding_raised
+    
+    if len(present_metrics) < 3 and not (major_investors or ownership_breakdown) and not has_web_data:
         return f"Company has not released financials as of {current_date}. No detailed financials were disclosed in the deck or public sources. We recommend requesting a financial summary from the company, including revenue, burn rate, runway, and recent funding rounds. Independent verification of financials is advised before proceeding."
-    # Table header
-    lines = ["| Metric | Value |", "|--------|-------|"]
     
-    # Adding Crunchbase-sourced funding data prominently if available
-    if crunchbase_valuation:
-        lines.append(f"| **Latest Funding Round** | **{crunchbase_valuation['type']}** |")
-        lines.append(f"| **Funding Amount** | **{crunchbase_valuation['amount']}** |")
-        lines.append(f"| **Funding Date** | **{crunchbase_valuation['date']}** |")
-        if crunchbase_valuation['url']:
-            lines.append(f"| **Source** | **[Crunchbase]({crunchbase_valuation['url']})** |")
-        lines.append("| **---** | **---** |")  # Separator
+    # Build the financial analysis section
+    lines = []
     
-    # Adding web-sourced financial data if available
-    if hasattr(profile, 'financial_summary') and profile.financial_summary and 'Web Search Results' in profile.financial_summary:
-        lines.append("| **Web-Sourced Financial Data** | **External Research** |")
-        # Extracting key financial information from web search results
-        web_summary = profile.financial_summary
-        if 'valuation' in web_summary.lower():
-            lines.append("| **Valuation Data** | **Available from web sources** |")
-        if 'funding' in web_summary.lower():
-            lines.append("| **Funding History** | **Available from web sources** |")
-        if 'revenue' in web_summary.lower():
-            lines.append("| **Revenue Data** | **Available from web sources** |")
-        lines.append("| **---** | **---** |")  # Separator
+    # Check if we have any financial data from the deck first
+    deck_financial_data = []
+    if hasattr(profile, 'revenue') and profile.revenue:
+        # Filter out obviously wrong revenue values
+        if isinstance(profile.revenue, (int, float)) and profile.revenue > 1000:
+            deck_financial_data.append(f"Revenue: ${profile.revenue:,.0f}")
+    if hasattr(profile, 'funding_amount') and profile.funding_amount:
+        # Filter out obviously wrong funding values
+        if isinstance(profile.funding_amount, (int, float)) and profile.funding_amount > 1000:
+            deck_financial_data.append(f"Funding: ${profile.funding_amount:,.0f}")
+    if hasattr(profile, 'cash_burn_12m') and profile.cash_burn_12m:
+        # Filter out obviously wrong burn values
+        if isinstance(profile.cash_burn_12m, (int, float)) and profile.cash_burn_12m > 1000:
+            deck_financial_data.append(f"Cash Burn (12m): ${profile.cash_burn_12m:,.0f}")
+    if hasattr(profile, 'runway_months') and profile.runway_months:
+        # Filter out obviously wrong runway values
+        if isinstance(profile.runway_months, (int, float)) and 0 < profile.runway_months < 1000:
+            deck_financial_data.append(f"Runway: {profile.runway_months} months")
     
-    for label, value in metrics:
-        if value is not None and value != '':
-            lines.append(f"| {label} | {value} |")
+    # If no deck financial data, show message
+    if not deck_financial_data and not has_web_data:
+        lines.append("**📊 Financial Data**")
+        lines.append("")
+        lines.append("No detailed financials were disclosed in the deck or public sources. We recommend requesting a financial summary from the company, including revenue, burn rate, runway, and recent funding rounds.")
+        lines.append("")
     
-    # Cap Table/Investors
-    if major_investors:
-        lines.append(f"| Major Investors | {', '.join(major_investors)} |")
-    if ownership_breakdown:
-        for owner in ownership_breakdown:
-            name = owner.get('name', 'Unknown')
-            percent = owner.get('percent', '')
-            lines.append(f"| Ownership: {name} | {percent} |")
+    # If we have deck data, show it first
+    elif deck_financial_data:
+        lines.append("**📊 Financial Data from Deck**")
+        lines.append("")
+        for item in deck_financial_data:
+            lines.append(f"• {item}")
+        lines.append("")
     
-    # Adding web sources if available
+    # Add web-sourced financial data as additional information
+    web_data_added = False
+    if has_web_data:
+        lines.append("**📊 Additional Web-Sourced Financial Data**")
+        lines.append("")
+        
+        # Display specific financial metrics with sources
+        if implied_valuation:
+            # Filter out obviously wrong valuation values
+            if isinstance(implied_valuation, (int, float)) and implied_valuation > 1_000_000:
+                valuation_str = f"${implied_valuation:,.0f}" if implied_valuation >= 1_000_000 else f"${implied_valuation:,.0f}"
+                source_str = f" [Source: {valuation_source}]({valuation_source})" if valuation_source and valuation_source.startswith('http') else f" [Source: {valuation_source}]" if valuation_source else ""
+                lines.append(f"• **Current Valuation**: {valuation_str}{source_str}")
+                web_data_added = True
+        
+        if total_funding_raised:
+            # Filter out obviously wrong funding values
+            if isinstance(total_funding_raised, (int, float)) and total_funding_raised > 100_000:
+                funding_str = f"${total_funding_raised:,.0f}"
+                source_str = f" [Source: {funding_source}]({funding_source})" if funding_source and funding_source.startswith('http') else f" [Source: {funding_source}]" if funding_source else ""
+                lines.append(f"• **Total Funding Raised**: {funding_str}{source_str}")
+                web_data_added = True
+        
+        if funding_rounds_count:
+            # Filter out obviously wrong round count values
+            if isinstance(funding_rounds_count, (int, float)) and 0 < funding_rounds_count < 100:
+                lines.append(f"• **Funding Rounds Count**: {funding_rounds_count}")
+                web_data_added = True
+        
+        if latest_round_type and latest_round_date:
+            lines.append(f"• **Latest Round**: {latest_round_type} ({latest_round_date})")
+            if latest_round_amount:
+                # Filter out obviously wrong round amount values
+                if isinstance(latest_round_amount, (int, float)) and latest_round_amount > 10_000:
+                    lines.append(f"• **Latest Round Amount**: ${latest_round_amount:,.0f}")
+                    web_data_added = True
+        
+        # If no valid web data was added, show a message
+        if not web_data_added:
+            lines.append("• No reliable financial data found from web sources")
+        
+        lines.append("")
+    
+    # Add web research summary if available (clean up debugging artifacts)
+    if web_financial_data and len(web_financial_data.strip()) > 100:
+        # Use the comprehensive cleaning function
+        cleaned_data = clean_think_tags_and_debugging(web_financial_data)
+        
+        if cleaned_data and len(cleaned_data) > 50:
+            lines.append("**📋 Web Research Summary**")
+            lines.append("")
+            
+            # Extract a concise summary from the cleaned web data
+            summary_lines = cleaned_data.split('\n')[:5]  # First 5 lines for better context
+            summary_text = ' '.join([line.strip() for line in summary_lines if line.strip()])
+            if len(summary_text) > 400:
+                summary_text = summary_text[:400] + "..."
+            lines.append(summary_text)
+            lines.append("")
+    
+    # Add data sources with clickable links
     if web_sources:
-        lines.append("| **---** | **---** |")  # Separator
-        lines.append("| **Data Sources** | **Web Research** |")
+        lines.append("**🔗 Data Sources**")
+        lines.append("")
         for i, source in enumerate(web_sources, 1):
-            # Extracting domain name for better display
             try:
                 from urllib.parse import urlparse
                 domain = urlparse(source).netloc
                 if domain.startswith('www.'):
                     domain = domain[4:]
-                source_name = domain.replace('.com', '').replace('.co', '').title()
+                # Create a more readable source name
+                if 'crunchbase' in domain.lower():
+                    source_name = "Crunchbase"
+                elif 'cbinsights' in domain.lower():
+                    source_name = "CB Insights"
+                elif 'upmarket' in domain.lower():
+                    source_name = "UpMarket"
+                elif 'dizraptor' in domain.lower():
+                    source_name = "Dizraptor"
+                elif 'growjo' in domain.lower():
+                    source_name = "Growjo"
+                else:
+                    source_name = domain.replace('.com', '').replace('.co', '').title()
+                lines.append(f"• [{source_name}]({source})")
             except:
-                source_name = f"Source {i}"
+                lines.append(f"• [Source {i}]({source})")
+        lines.append("")
+    
+    # Add traditional metrics table if available (filter out incorrect values)
+    present_metrics_filtered = []
+    for label, value in metrics:
+        if value not in [None, '']:
+            # Filter out obviously incorrect values
+            if label == "Revenue" and value == 1.0:
+                continue  # Skip incorrect revenue value
+            if label == "Projected Revenue" and value == 1.0:
+                continue  # Skip incorrect projected revenue value
+            if isinstance(value, (int, float)) and value < 0:
+                continue  # Skip negative values
             
-            lines.append(f"| {source_name} | [{source}]({source}) |")
+            # Filter out values that are clearly wrong (like year numbers)
+            if isinstance(value, (int, float)):
+                # Skip if value looks like a year (between 1900-2030)
+                if 1900 <= value <= 2030:
+                    continue
+                # Skip if value is too small for the metric type
+                if label in ["Revenue", "Cash Burn (12m)", "Implied Valuation"] and value < 1000:
+                    continue
+                # Skip if value is unreasonably large for the metric type
+                if label in ["Runway (months)", "Funding Rounds Count"] and value > 1000:
+                    continue
+            
+            present_metrics_filtered.append((label, value))
+    
+    # Check if we have any valid financial data at all
+    has_valid_data = (len(deck_financial_data) > 0 or 
+                     web_data_added or 
+                     len(present_metrics_filtered) > 0 or
+                     (major_investors or ownership_breakdown))
+    
+    # If no valid financial data found, return early with a message
+    if not has_valid_data:
+        return f"**📊 Financial Data**\n\nNo reliable financial data was found in the deck or public sources. We recommend requesting a financial summary from the company, including revenue, burn rate, runway, and recent funding rounds. Independent verification of financials is advised before proceeding."
+    
+    if present_metrics_filtered:
+        lines.append("**📈 Additional Financial Metrics**")
+        lines.append("")
+        lines.append("| Metric | Value |")
+        lines.append("|--------|-------|")
+        for label, value in present_metrics_filtered:
+            lines.append(f"| {label} | {value} |")
+        lines.append("")
+    else:
+        # Don't add empty table if no metrics
+        pass
+    
+    # Add Cap Table/Investors if available
+    if major_investors or ownership_breakdown:
+        lines.append("**🏢 Ownership & Investors**")
+        lines.append("")
+        if major_investors:
+            lines.append(f"**Major Investors**: {', '.join(major_investors)}")
+        if ownership_breakdown:
+            for owner in ownership_breakdown:
+                name = owner.get('name', 'Unknown')
+                percent = owner.get('percent', '')
+                lines.append(f"• **{name}**: {percent}")
+        lines.append("")
     
     return '\n'.join(lines)
 
@@ -904,6 +1118,84 @@ def clean_blank_bullets(text):
     return result
 
 
+def clean_think_tags_and_debugging(text):
+    """Comprehensive cleaning function to remove all think tags and debugging sentences."""
+    if not isinstance(text, str):
+        return text
+    
+    import re
+    
+    # Remove <think> tags and their content (handle nested tags)
+    # First, remove all <think> and </think> tags completely
+    text = re.sub(r'<think>', '', text)
+    text = re.sub(r'</think>', '', text)
+    
+    # Remove thinking process markers (comprehensive list)
+    thinking_patterns = [
+        r'(Okay, so I need to figure out|First, from the|Looking at the|Based on the|From the search results|Let me start by|I need to analyze|Let me examine).*?(?=\n|$)',
+        r'(Let me look through|I need to look through|Looking at result|Result mentions|First, result|Result from|Based on result).*?(?=\n|$)',
+        r'(The user wants|The user asked|The user is asking|The query is about).*?(?=\n|$)',
+        r'(I need to answer|I need to tackle|Let me tackle|Let me answer).*?(?=\n|$)',
+        r'(Okay, let\'s tackle|Let\'s tackle|Let me tackle).*?(?=\n|$)',
+        r'(The user wants me to|The user wants to know|The user is looking for).*?(?=\n|$)',
+        r'(I should look|I need to look|Let me look).*?(?=\n|$)',
+        r'(Based on the provided|Based on the search|From the search).*?(?=\n|$)',
+        r'(Financial Research Summary for|StoreDot:).*?(?=\n|$)',
+        r'(First, looking at|Looking at result|Result mentions|First, result).*?(?=\n|$)',
+        r'(Wait, but|Wait, the|Wait, that\'s|Wait, no).*?(?=\n|$)',
+        r'(Hmm,|Hmm.|Hmm, but|Hmm, that\'s).*?(?=\n|$)',
+        r'(So, putting this together|Putting this together).*?(?=\n|$)',
+        r'(Need to check|Need to verify|Need to confirm).*?(?=\n|$)',
+        r'(However,|However, the|However, there\'s).*?(?=\n|$)',
+        r'(But wait,|But wait.|But wait, the).*?(?=\n|$)',
+        r'(Maybe the|Maybe there\'s|Maybe it\'s).*?(?=\n|$)',
+        r'(It\'s possible that|It\'s likely that).*?(?=\n|$)',
+        r'(Without more|Without additional).*?(?=\n|$)',
+        r'(The user might need|The user should know).*?(?=\n|$)',
+        # Add more patterns for <think> sentences
+        r'(<think>.*?</think>)',
+        r'(Okay, I need to figure out.*?)(?=\n|$)',
+        r'(Let me start by.*?)(?=\n|$)',
+        r'(Based on the search results.*?)(?=\n|$)',
+        r'(Looking at the data.*?)(?=\n|$)',
+        r'(From the information provided.*?)(?=\n|$)',
+        r'(I need to analyze.*?)(?=\n|$)',
+        r'(Let me examine.*?)(?=\n|$)',
+    ]
+    
+    for pattern in thinking_patterns:
+        text = re.sub(pattern, '', text, flags=re.DOTALL)
+    
+    # Remove numbered analysis that's part of thinking process
+    text = re.sub(r'^\d+\.\s*[A-Z].*?(?=\n|$)', '', text, flags=re.MULTILINE)
+    
+    # Remove citation markers
+    text = re.sub(r'\[\d+\]', '', text)
+    
+    # Remove hashtags and markdown formatting that might be artifacts
+    text = re.sub(r'#+\s*[A-Za-z\s]+', '', text)
+    
+    # Remove standalone bullet points that don't have content
+    text = re.sub(r'^\s*•\s*$', '', text, flags=re.MULTILINE)
+    
+    # Remove bullet points at the beginning of lines that are followed by whitespace
+    text = re.sub(r'^\s*•\s+(?=\s|$)', '', text, flags=re.MULTILINE)
+    
+    # Remove lines that are just debugging markers
+    text = re.sub(r'^\s*(Sources:|Source:|Sources|Source)\s*$', '', text, flags=re.MULTILINE)
+    
+    # Remove empty tables (lines with just | | |)
+    text = re.sub(r'^\s*\|\s*\|\s*\|\s*$', '', text, flags=re.MULTILINE)
+    text = re.sub(r'^\s*\|\s*Metric\s*\|\s*Value\s*\|\s*$', '', text, flags=re.MULTILINE)
+    text = re.sub(r'^\s*\|\s*--------\s*\|\s*-------\s*\|\s*$', '', text, flags=re.MULTILINE)
+    
+    # Clean up extra whitespace and newlines
+    text = re.sub(r'\n\s*\n', '\n', text)
+    text = re.sub(r' +', ' ', text)
+    text = text.strip()
+    
+    return text
+
 
 def format_memo(profile: StartupProfile) -> str:
     current_date = datetime.now().strftime("%B %d, %Y")
@@ -935,53 +1227,53 @@ def format_memo(profile: StartupProfile) -> str:
 
     memo_body = f"""
 1. DETAILED SUMMARY
-{clean(run_detailed_summary_chain(profile))}
+{clean_think_tags_and_debugging(clean(run_detailed_summary_chain(profile)))}
 
 2. COMPANY OVERVIEW
-{clean(format_company_overview_section(profile))}
+{clean_think_tags_and_debugging(clean(format_company_overview_section(profile)))}
 
 3. PROBLEM STATEMENT
-{clean(run_problem_statement_chain(profile))}
+{clean_think_tags_and_debugging(clean(run_problem_statement_chain(profile)))}
     
 4. SOLUTION OVERVIEW
-{clean(run_solution_overview_chain(profile))}
+{clean_think_tags_and_debugging(clean(run_solution_overview_chain(profile)))}
     
 5. PRODUCT/SERVICE DESCRIPTION
-{run_product_description_chain(profile)}
+{clean_think_tags_and_debugging(run_product_description_chain(profile))}
     
 6. MARKET SIZE & ANALYSIS
-{generate_market_size_section(profile)}
-{clean(getattr(profile, 'sector', ''))}
+{clean_think_tags_and_debugging(generate_market_size_section(profile))}
+{clean_think_tags_and_debugging(clean(getattr(profile, 'sector', '')))}
 
 7. COMPETITORS
-{clean(generate_competitive_landscape(profile))}
-{clean(getattr(profile, 'competitive_summary', ''))}
+{clean_think_tags_and_debugging(clean(generate_competitive_landscape(profile)))}
+{clean_think_tags_and_debugging(clean(getattr(profile, 'competitive_summary', '')))}
 
 8. BUSINESS MODEL
-{run_business_model_chain(profile)}
+{clean_think_tags_and_debugging(run_business_model_chain(profile))}
 
 9. TECHNICAL DUE DILIGENCE
-{clean(format_technical_dd_section(profile))}
+{clean_think_tags_and_debugging(clean(format_enhanced_technical_section(profile)))}
 
 10. FINANCIAL ANALYSIS
-{format_financials_section(profile, current_date)}
+{clean_think_tags_and_debugging(format_enhanced_financials_section(profile, current_date))}
 
-{format_financial_history_section(profile)}
+{clean_think_tags_and_debugging(format_financial_history_section(profile))}
 
 11. TEAM & MANAGEMENT
-{clean(generate_team_section(profile))}
+{clean_think_tags_and_debugging(clean(generate_team_section(profile)))}
 
 12. ESG CONSIDERATIONS
-{run_esg_section_chain(profile)}
+{clean_think_tags_and_debugging(run_esg_section_chain(profile))}
 
 13. RISKS
-{run_risks_section_chain(profile)}
+{clean_think_tags_and_debugging(run_risks_section_chain(profile))}
 
 14. INVESTMENT & EXIT STRATEGIES
-{run_exit_strategies_chain(profile)}
+{clean_think_tags_and_debugging(run_exit_strategies_chain(profile))}
 
 15. COUNTERFACTUAL ANALYSIS: WHAT IF WE DON'T INVEST?
-{generate_counterfactual_section(profile)}
+{clean_think_tags_and_debugging(generate_counterfactual_section(profile))}
 
 16. FOLLOW-UP QUESTIONS & NEXT STEPS
 {run_followup_section_chain(profile)}
@@ -1389,18 +1681,33 @@ def main():
         tables = extracted["tables"]
         figures = extracted["figures"]
         
-        # Adding structured data to profile if available
+        clear_collection()
+        profile = StartupProfile()
+        
+        # Adding structured data to profile if available (AFTER profile creation)
         structured_data = extracted.get("structured_data", {})
         if structured_data:
             print(f"[Structured Data] Found: {list(structured_data.keys())}")
-            for key, value in structured_data.items():
-                if hasattr(profile, key) and value:
-                    setattr(profile, key, value)
-                    setattr(profile, f"{key}_source", "enhanced_extraction")
-                    print(f"[Structured Data] Set {key} = {value}")
-
-        clear_collection()
-        profile = StartupProfile()
+            # Set the structured data on the profile
+            profile.structured_data = structured_data
+            print(f"[Structured Data] Set profile.structured_data with {len(structured_data)} items")
+            
+            # Also map key fields directly to profile attributes
+            field_mapping = {
+                'market_size': 'TAM',
+                'funding': 'funding_amount', 
+                'patents': 'patent_count',
+                'employees': 'employees_count',
+                'energy_density': 'energy_density_wh_kg',
+                'cycle_life': 'cycle_life_count'
+            }
+            
+            for source_key, profile_key in field_mapping.items():
+                if source_key in structured_data and hasattr(profile, profile_key):
+                    value = structured_data[source_key]
+                    setattr(profile, profile_key, value)
+                    setattr(profile, f"{profile_key}_source", "enhanced_extraction")
+                    print(f"[Structured Data] Set {profile_key} = {value}")
         
         # Initialising evaluation tracker with real-time tracking
         from evaluation_metrics import MemoEvaluator
@@ -1410,6 +1717,13 @@ def main():
         # Tracking the main analysis pipeline with real timing
         evaluator.log_section_start("COMPLETE ANALYSIS PIPELINE")
         start_time = time.time()
+        
+        # Debug: Show what structured data we have before running the pipeline
+        if hasattr(profile, 'structured_data') and profile.structured_data:
+            print(f"[DEBUG] Profile has structured_data: {list(profile.structured_data.keys())}")
+        else:
+            print("[DEBUG] Profile has no structured_data")
+        
         profile = run_all_sequential_with_text(text, profile, file_path)
         pipeline_time = time.time() - start_time
         
@@ -1510,6 +1824,36 @@ def main():
             print("⚠️ pandas not available - skipping Excel output")
         except Exception as e:
             print(f"⚠️ Error generating Excel output: {e}")
+
+
+def format_enhanced_technical_section(profile):
+    """Enhanced technical section using the technical due diligence agent."""
+    try:
+        from agents.technical_dd_agent import build_technical_dd_agent
+        
+        # Build the technical due diligence agent
+        agent, task = build_technical_dd_agent(profile)
+        
+        # Get the agent output
+        agent_output = task.callback()
+        
+        # Parse the JSON output
+        import json
+        agent_data = json.loads(agent_output)
+        
+        # Update the profile with agent data
+        for key, value in agent_data.items():
+            if hasattr(profile, key) and value is not None:
+                setattr(profile, key, value)
+        
+        # Now use the original formatting logic with enhanced data
+        return format_technical_dd_section(profile)
+        
+    except Exception as e:
+        print(f"[Technical Agent] Error: {e}")
+        # Use direct formatting since the agent is failing
+        from agents.technical_dd_agent import format_technical_dd_section
+        return format_technical_dd_section(profile)
 
 
 if __name__ == "__main__":

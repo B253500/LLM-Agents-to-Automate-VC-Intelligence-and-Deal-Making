@@ -5,7 +5,7 @@ def run_product_description_chain(profile: StartupProfile) -> str:
     """
     Use LLM to synthesize a detailed, multi-paragraph, multi-bullet Product/Service Description section for the memo.
     """
-    llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0.2)
+    llm = ChatOpenAI(model="gpt-4o", temperature=0.2)
     prompt = f"""
 You are a VC analyst writing the Product/Service Description section for an investment memo.
 - Do NOT repeat information already covered in the Detailed Summary or Solution Overview.

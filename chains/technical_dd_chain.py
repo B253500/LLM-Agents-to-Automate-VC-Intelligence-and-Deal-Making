@@ -10,7 +10,7 @@ from core.schemas import StartupProfile
 from core.hybrid_context import get_hybrid_context
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
-llm = ChatOpenAI(model="gpt-4o", temperature=0.2)
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.1)
 
 SYSTEM = """
 You are a senior CTO performing technical due diligence for venture capital investment.
@@ -58,7 +58,7 @@ PATENT ANALYSIS REQUIREMENTS:
 - If patent information is present in the context, provide specific details
 
 Return your analysis in the following JSON format:
-{
+{{
     "tech_maturity": "Brief assessment of technical maturity (e.g., 'Early-stage prototype', 'Production-ready', 'Lab-scale')",
     "moat_strength": "Assessment of technical moat and defensibility",
     "tech_stack": "Detailed description of the technology stack and architecture (3-4 sentences covering core technologies, infrastructure, and technical approach)",
@@ -70,7 +70,7 @@ Return your analysis in the following JSON format:
     "implementation": "Implementation challenges and requirements",
     "regulatory": "Regulatory and compliance considerations",
     "testing": "Testing and validation requirements"
-}
+}}
 
 Be specific, critical, and highlight both strengths and weaknesses. If information is missing, note it explicitly.
 Focus on actionable insights for VC investment decision-making.
@@ -104,14 +104,15 @@ def clean_llm_output(text):
         print(f"[Technical DD] Raw JSON: {json_str[:200]}...")
         
         # Try to fix common JSON issues
+        # Remove newlines and extra whitespace
+        json_str = re.sub(r'\n\s*', ' ', json_str)
+        json_str = re.sub(r'\s+', ' ', json_str)
         # Fix unquoted keys
         json_str = re.sub(r'([{,])\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:', r'\1"\2":', json_str)
         # Fix unquoted string values
         json_str = re.sub(r':\s*([^",\{\}\[\]]+?)([,}\]])', r': "\1"\2', json_str)
         # Remove bullet points from string values
         json_str = re.sub(r'•\s*', '', json_str)
-        # Remove extra whitespace and newlines
-        json_str = re.sub(r'\s+', ' ', json_str)
         # Fix trailing commas
         json_str = re.sub(r',\s*}', '}', json_str)
         json_str = re.sub(r',\s*]', ']', json_str)
@@ -124,6 +125,215 @@ def clean_llm_output(text):
             return None
 
 
+def extract_technical_specs_from_text(text: str) -> dict:
+    """Extract technical specifications from document text using regex patterns."""
+    import re
+    
+    specs = {}
+    
+    # Energy density patterns
+    energy_patterns = [
+        r'energy.*?density.*?(\d+(?:\.\d+)?).*?(wh|watt|wh/kg)',
+        r'(\d+(?:\.\d+)?).*?(wh|watt|wh/kg).*?energy.*?density',
+        r'energy.*?density.*?(\d+(?:\.\d+)?)\s*(wh|watt|wh/kg)',
+        r'>(\d+)\s*wh/kg',
+        r'(\d+)\s*wh/kg',
+    ]
+    
+    for pattern in energy_patterns:
+        matches = re.findall(pattern, text.lower())
+        if matches:
+            match = matches[0]
+            if isinstance(match, tuple) and len(match) >= 2:
+                value, unit = match[0], match[1]
+                specs['energy_density'] = float(value)
+                specs['energy_density_unit'] = unit
+                break
+            elif isinstance(match, str):
+                # Handle single value patterns like ">300 wh/kg"
+                value = match
+                specs['energy_density'] = float(value)
+                specs['energy_density_unit'] = 'wh/kg'
+                break
+    
+    # Cycle life patterns
+    cycle_patterns = [
+        r'cycle.*?life.*?(\d+(?:,\d+)?)',
+        r'(\d+(?:,\d+)?).*?cycle.*?life',
+        r'(\d+(?:,\d+)?)\s*cycles',
+        r'>(\d+)\s*consecutive',
+        r'(\d+)\s*consecutive.*?cycles',
+    ]
+    
+    for pattern in cycle_patterns:
+        matches = re.findall(pattern, text.lower())
+        if matches:
+            value = matches[0].replace(',', '')
+            specs['cycle_life'] = int(value)
+            break
+    
+    # Patent patterns
+    patent_patterns = [
+        r'(\d+\+?)\s*patents?',
+        r'patent.*?portfolio.*?(\d+\+?)',
+        r'(\d+\+?).*?patent',
+        r'(\d+)\s*us.*?granted',
+        r'(\d+)\s*us.*?pending',
+    ]
+    
+    for pattern in patent_patterns:
+        matches = re.findall(pattern, text.lower())
+        if matches:
+            patent_value = matches[0]
+            # Handle "200+" format
+            if patent_value.endswith('+'):
+                specs['patents'] = patent_value  # Keep as string for "200+"
+            else:
+                specs['patents'] = int(patent_value)  # Convert to int for exact numbers
+            break
+    
+    # Charging speed patterns
+    charging_patterns = [
+        r'(\d+)\s*miles.*?(\d+)\s*min',
+        r'(\d+)in(\d+)',
+        r'(\d+)\s*miles.*?charged.*?(\d+)\s*min',
+    ]
+    
+    for pattern in charging_patterns:
+        matches = re.findall(pattern, text.lower())
+        if matches:
+            miles, minutes = matches[0]
+            specs['charging_speed_miles'] = int(miles)
+            specs['charging_speed_minutes'] = int(minutes)
+            break
+    
+    # Temperature performance patterns
+    temp_patterns = [
+        r'(\d+).*?temperature',
+        r'(\d+).*?°c',
+        r'(\d+).*?celsius',
+        r'(\d+).*?discharge.*?capacity.*?(\d+)',
+    ]
+    
+    for pattern in temp_patterns:
+        matches = re.findall(pattern, text.lower())
+        if matches:
+            if len(matches[0]) == 2:
+                temp, capacity = matches[0]
+                specs['low_temp_performance'] = f"{temp}°C: {capacity}% capacity"
+            else:
+                specs['operating_temp'] = int(matches[0])
+            break
+    
+    # Cell specifications patterns
+    cell_patterns = [
+        r'(\d+)ah.*?pouch',
+        r'(\d+)ah.*?cell',
+        r'cell.*?type.*?(\d+)ah',
+    ]
+    
+    for pattern in cell_patterns:
+        matches = re.findall(pattern, text.lower())
+        if matches:
+            specs['cell_capacity'] = int(matches[0])
+            break
+    
+    # Cell format patterns
+    format_patterns = [
+        r'cell.*?format.*?([a-zA-Z0-9\s]+)',
+        r'([a-zA-Z0-9\s]+).*?cell.*?format',
+        r'(\d+mm).*?(\d+mm)',
+    ]
+    
+    for pattern in format_patterns:
+        matches = re.findall(pattern, text.lower())
+        if matches:
+            if len(matches[0]) == 2:
+                width, height = matches[0]
+                specs['cell_dimensions'] = f"{width} x {height}"
+            else:
+                specs['cell_format'] = matches[0].strip()
+            break
+    
+    # Power performance patterns
+    power_patterns = [
+        r'(\d+)kw.*?charging',
+        r'(\d+)kw.*?power',
+        r'(\d+).*?discharge.*?capacity.*?(\d+)c',
+    ]
+    
+    for pattern in power_patterns:
+        matches = re.findall(pattern, text.lower())
+        if matches:
+            if len(matches[0]) == 2:
+                capacity, rate = matches[0]
+                specs['power_performance'] = f"{capacity}% at {rate}C discharge"
+            else:
+                specs['charging_power'] = int(matches[0])
+            break
+    
+    # Manufacturing patterns
+    manufacturing_patterns = [
+        r'(\d+)\s*employees',
+        r'(\d+)\s*phds',
+        r'(\d+)\s*professionals',
+    ]
+    
+    for pattern in manufacturing_patterns:
+        matches = re.findall(pattern, text.lower())
+        if matches:
+            if 'employees' in pattern:
+                specs['employees'] = int(matches[0])
+            elif 'phds' in pattern:
+                specs['phds'] = int(matches[0])
+            elif 'professionals' in pattern:
+                specs['professionals'] = int(matches[0])
+    
+    # Roadmap patterns
+    roadmap_patterns = [
+        r'100in(\d+).*?(\d{4})',
+        r'production.*?readiness.*?(\d{4})',
+        r'(\d{4}).*?production.*?readiness',
+        r'phase.*?(\d+).*?(\d{4})',
+        r'(\d{4}).*?phase.*?(\d+)',
+    ]
+    
+    # Extract all 100inX technologies
+    all_100in_matches = re.findall(r'100in(\d+).*?(\d{4})', text.lower())
+    if all_100in_matches:
+        roadmap_technologies = []
+        for speed, year in all_100in_matches:
+            roadmap_technologies.append(f"100in{speed} by {year}")
+        specs['roadmap_technologies'] = roadmap_technologies
+    
+    for pattern in roadmap_patterns:
+        matches = re.findall(pattern, text.lower())
+        if matches:
+            if len(matches[0]) == 2:
+                if '100in' in pattern:
+                    # 100inX format: (X, year) - only store the first one as primary
+                    if 'roadmap_100in_speed' not in specs:
+                        speed, year = matches[0]
+                        specs['roadmap_100in_speed'] = int(speed)
+                        specs['roadmap_100in_year'] = int(year)
+                elif 'phase' in pattern:
+                    # Phase format: (phase, year) or (year, phase)
+                    if matches[0][0].isdigit() and len(matches[0][0]) == 4:
+                        year, phase = matches[0]
+                        specs[f'roadmap_phase_{phase}_year'] = int(year)
+                    else:
+                        phase, year = matches[0]
+                        specs[f'roadmap_phase_{phase}_year'] = int(year)
+            elif len(matches[0]) == 1:
+                # Single year format
+                year = matches[0]
+                if year.isdigit() and len(year) == 4:
+                    specs['roadmap_production_year'] = int(year)
+            break
+    
+    return specs
+
+
 def run_technical_dd_chain(profile: StartupProfile) -> StartupProfile:
     context = get_hybrid_context(
         profile, "patents OR patent portfolio OR intellectual property OR IP OR product roadmap OR development timeline OR technical milestones OR technology stack OR product development OR technical specifications OR performance metrics OR energy density OR cycle life OR charging speed OR temperature range OR safety features OR materials OR dimensions OR capabilities", 5, 3
@@ -132,6 +342,72 @@ def run_technical_dd_chain(profile: StartupProfile) -> StartupProfile:
     # Debug: Print a snippet of the context to see what's being passed
     print(f"[Technical DD] Context snippet: {context[:500]}...")
     
+    # Get the full document text for better extraction
+    full_text = ""
+    try:
+        # Use the profile's extracted data context if available
+        if hasattr(profile, 'extracted_data_context') and profile.extracted_data_context:
+            full_text = profile.extracted_data_context
+        # Fallback to context if no extracted data
+        if not full_text:
+            full_text = context
+    except:
+        full_text = context
+    
+    # Extract technical specifications from full text
+    tech_specs = extract_technical_specs_from_text(full_text)
+    
+    # Set extracted technical specifications on profile FIRST (before LLM call)
+    if tech_specs.get('energy_density'):
+        profile.energy_density_wh_kg = tech_specs['energy_density']
+        profile.energy_density_source = 'technical_extraction'
+    if tech_specs.get('cycle_life'):
+        profile.cycle_life_count = tech_specs['cycle_life']
+        profile.cycle_life_source = 'technical_extraction'
+    if tech_specs.get('patents'):
+        if isinstance(tech_specs['patents'], str):
+            profile.patent_portfolio = f"{tech_specs['patents']} patents"
+        else:
+            profile.patent_portfolio = f"{tech_specs['patents']} patents"
+    
+    # Set new technical specifications (only fields that exist in schema)
+    if tech_specs.get('charging_speed_miles'):
+        profile.charging_speed_miles = tech_specs['charging_speed_miles']
+    if tech_specs.get('charging_speed_minutes'):
+        profile.charging_speed_minutes = tech_specs['charging_speed_minutes']
+    if tech_specs.get('low_temp_performance'):
+        profile.low_temp_performance = tech_specs['low_temp_performance']
+    if tech_specs.get('cell_capacity'):
+        profile.cell_capacity = tech_specs['cell_capacity']
+    if tech_specs.get('cell_dimensions'):
+        profile.cell_dimensions = tech_specs['cell_dimensions']
+    if tech_specs.get('charging_power'):
+        profile.charging_power = tech_specs['charging_power']
+    if tech_specs.get('power_performance'):
+        profile.power_performance = tech_specs['power_performance']
+    if tech_specs.get('employees'):
+        profile.employees_count = tech_specs['employees']
+    if tech_specs.get('phds'):
+        profile.phds = tech_specs['phds']
+    if tech_specs.get('professionals'):
+        profile.professionals = tech_specs['professionals']
+    
+    # Set roadmap specifications
+    if tech_specs.get('roadmap_100in_speed'):
+        profile.roadmap_100in_speed = tech_specs['roadmap_100in_speed']
+    if tech_specs.get('roadmap_100in_year'):
+        profile.roadmap_100in_year = tech_specs['roadmap_100in_year']
+    if tech_specs.get('roadmap_production_year'):
+        profile.roadmap_production_year = tech_specs['roadmap_production_year']
+    if tech_specs.get('roadmap_technologies'):
+        profile.roadmap_technologies = tech_specs['roadmap_technologies']
+    
+    # Set phase-specific roadmap years
+    for key, value in tech_specs.items():
+        if key.startswith('roadmap_phase_') and key.endswith('_year'):
+            setattr(profile, key, value)
+    
+    # Now try the LLM call (but extracted data is already set)
     try:
         # Clean the context to avoid formatting issues
         clean_context = context.replace('"', "'").replace('\n', ' ').strip()
@@ -146,6 +422,8 @@ def run_technical_dd_chain(profile: StartupProfile) -> StartupProfile:
                 profile.moat_strength = str(data["moat_strength"])
             if data.get("tech_stack"):
                 profile.tech_stack = str(data["tech_stack"])
+            if data.get("product_specifications"):
+                profile.product_specifications = str(data["product_specifications"])
             if data.get("product_roadmap"):
                 profile.product_roadmap = str(data["product_roadmap"])
             if data.get("patent_portfolio"):
@@ -161,24 +439,38 @@ def run_technical_dd_chain(profile: StartupProfile) -> StartupProfile:
             if data.get("testing"):
                 profile.testing = str(data["testing"])
         else:
-            # Fallback: set default values if parsing fails
-            profile.tech_maturity = "Technical maturity assessment requires additional research"
-            profile.moat_strength = "Moat strength analysis requires additional research"
+            # Fallback: set default values if parsing fails, but DON'T override extracted data
+            if not hasattr(profile, 'tech_maturity') or not profile.tech_maturity or profile.tech_maturity == "Technical assessment unavailable":
+                profile.tech_maturity = "Technical maturity assessment requires additional research"
+            if not hasattr(profile, 'moat_strength') or not profile.moat_strength or profile.moat_strength == "Moat analysis unavailable":
+                profile.moat_strength = "Moat strength analysis requires additional research"
             
     except Exception as e:
         print(f"[Technical DD] Error: {e}")
-        # Set fallback values
-        profile.tech_maturity = "Technical assessment unavailable"
-        profile.moat_strength = "Moat analysis unavailable"
-        profile.tech_stack = "Technology stack details require additional research"
-        profile.product_specifications = "Product technical specifications require additional research"
-        profile.product_roadmap = "Product roadmap information requires additional research"
-        profile.patent_portfolio = "Patent portfolio information requires additional research"
-        profile.complexity = "Technical complexity assessment requires additional research"
-        profile.security = "Security considerations require additional research"
-        profile.implementation = "Implementation details require additional research"
-        profile.regulatory = "Regulatory compliance information requires additional research"
-        profile.testing = "Testing and validation information requires additional research"
+        # Set fallback values ONLY if extracted data is not available
+        if not hasattr(profile, 'tech_maturity') or not profile.tech_maturity or profile.tech_maturity == "Technical assessment unavailable":
+            profile.tech_maturity = "Technical assessment unavailable"
+        if not hasattr(profile, 'moat_strength') or not profile.moat_strength or profile.moat_strength == "Moat analysis unavailable":
+            profile.moat_strength = "Moat analysis unavailable"
+        if not hasattr(profile, 'tech_stack') or not profile.tech_stack or profile.tech_stack == "Technology stack details require additional research":
+            profile.tech_stack = "Technology stack details require additional research"
+        if not hasattr(profile, 'product_specifications') or not profile.product_specifications or profile.product_specifications == "Product technical specifications require additional research":
+            profile.product_specifications = "Product technical specifications require additional research"
+        if not hasattr(profile, 'product_roadmap') or not profile.product_roadmap or profile.product_roadmap == "Product roadmap information requires additional research":
+            profile.product_roadmap = "Product roadmap information requires additional research"
+        if not hasattr(profile, 'patent_portfolio') or not profile.patent_portfolio or profile.patent_portfolio == "Patent portfolio information requires additional research":
+            print(f"[Technical DD] Overriding patent portfolio. Current value: '{profile.patent_portfolio}'")
+            profile.patent_portfolio = "Patent portfolio information requires additional research"
+        if not hasattr(profile, 'complexity') or not profile.complexity or profile.complexity == "Technical complexity assessment requires additional research":
+            profile.complexity = "Technical complexity assessment requires additional research"
+        if not hasattr(profile, 'security') or not profile.security or profile.security == "Security considerations require additional research":
+            profile.security = "Security considerations require additional research"
+        if not hasattr(profile, 'implementation') or not profile.implementation or profile.implementation == "Implementation details require additional research":
+            profile.implementation = "Implementation details require additional research"
+        if not hasattr(profile, 'regulatory') or not profile.regulatory:
+            profile.regulatory = "Regulatory compliance information requires additional research"
+        if not hasattr(profile, 'testing') or not profile.testing:
+            profile.testing = "Testing and validation information requires additional research"
     
     if not profile.startup_id:
         profile.startup_id = sha1((profile.name or context[:40]).encode()).hexdigest()[:10]
@@ -194,9 +486,66 @@ def run_technical_dd_chain_with_text(full_text: str, profile: StartupProfile) ->
     # Debug: Print a snippet of the context to see what's being passed
     print(f"[Technical DD] Full text context snippet: {context[:500]}...")
     
+    # Extract technical specifications from full text
+    tech_specs = extract_technical_specs_from_text(full_text)
+    
+    # Set extracted technical specifications on profile
+    if tech_specs.get('energy_density'):
+        profile.energy_density_wh_kg = tech_specs['energy_density']
+        profile.energy_density_source = 'technical_extraction'
+    if tech_specs.get('cycle_life'):
+        profile.cycle_life_count = tech_specs['cycle_life']
+        profile.cycle_life_source = 'technical_extraction'
+    if tech_specs.get('patents'):
+        if isinstance(tech_specs['patents'], str):
+            profile.patent_portfolio = f"{tech_specs['patents']} patents"
+            print(f"[Technical DD] Set patent portfolio to: {profile.patent_portfolio}")
+        else:
+            profile.patent_portfolio = f"{tech_specs['patents']} patents"
+            print(f"[Technical DD] Set patent portfolio to: {profile.patent_portfolio}")
+    else:
+        print(f"[Technical DD] No patents found in tech_specs: {tech_specs}")
+    
+    # Set new technical specifications (only fields that exist in schema)
+    if tech_specs.get('charging_speed_miles'):
+        profile.charging_speed_miles = tech_specs['charging_speed_miles']
+    if tech_specs.get('charging_speed_minutes'):
+        profile.charging_speed_minutes = tech_specs['charging_speed_minutes']
+    if tech_specs.get('low_temp_performance'):
+        profile.low_temp_performance = tech_specs['low_temp_performance']
+    if tech_specs.get('cell_capacity'):
+        profile.cell_capacity = tech_specs['cell_capacity']
+    if tech_specs.get('cell_dimensions'):
+        profile.cell_dimensions = tech_specs['cell_dimensions']
+    if tech_specs.get('charging_power'):
+        profile.charging_power = tech_specs['charging_power']
+    if tech_specs.get('power_performance'):
+        profile.power_performance = tech_specs['power_performance']
+    if tech_specs.get('employees'):
+        profile.employees_count = tech_specs['employees']
+    if tech_specs.get('phds'):
+        profile.phds = tech_specs['phds']
+    if tech_specs.get('professionals'):
+        profile.professionals = tech_specs['professionals']
+    
+    # Set roadmap specifications
+    if tech_specs.get('roadmap_100in_speed'):
+        profile.roadmap_100in_speed = tech_specs['roadmap_100in_speed']
+    if tech_specs.get('roadmap_100in_year'):
+        profile.roadmap_100in_year = tech_specs['roadmap_100in_year']
+    if tech_specs.get('roadmap_production_year'):
+        profile.roadmap_production_year = tech_specs['roadmap_production_year']
+    if tech_specs.get('roadmap_technologies'):
+        profile.roadmap_technologies = tech_specs['roadmap_technologies']
+    
+    # Set phase-specific roadmap years
+    for key, value in tech_specs.items():
+        if key.startswith('roadmap_phase_') and key.endswith('_year'):
+            setattr(profile, key, value)
+    
     try:
-        # Clean the context to avoid formatting issues
-        clean_context = context.replace('"', "'").replace('\n', ' ').strip()
+        # Clean the context to avoid formatting issues and escape curly braces
+        clean_context = context.replace('"', "'").replace('\n', ' ').replace('{', '{{').replace('}', '}}').strip()
         txt = llm.invoke(PROMPT.format(context=clean_context)).content.strip()
         data = clean_llm_output(txt)
         
@@ -208,6 +557,8 @@ def run_technical_dd_chain_with_text(full_text: str, profile: StartupProfile) ->
                 profile.moat_strength = str(data["moat_strength"])
             if data.get("tech_stack"):
                 profile.tech_stack = str(data["tech_stack"])
+            if data.get("product_specifications"):
+                profile.product_specifications = str(data["product_specifications"])
             if data.get("product_roadmap"):
                 profile.product_roadmap = str(data["product_roadmap"])
             if data.get("patent_portfolio"):
@@ -223,15 +574,55 @@ def run_technical_dd_chain_with_text(full_text: str, profile: StartupProfile) ->
             if data.get("testing"):
                 profile.testing = str(data["testing"])
         else:
-            # Fallback: set default values if parsing fails
-            profile.tech_maturity = "Technical maturity assessment requires additional research"
-            profile.moat_strength = "Moat strength analysis requires additional research"
+            # Fallback: set default values if parsing fails, but DON'T override extracted data
+            if not hasattr(profile, 'tech_maturity') or not profile.tech_maturity:
+                profile.tech_maturity = "Technical maturity assessment requires additional research"
+            if not hasattr(profile, 'moat_strength') or not profile.moat_strength:
+                profile.moat_strength = "Moat strength analysis requires additional research"
+            if not hasattr(profile, 'tech_stack') or not profile.tech_stack:
+                profile.tech_stack = "Technology stack details require additional research"
+            if not hasattr(profile, 'product_specifications') or not profile.product_specifications:
+                profile.product_specifications = "Product technical specifications require additional research"
+            if not hasattr(profile, 'product_roadmap') or not profile.product_roadmap:
+                profile.product_roadmap = "Product roadmap information requires additional research"
+            if not hasattr(profile, 'patent_portfolio') or not profile.patent_portfolio:
+                profile.patent_portfolio = "Patent portfolio information requires additional research"
+            if not hasattr(profile, 'complexity') or not profile.complexity:
+                profile.complexity = "Technical complexity assessment requires additional research"
+            if not hasattr(profile, 'security') or not profile.security:
+                profile.security = "Security considerations require additional research"
+            if not hasattr(profile, 'implementation') or not profile.implementation:
+                profile.implementation = "Implementation details require additional research"
+            if not hasattr(profile, 'regulatory') or not profile.regulatory:
+                profile.regulatory = "Regulatory compliance information requires additional research"
+            if not hasattr(profile, 'testing') or not profile.testing:
+                profile.testing = "Testing and validation information requires additional research"
             
     except Exception as e:
         print(f"[Technical DD] Error: {e}")
-        # Set fallback values
-        profile.tech_maturity = "Technical assessment unavailable"
-        profile.moat_strength = "Moat analysis unavailable"
+        # Set fallback values ONLY if extracted data is not available
+        if not hasattr(profile, 'tech_maturity') or not profile.tech_maturity:
+            profile.tech_maturity = "Technical assessment unavailable"
+        if not hasattr(profile, 'moat_strength') or not profile.moat_strength:
+            profile.moat_strength = "Moat analysis unavailable"
+        if not hasattr(profile, 'tech_stack') or not profile.tech_stack:
+            profile.tech_stack = "Technology stack details require additional research"
+        if not hasattr(profile, 'product_specifications') or not profile.product_specifications:
+            profile.product_specifications = "Product technical specifications require additional research"
+        if not hasattr(profile, 'product_roadmap') or not profile.product_roadmap:
+            profile.product_roadmap = "Product roadmap information requires additional research"
+        if not hasattr(profile, 'patent_portfolio') or not profile.patent_portfolio:
+            profile.patent_portfolio = "Patent portfolio information requires additional research"
+        if not hasattr(profile, 'complexity') or not profile.complexity:
+            profile.complexity = "Technical complexity assessment requires additional research"
+        if not hasattr(profile, 'security') or not profile.security:
+            profile.security = "Security considerations require additional research"
+        if not hasattr(profile, 'implementation') or not profile.implementation:
+            profile.implementation = "Implementation details require additional research"
+        if not hasattr(profile, 'regulatory') or not profile.regulatory:
+            profile.regulatory = "Regulatory compliance information requires additional research"
+        if not hasattr(profile, 'testing') or not profile.testing:
+            profile.testing = "Testing and validation information requires additional research"
     
     if not profile.startup_id:
         profile.startup_id = sha1((profile.name or context[:40]).encode()).hexdigest()[:10]

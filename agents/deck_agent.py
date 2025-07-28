@@ -13,7 +13,7 @@ from core.download_utils import extract_text_from_image
 import pdfplumber
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
-llm = ChatOpenAI(model="gpt-4", temperature=0.2)
+llm = ChatOpenAI(model="gpt-4o", temperature=0.2)
 
 
 def build_deck_agent(pdf_path: str, trace_id=None):

@@ -188,6 +188,7 @@ def build_risk_assessment_agent(profile: StartupProfile, trace_id=None):
     )
 
     def _callback(*_):
+        # Run risk assessment with profile data
         updated = run_risk_assessment_chain(profile)
         return updated.model_dump_json(indent=2)
 

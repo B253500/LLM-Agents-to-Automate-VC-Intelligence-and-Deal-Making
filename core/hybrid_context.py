@@ -34,11 +34,15 @@ def get_hybrid_context(profile, topic, k_local=3, k_web=2, use_reports=True):
     """
     context_parts = []
     
+    # 0. NEW: Add comprehensive extracted data context first (highest priority)
+    if hasattr(profile, 'extracted_data_context') and profile.extracted_data_context:
+        context_parts.append(f"EXTRACTED DATA CONTEXT:\n{profile.extracted_data_context}")
+    
     # 1. Get report context if available and requested
     if use_reports:
         report_context = get_report_context(topic, k=k_local)
         if report_context and "No relevant report data found" not in report_context:
-            context_parts.append(report_context)
+            context_parts.append(f"REPORT CONTEXT:\n{report_context}")
     
     # 2. Get local context if we have a startup_id
     if not use_reports or not context_parts:  # Only if no report data or reports not requested
@@ -47,7 +51,7 @@ def get_hybrid_context(profile, topic, k_local=3, k_web=2, use_reports=True):
         ceo = getattr(profile, "founder_name", "") or getattr(profile, "ceo", "") or ""
         local = query_doc(getattr(profile, "startup_id", None), topic, k=k_local)
         if local:
-            context_parts.extend(local)
+            context_parts.append(f"LOCAL CONTEXT:\n{local}")
     
     # 3. Get web context if we still need more
     # if not context_parts:  # Only if we have no other context

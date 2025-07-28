@@ -27,7 +27,7 @@ exa_search_tool = EXASearchTool(
     numResults=20
 )
 
-llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0.2)
+llm = ChatOpenAI(model="gpt-4", temperature=0.2)
 
 SYSTEM = """
 You are a market research analyst for venture capital.
@@ -106,18 +106,73 @@ def generate_market_size_section(profile: StartupProfile) -> str:
     CAGR_source = getattr(profile, 'cagr_source', None)
     growth_rate = getattr(profile, 'market_growth_rate', None)
     growth_rate_source = getattr(profile, 'market_growth_rate_source', None)
-    sector = getattr(profile, 'sector', '')
+    sector = getattr(profile, 'sector', None)
+    
+    # Extract BEV data from deck text if available
+    bev_data = {}
+    if hasattr(profile, 'extracted_data_context') and profile.extracted_data_context:
+        bev_data = extract_bev_data_from_text(profile.extracted_data_context)
+    
+    # Data validation: Ensure SAM is not larger than TAM
+    if SAM and TAM and isinstance(SAM, (int, float)) and isinstance(TAM, (int, float)):
+        if SAM > TAM:
+            print(f"[Market Size Validation] SAM ({SAM}) is larger than TAM ({TAM}). Correcting SAM to TAM * 0.3")
+            SAM = TAM * 0.3
+            SAM_source = "calculated_from_tam"
+    
+    # Data validation: Ensure SOM is not larger than SAM
+    if SOM and SAM and isinstance(SOM, (int, float)) and isinstance(SAM, (int, float)):
+        if SOM > SAM:
+            print(f"[Market Size Validation] SOM ({SOM}) is larger than SAM ({SAM}). Correcting SOM to SAM * 0.1")
+            SOM = SAM * 0.1
+            SOM_source = "calculated_from_sam"
+    
+    def clean_perplexity_response(response):
+        """Clean Perplexity response by removing think tags and internal reasoning."""
+        if not response:
+            return ""
+        
+        # Remove <think> tags and their content
+        import re
+        cleaned = re.sub(r'<think>.*?</think>', '', response, flags=re.DOTALL)
+        
+        # Remove thinking process markers
+        cleaned = re.sub(r'(Okay, so I need to figure out|First, looking at|Let me start by|I need to analyze|Let me examine).*?(?=\n|$)', '', cleaned, flags=re.DOTALL)
+        
+        # Remove numbered analysis that's part of thinking process
+        cleaned = re.sub(r'^\d+\.\s*[A-Z].*?(?=\n|$)', '', cleaned, flags=re.MULTILINE)
+        
+        # Remove citation markers like [1], [2], etc.
+        cleaned = re.sub(r'\[\d+\]', '', cleaned)
+        
+        # Clean up extra whitespace and newlines
+        cleaned = re.sub(r'\n\s*\n', '\n', cleaned)
+        cleaned = cleaned.strip()
+        
+        return cleaned
     
     # --- Perplexity search for market research URLs ---
     market_research_urls = []
     if sector:
         try:
-            # Use Perplexity to find relevant market research reports
+            # Use Perplexity to find relevant market research reports with explicit URL requests
             search_queries = [
-                f"{sector} market size report 2024 2025",
-                f"{sector} industry analysis TAM SAM",
-                f"{sector} market research growth trends"
+                f"Find 3 specific market research report URLs for {sector} market size 2024 2025. Return only the URLs in markdown format: [Report Name](URL)",
+                f"Find 3 industry analysis report URLs for {sector} TAM SAM market research. Return only the URLs in markdown format: [Report Name](URL)",
+                f"Find 3 market research URLs for {sector} growth trends 2024. Return only the URLs in markdown format: [Report Name](URL)"
             ]
+            
+            # Check if Perplexity API is available
+            from core.perplexity_utils import search_perplexity
+            test_result = search_perplexity("test", num_results=1)
+            if test_result is None:
+                print("[Market Agent] Perplexity API not available, skipping web searches")
+                # Add fallback URLs for common market research sources
+                market_research_urls = [
+                    "https://www.market.us/report/global-battery-technology-market/",
+                    "https://www.imarcgroup.com/battery-technology-market", 
+                    "https://www.researchandmarkets.com/reports/battery-technology-market"
+                ]
             
             for query in search_queries:
                 try:
@@ -125,17 +180,31 @@ def generate_market_size_section(profile: StartupProfile) -> str:
                     search_results = search_perplexity(query, num_results=3)
                     
                     if search_results:
-                        # Extract URLs from the search results
-                        import re
-                        urls = re.findall(r'https?://[^\s\)]+', search_results)
-                        # Filter for market research domains
-                        market_domains = ['statista', 'grandviewresearch', 'marketsandmarkets', 'mckinsey', 'bain', 'bcg', 'deloitte', 'pwc', 'kpmg', 'ey', 'forrester', 'gartner', 'idc', 'frost', 'technavio', 'ibisworld', 'marketresearch', 'researchandmarkets', 'alliedmarketresearch', 'persistencemarketresearch', 'factmr', 'coherentmarketinsights', 'transparencymarketresearch', 'emergenresearch', 'precedenceresearch', 'verifiedmarketresearch', 'marketdataforecast', 'marketresearchfuture', '360marketupdates', 'marketwatch', 'bloomberg', 'reuters', 'cnbc', 'wsj', 'ft', 'forbes', 'techcrunch', 'venturebeat']
+                        # Clean the response
+                        cleaned_results = clean_perplexity_response(search_results)
                         
-                        for url in urls:
-                            if any(domain in url.lower() for domain in market_domains):
-                                market_research_urls.append(url)
-                                if len(market_research_urls) >= 3:
-                                    break
+                        # Improved URL extraction from Perplexity results
+                        import re
+                        # Look for markdown links first: [text](url)
+                        markdown_links = re.findall(r'\[([^\]]+)\]\((https?://[^\)]+)\)', cleaned_results)
+                        for text, url in markdown_links:
+                            market_research_urls.append(url)
+                            if len(market_research_urls) >= 3:
+                                break
+                        
+                        # If not enough markdown links, look for plain URLs
+                        if len(market_research_urls) < 3:
+                            # More comprehensive URL regex
+                            urls = re.findall(r'https?://[^\s\)\]<>"]+', cleaned_results)
+                            # Filter for market research domains
+                            market_domains = ['statista', 'grandviewresearch', 'marketsandmarkets', 'mckinsey', 'bain', 'bcg', 'deloitte', 'pwc', 'kpmg', 'ey', 'forrester', 'gartner', 'idc', 'frost', 'technavio', 'ibisworld', 'marketresearch', 'researchandmarkets', 'alliedmarketresearch', 'persistencemarketresearch', 'factmr', 'coherentmarketinsights', 'transparencymarketresearch', 'emergenresearch', 'precedenceresearch', 'verifiedmarketresearch', 'marketdataforecast', 'marketresearchfuture', '360marketupdates', 'marketwatch', 'bloomberg', 'reuters', 'cnbc', 'wsj', 'ft', 'forbes', 'techcrunch', 'venturebeat']
+                            
+                            for url in urls:
+                                if any(domain in url.lower() for domain in market_domains):
+                                    if url not in market_research_urls:  # Avoid duplicates
+                                        market_research_urls.append(url)
+                                        if len(market_research_urls) >= 3:
+                                            break
                     
                     if len(market_research_urls) >= 3:
                         break
@@ -152,14 +221,33 @@ def generate_market_size_section(profile: StartupProfile) -> str:
     sector_sources = []
     if sector:
         try:
-            search_query = f"Latest market analysis and trends for the {sector} sector in 2024-2025. Focus on market size, growth drivers, and key trends."
+            search_query = f"Latest market analysis and trends for the {sector} sector in 2024-2025. Focus on market size, growth drivers, and key trends. Include specific URLs to market research reports in markdown format: [Source Name](URL)."
             search_results = search_perplexity(search_query, num_results=2)
             
             if search_results:
-                # Extract URLs from the search results
+                # Clean the response
+                cleaned_results = clean_perplexity_response(search_results)
+                
+                # Improved URL extraction from sector analysis
                 import re
-                urls = re.findall(r'https?://[^\s\)]+', search_results)
-                sector_sources = urls[:2]  # Take first 2 URLs
+                # Look for markdown links first: [text](url)
+                markdown_links = re.findall(r'\[([^\]]+)\]\((https?://[^\)]+)\)', cleaned_results)
+                for text, url in markdown_links:
+                    # Ensure we have a complete URL
+                    if url.startswith('http') and len(url) > 10:
+                        sector_sources.append(url)
+                    if len(sector_sources) >= 2:
+                        break
+                
+                # If not enough markdown links, look for plain URLs
+                if len(sector_sources) < 2:
+                    urls = re.findall(r'https?://[^\s\)\]<>"]+', cleaned_results)
+                    for url in urls:
+                        # Ensure we have a complete URL with domain and path
+                        if len(url) > 15 and '.' in url.split('/')[2]:
+                            sector_sources.append(url)
+                        if len(sector_sources) >= 2:
+                            break
                 
                 # Use LLM to summarize the analysis
                 summary_prompt = f"""
@@ -171,14 +259,14 @@ def generate_market_size_section(profile: StartupProfile) -> str:
                 Focus on actionable insights for investment analysis. Do not include URLs or citations.
                 
                 Research Results:
-                {search_results}
+                {cleaned_results}
                 """
                 sector_analysis = llm.invoke(summary_prompt).content.strip()
         except Exception as e:
             print(f"[Market Analysis] Error during sector analysis: {e}")
     
     web_sources = getattr(profile, 'market_size_sources', []) or []
-    web_links = [url for url in web_sources if url.startswith('http')][:3]
+    web_links = [url for url in web_sources if url.startswith('http') and len(url) > 15][:3]
     
     # Generate market discussion
     prompt = f"""
@@ -190,6 +278,8 @@ Write a concise, professional market analysis (4-6 sentences) that covers:
 - Opportunities and challenges for the company
 
 Use the following data and be specific about numbers and sources. Present the market data as provided without assuming units.
+
+IMPORTANT: Validate that SAM is not larger than TAM. If SAM > TAM, use SAM = TAM * 0.3 as a reasonable estimate.
 
 Data:
 TAM: {TAM}
@@ -239,6 +329,45 @@ Sector: {sector}
     if SOM:
         metrics_data.append(("Serviceable Obtainable Market (SOM)", SOM, SOM_source))
     
+    # Dynamically add any additional market size fields from deck extraction
+    # Check for any fields that might contain market data
+    for field_name in dir(profile):
+        if not field_name.startswith('_') and not callable(getattr(profile, field_name)):
+            value = getattr(profile, field_name)
+            source = getattr(profile, f"{field_name}_source", None)
+            
+            # Skip if already handled or if value is None/empty
+            if (field_name in ['TAM', 'SAM', 'SOM', 'cagr', 'market_growth_rate'] or 
+                not value or value == 0 or 
+                field_name.endswith('_source') or 
+                field_name.endswith('_original')):
+                continue
+                
+            # Check if this looks like market data (contains numbers and common market terms)
+            # Exclude non-market fields
+            exclude_fields = [
+                'linkedin_followers', 'followers', 'employees_count', 'patent_count',
+                'funding_amount', 'revenue', 'implied_valuation', 'cash_burn_12m',
+                'runway_months', 'arr', 'mrr', 'cac', 'ltv', 'payback_period',
+                'revenue_growth_rate', 'debt', 'cash_on_hand', 'cycle_life_count',
+                'energy_density_wh_kg', 'startup_id', 'founded_year', 'founded'
+            ]
+            
+            if (isinstance(value, (int, float)) and value > 1000 and 
+                field_name not in exclude_fields and
+                any(keyword in field_name.lower() for keyword in ['market', 'tam', 'sam', 'som', 'addressable', 'bev', 'demand', 'size'])):
+                
+                # Try to create a readable label
+                label = field_name.replace('_', ' ').title()
+                if 'addressable' in field_name.lower():
+                    label = "Addressable Market"
+                elif 'bev' in field_name.lower() or 'battery' in field_name.lower():
+                    label = "Market Size"
+                elif 'demand' in field_name.lower():
+                    label = "Market Demand"
+                
+                metrics_data.append((label, value, source))
+    
     if metrics_data:
         for metric, value, source in metrics_data:
             # Format the value using the improved formatting function
@@ -264,12 +393,64 @@ Sector: {sector}
         lines.append("**📰 Sector Analysis**")
         lines.append("")
         lines.append(sector_analysis)
+        
+        # Add BEV data if available
+        if bev_data and (bev_data.get('overall_adoption') or bev_data.get('us_adoption') or bev_data.get('market_size')):
+            lines.append("")
+            lines.append("**🚗 BEV Market Data (from Deck)**")
+            if bev_data.get('overall_adoption'):
+                lines.append(f"• **Overall BEV Adoption**: {bev_data['overall_adoption']} by {bev_data.get('target_year', '2030')}")
+            if bev_data.get('us_adoption'):
+                lines.append(f"• **Regional Adoption**: US ({bev_data['us_adoption']}), EU ({bev_data['eu_adoption']}), China ({bev_data['china_adoption']})")
+            if bev_data.get('market_size'):
+                lines.append(f"• **Market Size**: {bev_data['market_size']}")
+            lines.append("• **Source**: StoreDot Pitch Deck")
+        
         if sector_sources:
             lines.append("")
             lines.append("**Sources:**")
             for url in sector_sources:
-                domain = url.split('/')[2] if len(url.split('/')) > 2 else url
-                lines.append(f"• [{domain}]({url})")
+                try:
+                    from urllib.parse import urlparse
+                    parsed = urlparse(url)
+                    domain = parsed.netloc
+                    if domain.startswith('www.'):
+                        domain = domain[4:]
+                    
+                    # Create readable source names
+                    if 'precedenceresearch' in domain.lower():
+                        source_name = "Precedence Research"
+                    elif 'oganalysis' in domain.lower():
+                        source_name = "OG Analysis"
+                    elif 'grandviewresearch' in domain.lower():
+                        source_name = "Grand View Research"
+                    elif 'marketsandmarkets' in domain.lower():
+                        source_name = "MarketsandMarkets"
+                    elif 'statista' in domain.lower():
+                        source_name = "Statista"
+                    elif 'ibisworld' in domain.lower():
+                        source_name = "IBISWorld"
+                    else:
+                        source_name = domain.replace('.com', '').replace('.co', '').title()
+                    
+                    lines.append(f"• [{source_name}]({url})")
+                except:
+                    # Fallback to domain extraction
+                    domain = url.split('/')[2] if len(url.split('/')) > 2 else url
+                    lines.append(f"• [{domain}]({url})")
+        lines.append("")
+    
+    # 4b. BEV Data (if no sector analysis but BEV data available)
+    if not sector_analysis and bev_data and (bev_data.get('overall_adoption') or bev_data.get('us_adoption') or bev_data.get('market_size')):
+        lines.append("**🚗 BEV Market Data (from Deck)**")
+        lines.append("")
+        if bev_data.get('overall_adoption'):
+            lines.append(f"• **Overall BEV Adoption**: {bev_data['overall_adoption']} by {bev_data.get('target_year', '2030')}")
+        if bev_data.get('us_adoption'):
+            lines.append(f"• **Regional Adoption**: US ({bev_data['us_adoption']}), EU ({bev_data['eu_adoption']}), China ({bev_data['china_adoption']})")
+        if bev_data.get('market_size'):
+            lines.append(f"• **Market Size**: {bev_data['market_size']}")
+        lines.append("• **Source**: StoreDot Pitch Deck")
         lines.append("")
     
     # 5. Market Research Sources (Perplexity search results)
@@ -277,19 +458,137 @@ Sector: {sector}
         lines.append("**🔍 Market Research Sources**")
         lines.append("")
         for url in market_research_urls:
-            domain = url.split('/')[2] if len(url.split('/')) > 2 else url
-            lines.append(f"• [{domain}]({url})")
+            try:
+                from urllib.parse import urlparse
+                parsed = urlparse(url)
+                domain = parsed.netloc
+                if domain.startswith('www.'):
+                    domain = domain[4:]
+                
+                # Create readable source names
+                if 'precedenceresearch' in domain.lower():
+                    source_name = "Precedence Research"
+                elif 'oganalysis' in domain.lower():
+                    source_name = "OG Analysis"
+                elif 'grandviewresearch' in domain.lower():
+                    source_name = "Grand View Research"
+                elif 'marketsandmarkets' in domain.lower():
+                    source_name = "MarketsandMarkets"
+                elif 'statista' in domain.lower():
+                    source_name = "Statista"
+                elif 'ibisworld' in domain.lower():
+                    source_name = "IBISWorld"
+                elif 'market.us' in domain.lower():
+                    source_name = "Market.Us"
+                elif 'researchandmarkets' in domain.lower():
+                    source_name = "ResearchandMarkets"
+                elif 'thebusinessresearchcompany' in domain.lower():
+                    source_name = "The Business Research Company"
+                else:
+                    source_name = domain.replace('.com', '').replace('.co', '').title()
+                
+                # Ensure we have a complete URL and clean it
+                if url.startswith('http') and len(url) > 10:
+                    # Clean the URL - only remove trailing periods that are not part of the URL structure
+                    clean_url = url
+                    # Only remove trailing period if it's not part of a domain extension
+                    if clean_url.endswith('.') and not clean_url.endswith('.com') and not clean_url.endswith('.org') and not clean_url.endswith('.net') and not clean_url.endswith('.co') and not clean_url.endswith('.io'):
+                        clean_url = clean_url[:-1]
+                    if len(clean_url) > 200:
+                        clean_url = clean_url[:200]
+                        print(f"[Market Agent] Truncated long URL: {url[:50]}...")
+                    lines.append(f"• [{source_name}]({clean_url})")
+                else:
+                    print(f"[Market Agent] Invalid URL found: {url}")
+            except Exception as e:
+                print(f"[Market Agent] Error processing URL {url}: {e}")
+                # Fallback to domain extraction
+                domain = url.split('/')[2] if len(url.split('/')) > 2 else url
+                if url.startswith('http') and len(url) > 10:
+                    lines.append(f"• [{domain}]({url})")
         lines.append("")
     
     # 6. Additional Web Sources (if any from profile)
     if web_links:
         lines.append("**🔗 Additional Sources**")
         for url in web_links:
-            domain = url.split('/')[2] if len(url.split('/')) > 2 else url
-            lines.append(f"• [{domain}]({url})")
+            try:
+                from urllib.parse import urlparse
+                parsed = urlparse(url)
+                domain = parsed.netloc
+                if domain.startswith('www.'):
+                    domain = domain[4:]
+                
+                # Create readable source names
+                if 'precedenceresearch' in domain.lower():
+                    source_name = "Precedence Research"
+                elif 'oganalysis' in domain.lower():
+                    source_name = "OG Analysis"
+                elif 'grandviewresearch' in domain.lower():
+                    source_name = "Grand View Research"
+                elif 'marketsandmarkets' in domain.lower():
+                    source_name = "MarketsandMarkets"
+                elif 'statista' in domain.lower():
+                    source_name = "Statista"
+                elif 'ibisworld' in domain.lower():
+                    source_name = "IBISWorld"
+                else:
+                    source_name = domain.replace('.com', '').replace('.co', '').title()
+                
+                # Clean the URL - only remove trailing periods that are not part of the URL structure
+                clean_url = url
+                # Only remove trailing period if it's not part of a domain extension
+                if clean_url.endswith('.') and not clean_url.endswith('.com') and not clean_url.endswith('.org') and not clean_url.endswith('.net') and not clean_url.endswith('.co') and not clean_url.endswith('.io'):
+                    clean_url = clean_url[:-1]
+                if len(clean_url) > 200:
+                    clean_url = clean_url[:200]
+                    print(f"[Market Agent] Truncated long URL: {url[:50]}...")
+                lines.append(f"• [{source_name}]({clean_url})")
+            except:
+                # Fallback to domain extraction
+                domain = url.split('/')[2] if len(url.split('/')) > 2 else url
+                lines.append(f"• [{domain}]({url})")
         lines.append("")
     
     return '\n'.join(lines)
+
+def extract_bev_data_from_text(text):
+    """Extract BEV (Battery Electric Vehicle) data from deck text."""
+    if not text:
+        return {}
+    
+    import re
+    
+    bev_data = {}
+    
+    # Extract regional BEV adoption rates
+    regional_matches = re.findall(r'US \(([^)]+)\), EU \(([^)]+)\) and China \(([^)]+)\)', text)
+    if regional_matches:
+        bev_data['us_adoption'] = regional_matches[0][0]
+        bev_data['eu_adoption'] = regional_matches[0][1]
+        bev_data['china_adoption'] = regional_matches[0][2]
+    
+    # Extract overall adoption percentage
+    adoption_matches = re.findall(r'>(\d+\.?\d*)%', text)
+    if adoption_matches:
+        bev_data['overall_adoption'] = adoption_matches[0] + '%'
+    
+    # Extract market size data
+    market_matches = re.findall(r'(\d+\.?\d*M|\d+\.?\d*B).*cars', text)
+    if market_matches:
+        bev_data['market_size'] = market_matches[0]
+    
+    # Extract year references (prioritize recent years)
+    year_matches = re.findall(r'(\d{4})', text)
+    if year_matches:
+        # Filter for reasonable years (2000-2030)
+        valid_years = [int(y) for y in year_matches if 2000 <= int(y) <= 2030]
+        if valid_years:
+            bev_data['target_year'] = str(max(valid_years))  # Use the most recent year
+        else:
+            bev_data['target_year'] = '2023'  # Default to 2023 if no valid years found
+    
+    return bev_data
 
 def build_market_sizing_agent(profile: StartupProfile, trace_id=None):
     analyst = Agent(

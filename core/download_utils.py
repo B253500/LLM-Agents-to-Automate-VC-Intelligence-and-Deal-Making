@@ -385,7 +385,15 @@ def extract_financial_metrics_enhanced(text, tables, charts):
             r"(\$?\d+\.?\d*)\s*[Bb]illion.*[Bb]attery.*[Mm]arket",
             r"[Bb]attery.*[Mm]arket.*(\$?\d+\.?\d*)\s*[Bb]illion",
             r"(\$?\d+\.?\d*)\s*[Bb]illion.*[Mm]arket",
-            r"[Mm]arket.*(\$?\d+\.?\d*)\s*[Bb]illion"
+            r"[Mm]arket.*(\$?\d+\.?\d*)\s*[Bb]illion",
+            # Improved patterns for multi-line text
+            r"(\$?\d+\.?\d*)\s*[Bb]illion[^$]*[Aa]ddressable[^$]*[Mm]arket",
+            r"[Aa]ddressable[^$]*[Mm]arket[^$]*(\$?\d+\.?\d*)\s*[Bb]illion",
+            r"(\$?\d+\.?\d*)\s*[Bb]illion[^$]*[Tt]otal[^$]*[Mm]arket",
+            r"[Tt]otal[^$]*[Mm]arket[^$]*(\$?\d+\.?\d*)\s*[Bb]illion",
+            # Specific pattern for "Total Addressable Market: $160B"
+            r"[Tt]otal[^$]*[Aa]ddressable[^$]*[Mm]arket[^$]*:?\s*(\$?\d+\.?\d*)\s*[Bb]",
+            r"[Aa]ddressable[^$]*[Mm]arket[^$]*:?\s*(\$?\d+\.?\d*)\s*[Bb]"
         ],
         "revenue": [
             r"(\$?\d+\.?\d*)\s*[KMB]?.*[Rr]evenue",
@@ -407,13 +415,29 @@ def extract_financial_metrics_enhanced(text, tables, charts):
             r"(\$?\d+\.?\d*)\s*[KMB]?.*[Cc]apital",
             r"[Cc]apital.*(\$?\d+\.?\d*)\s*[KMB]?",
             r"(\$?\d+\.?\d*)\s*[KMB]?.*[Ss]trategic.*[Ii]nvestors?",
-            r"[Ss]trategic.*[Ii]nvestors?.*(\$?\d+\.?\d*)\s*[KMB]?"
+            r"[Ss]trategic.*[Ii]nvestors?.*(\$?\d+\.?\d*)\s*[KMB]?",
+            # Improved patterns for multi-line text
+            r"(\$?\d+\.?\d*)\s*[KMB]?[^$]*[Ii]nvested",
+            r"[Ii]nvested[^$]*(\$?\d+\.?\d*)\s*[KMB]?",
+            r"(\$?\d+\.?\d*)\s*[KMB]?[^$]*silicon-dominant",
+            r"silicon-dominant[^$]*(\$?\d+\.?\d*)\s*[KMB]?"
         ],
         "patents": [
+            # StoreDot specific patterns - prioritize total patent count
+            r"(\d+)\+?\s*[Pp]atents?\s*\([Gg]ranted.*[Pp]ending\)",
+            r"(\d+)\s*[Pp]atents?\s*\([Gg]ranted.*[Pp]ending\)",
+            r"(\d+)\s*[Uu][Ss]\s*[Gg]ranted.*[Pp]atents?",
+            r"(\d+)\s*[Uu][Ss]\s*[Pp]ending.*[Pp]atents?",
+            # General patterns
             r"(\d+)\s*[Pp]atents?",
             r"(\d+)\s*[Gg]ranted.*[Pp]atents?",
             r"(\d+)\s*[Pp]ending.*[Pp]atents?",
-            r"[Pp]atents?.*(\d+)"
+            r"[Pp]atents?.*(\d+)",
+            # Additional patterns for comprehensive coverage
+            r"(\d+)\s*[Pp]atent.*[Pp]ortfolio",
+            r"[Pp]atent.*[Pp]ortfolio.*(\d+)",
+            r"(\d+)\s*[Pp]atents?.*[Gg]ranted",
+            r"(\d+)\s*[Pp]atents?.*[Pp]ending"
         ],
         "employees": [
             r"(\d+)\s*[Ee]mployees?",
@@ -428,10 +452,70 @@ def extract_financial_metrics_enhanced(text, tables, charts):
             r"(\d+)\s*[Ww]h.*[Dd]ensity"
         ],
         "cycle_life": [
+            # Prioritize higher cycle life values (like 1200 over 15) - put these FIRST
+            r"[Cc]ycle.*[Ll]ife.*>(\d{3,})",
+            r">(\d{3,})\s*[Cc]onsecutive.*[Cc]ycles?",
+            r"(\d{3,})\s*[Cc]ycles?.*consecutive",
+            # Specific pattern for "Cycle life > 1200"
+            r"[Cc]ycle.*[Ll]ife.*>(\d+)",
+            r">(\d+)\s*[Cc]onsecutive.*[Cc]ycles?",
+            # General patterns (lower priority)
             r"(\d+)\s*[Cc]ycles?",
             r"(\d+)\s*[Cc]ycle.*[Ll]ife",
             r"[Cc]ycle.*[Ll]ife.*(\d+)",
-            r"(\d+)\s*[Cc]onsecutive.*[Cc]ycles?"
+            r"(\d+)\s*[Cc]onsecutive.*[Cc]ycles?",
+            r"(\d+)\s*[Cc]ycles?.*consecutive",
+            r"(\d+)\s*[Cc]ycles?.*XFC",
+            r"XFC.*(\d+)\s*[Cc]ycles?"
+        ],
+        "tech_stack": [
+            r"[Tt]ech(nology)?\s*[Ss]tack:?\s*([A-Za-z0-9, \-\(\)]+)",
+            r"[Cc]hemistry:?\s*([A-Za-z0-9, \-\(\)]+)",
+            r"[Aa]node:?\s*([A-Za-z0-9, \-\(\)]+)",
+            r"[Cc]athode:?\s*([A-Za-z0-9, \-\(\)]+)",
+            r"[Ss]ilicon-dominant anode|NMC811 cathode|semi-solid|solid-state|graphite anode"
+        ],
+        "product_roadmap": [
+            r"[Rr]oadmap:?\s*([A-Za-z0-9, \-\(\)]+)",
+            r"100in5.*2024.*100in3.*2028.*100in1.*2032",
+            r"100in5.*2024",
+            r"100in3.*2028",
+            r"100in1.*2032"
+        ],
+        "product_description": [
+            r'[Pp]roduct [Dd]escription:?\s*([A-Za-z0-9, \-\(\)\.]+)',
+            r'Extreme fast charging battery technology[^\"]*',
+            r'XFC Silicon Battery[^\"]*',
+            r'Fast charging[^\"]*',
+            r'Battery technology[^\"]*'
+        ],
+        "cagr": [
+            r"(\d+)\%?\s*[Cc][Aa][Gg][Rr]",
+            r"[Cc][Aa][Gg][Rr]\s*(\d+)\%?",
+            r"(\d+)\%?\s*[Gg]rowth",
+            r"[Gg]rowth\s*(\d+)\%?",
+            r"(\d+)\%?\s*[Cc]ompound.*[Aa]nnual.*[Gg]rowth"
+        ],
+        "bev_penetration": [
+            # StoreDot specific patterns
+            r"(\d+\.\d+)\%?\s*[Uu][Ss]",
+            r"(\d+\.\d+)\%?\s*[Ee][Uu]",
+            r"(\d+\.\d+)\%?\s*[Cc]hina",
+            r"(\d+\.\d+)\%?\s*by\s*2030",
+            # General patterns
+            r"(\d+\.\d+)\%?\s*[Bb][Ee][Vv]\s*[Pp]enetration",
+            r"[Bb][Ee][Vv]\s*[Pp]enetration\s*(\d+\.\d+)\%?",
+            r"(\d+\.\d+)\%?\s*[Pp]enetration.*2030"
+        ],
+        "oem_investment": [
+            # StoreDot specific patterns - simpler patterns
+            r"\$(\d+)[Bb][Nn]",
+            r"(\d+)[Bb][Nn].*[Oo][Ee][Mm]",
+            r"[Oo][Ee][Mm].*\$(\d+)[Bb][Nn]",
+            # General patterns
+            r"[Oo][Ee][Mm]s?\s*\$(\d+)[Bb][Nn]",
+            r"(\d+)[Bb][Nn]\s*[Ss]pending",
+            r"\$(\d+)[Bb][Nn].*[Ee][Vv]s?.*[Bb]atteries?"
         ]
     }
     
@@ -445,10 +529,45 @@ def extract_financial_metrics_enhanced(text, tables, charts):
                 value = matches[0]
                 try:
                     if metric_type in ["patents", "employees", "energy_density", "cycle_life"]:
-                        results[metric_type] = int(value)
+                        # Special handling for patents to get total count
+                        if metric_type == "patents":
+                            # Look for total patent count patterns first
+                            total_patent_patterns = [
+                                r"(\d+)\+?\s*[Pp]atents?\s*\([Gg]ranted.*[Pp]ending\)",
+                                r"(\d+)\s*[Pp]atents?\s*\([Gg]ranted.*[Pp]ending\)",
+                                r"(\d+)\+?\s*[Pp]atents?",
+                                r"(\d+)\s*[Pp]atents?"
+                            ]
+                            
+                            total_patents = None
+                            for total_pattern in total_patent_patterns:
+                                total_matches = re.findall(total_pattern, all_text, re.IGNORECASE)
+                                if total_matches:
+                                    total_patents = int(total_matches[0])
+                                    break
+                            
+                            if total_patents:
+                                results[metric_type] = total_patents
+                                print(f"[Enhanced Extraction] Found total {metric_type}: {results[metric_type]}")
+                            else:
+                                results[metric_type] = int(value)
+                                print(f"[Enhanced Extraction] Found {metric_type}: {results[metric_type]}")
+                        else:
+                            results[metric_type] = int(value)
+                            print(f"[Enhanced Extraction] Found {metric_type}: {results[metric_type]}")
                     else:
-                        results[metric_type] = parse_money_string(value)
-                    print(f"[Enhanced Extraction] Found {metric_type}: {results[metric_type]}")
+                        parsed_value = parse_money_string(value)
+                        # Apply proper scaling for market size and funding
+                        if metric_type == "market_size" and parsed_value and parsed_value < 1000:
+                            # If market size is small, it's likely in billions
+                            parsed_value *= 1_000_000_000
+                            print(f"[Enhanced Extraction] Scaled market_size from {value} to {parsed_value}")
+                        elif metric_type == "funding" and parsed_value and parsed_value < 1000:
+                            # If funding is small, it's likely in millions
+                            parsed_value *= 1_000_000
+                            print(f"[Enhanced Extraction] Scaled funding from {value} to {parsed_value}")
+                        results[metric_type] = parsed_value
+                        print(f"[Enhanced Extraction] Found {metric_type}: {results[metric_type]}")
                     break
                 except Exception as e:
                     print(f"[Enhanced Extraction] Error parsing {metric_type} value '{value}': {e}")
@@ -561,7 +680,16 @@ def extract_market_size_from_text(text):
                 r'(\$?\d+[,.]?\d*)\s*[Bb]illion.*[Tt]otal.*[Aa]ddressable.*[Mm]arket',
                 r'[Tt]otal.*[Aa]ddressable.*[Mm]arket.*(\$?\d+[,.]?\d*)\s*[Bb]illion',
                 r'TAM.*(\$?\d+[,.]?\d*)\s*[Bb]illion',
-                r'(\$?\d+[,.]?\d*)\s*[Bb]illion.*TAM'
+                r'(\$?\d+[,.]?\d*)\s*[Bb]illion.*TAM',
+                # New patterns for StoreDot deck
+                r'(\$?\d+[,.]?\d*)\s*[Bb]illion.*[Bb]attery.*[Mm]arket',
+                r'[Bb]attery.*[Mm]arket.*(\$?\d+[,.]?\d*)\s*[Bb]illion',
+                r'(\$?\d+[,.]?\d*)\s*[Bb]illion.*[Aa]ddressable.*[Mm]arket',
+                # Additional patterns for better extraction
+                r'(\$?\d+[,.]?\d*)\s*[Bb]illion.*[Mm]arket',
+                r'[Mm]arket.*(\$?\d+[,.]?\d*)\s*[Bb]illion',
+                r'(\$?\d+[,.]?\d*)\s*[Bb]illion.*[Gg]lobal',
+                r'[Gg]lobal.*[Mm]arket.*(\$?\d+[,.]?\d*)\s*[Bb]illion'
             ],
             "SAM": [
                 r'(Serviceable Available Market|SAM)[^\d$]{0,20}(\$?\d+[,.]?\d*)\s*[BbMmKk]?',
@@ -578,6 +706,23 @@ def extract_market_size_from_text(text):
                 r'[Mm]arket.*(\$?\d+[,.]?\d*)\s*[Bb]illion',
                 r'(\$?\d+[,.]?\d*)\s*[Bb]illion.*[Bb]attery.*[Mm]arket',
                 r'[Bb]attery.*[Mm]arket.*(\$?\d+[,.]?\d*)\s*[Bb]illion'
+            ],
+            "addressable_cars": [
+                r'(\d+\.?\d*)\s*[Mm]illion.*[Aa]ddressable.*[Mm]arket',
+                r'[Aa]ddressable.*[Mm]arket.*(\d+\.?\d*)\s*[Mm]illion',
+                r'(\d+\.?\d*)\s*[Mm]illion.*[Cc]ars.*[Aa]ddressable',
+                r'(\d+\.?\d*)\s*[Mm]illion.*[Bb]EV.*[Mm]arket'
+            ],
+            "bev_sales": [
+                r'(\d+\.?\d*)\s*[Mm]illion.*[Bb]EV.*[Ss]ales',
+                r'[Bb]EV.*[Ss]ales.*(\d+\.?\d*)\s*[Mm]illion',
+                r'(\d+\.?\d*)\s*[Mm]illion.*[Bb]attery.*[Dd]emand',
+                r'(\d+\.?\d*)\s*[Mm]illion.*[Cc]ars.*2030'
+            ],
+            "battery_demand": [
+                r'(\d+[,.]?\d*)\s*[Gg][Ww][Hh].*[Bb]attery.*[Dd]emand',
+                r'[Bb]attery.*[Dd]emand.*(\d+[,.]?\d*)\s*[Gg][Ww][Hh]',
+                r'(\d+[,.]?\d*)\s*[Gg][Ww][Hh].*2030'
             ]
         }
         
@@ -586,11 +731,29 @@ def extract_market_size_from_text(text):
                 match = re.search(pattern, text, re.IGNORECASE)
                 if match:
                     val = match.group(2) if len(match.groups()) > 1 else match.group(1)
-                    parsed_value = parse_money_string(val)
-                    if parsed_value:
-                        results[market_type] = parsed_value
-                        print(f"[Market Size] Found {market_type}={parsed_value}")
-                        break
+                    # For non-currency values (like millions of cars), don't parse as money
+                    if market_type in ['addressable_cars', 'bev_sales']:
+                        try:
+                            parsed_value = float(val.replace(',', ''))
+                            if 'million' in pattern.lower():
+                                parsed_value *= 1_000_000
+                            results[market_type] = parsed_value
+                            print(f"[Market Size] Found {market_type}={parsed_value}")
+                            break
+                        except:
+                            continue
+                    else:
+                        # Check if the pattern contains "billion" to ensure proper parsing
+                        is_billion = 'billion' in pattern.lower() or 'b' in pattern.lower()
+                        parsed_value = parse_money_string(val)
+                        if parsed_value:
+                            # If the pattern indicates billion but the value is small, multiply by 1B
+                            if is_billion and parsed_value < 1000:  # Likely a small number that should be billions
+                                parsed_value *= 1_000_000_000
+                                print(f"[Market Size] Corrected {market_type} to billions: {parsed_value}")
+                            results[market_type] = parsed_value
+                            print(f"[Market Size] Found {market_type}={parsed_value}")
+                            break
         
         # CAGR extraction
         cagr_match = re.search(r'(\d{1,2}(?:\.\d+)?)\s*%\s*CAGR', text)

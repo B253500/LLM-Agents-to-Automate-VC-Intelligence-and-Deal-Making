@@ -18,18 +18,17 @@ from core.hybrid_context import get_hybrid_context
 
 # ------------------------------------------------------------------
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
-llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0.2)
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.1)
 
 def web_search_financial_context(company_name):
     """Search for company financial data and valuation information with source attribution."""
     try:
         from core.perplexity_utils import search_perplexity
         
-        # Search for company valuation and financial data
+        # Focused queries for key financial data
         search_queries = [
-            f"What is the current valuation of {company_name}? Include the most recent funding rounds and valuation data.",
-            f"What are the latest financial metrics for {company_name}? Include revenue, funding, and key financial indicators.",
-            f"What is the funding history and valuation of {company_name}? Include all funding rounds and post-money valuations."
+            f"Current valuation and latest funding round for {company_name} from Crunchbase and Wikipedia",
+            f"Total funding raised and funding history for {company_name} from reliable sources"
         ]
         
         web_data = []
@@ -39,10 +38,53 @@ def web_search_financial_context(company_name):
             try:
                 result = search_perplexity(query)
                 if result and len(result.strip()) > 50:
-                    web_data.append(result.strip())
-                    # Extract URLs from the result
+                    # Clean up the result by removing debugging and thinking process markers
+                    cleaned_result = result.strip()
+                    
+                    # Remove <think> tags and their content
                     import re
-                    urls = re.findall(r'https?://[^\s]+', result)
+                    cleaned_result = re.sub(r'<think>.*?</think>', '', cleaned_result, flags=re.DOTALL)
+                    
+                    # Remove thinking process markers (more comprehensive)
+                    thinking_patterns = [
+                        r'(Okay, so I need to figure out|First, from the|Looking at the|Based on the|From the search results|Let me start by|I need to analyze|Let me examine).*?(?=\n|$)',
+                        r'(Let me look through|I need to look through|Looking at result|Result mentions|First, result|Result from|Based on result).*?(?=\n|$)',
+                        r'(The user wants|The user asked|The user is asking|The query is about).*?(?=\n|$)',
+                        r'(I need to answer|I need to tackle|Let me tackle|Let me answer).*?(?=\n|$)',
+                        r'(Okay, let\'s tackle|Let\'s tackle|Let me tackle).*?(?=\n|$)',
+                        r'(The user wants me to|The user wants to know|The user is looking for).*?(?=\n|$)',
+                        r'(I should look|I need to look|Let me look).*?(?=\n|$)',
+                        r'(Based on the provided|Based on the search|From the search).*?(?=\n|$)',
+                        r'(Financial Research Summary for|StoreDot:).*?(?=\n|$)',
+                    ]
+                    
+                    for pattern in thinking_patterns:
+                        cleaned_result = re.sub(pattern, '', cleaned_result, flags=re.DOTALL)
+                    
+                    # Remove numbered analysis that's part of thinking process
+                    cleaned_result = re.sub(r'^\d+\.\s*[A-Z].*?(?=\n|$)', '', cleaned_result, flags=re.MULTILINE)
+                    
+                    # Remove citation markers
+                    cleaned_result = re.sub(r'\[\d+\]', '', cleaned_result)
+                    
+                    # Remove hashtags and markdown formatting that might be artifacts
+                    cleaned_result = re.sub(r'#+\s*[A-Za-z\s]+', '', cleaned_result)
+                    
+                    # Remove standalone bullet points that don't have content
+                    cleaned_result = re.sub(r'^\s*•\s*$', '', cleaned_result, flags=re.MULTILINE)
+                    
+                    # Remove bullet points at the beginning of lines that are followed by whitespace
+                    cleaned_result = re.sub(r'^\s*•\s+(?=\s|$)', '', cleaned_result, flags=re.MULTILINE)
+                    
+                    # Clean up extra whitespace and newlines
+                    cleaned_result = re.sub(r'\n\s*\n', '\n', cleaned_result)
+                    cleaned_result = cleaned_result.strip()
+                    
+                    # Only add if we have meaningful content after cleaning
+                    if len(cleaned_result) > 50:
+                        web_data.append(cleaned_result)
+                        # Extract URLs from the result
+                        urls = re.findall(r'https?://[^\s]+', cleaned_result)
                     sources.extend(urls[:2])  # Limit to first 2 URLs per query
             except Exception as e:
                 print(f"[Financial Analysis] Web search error for query '{query}': {e}")
@@ -50,12 +92,20 @@ def web_search_financial_context(company_name):
         
         if web_data:
             combined_data = "\n\n".join(web_data)
-            # Remove duplicate sources
+            # Remove duplicate sources and prioritize Crunchbase
             unique_sources = list(set(sources))
-            source_links = "\n".join([f"Source: {url}" for url in unique_sources[:5]])  # Limit to 5 sources
+            
+            # Prioritize Crunchbase if available
+            crunchbase_sources = [s for s in unique_sources if 'crunchbase' in s.lower()]
+            other_sources = [s for s in unique_sources if 'crunchbase' not in s.lower()]
+            
+            # Put Crunchbase first, then others (limit to 3 total)
+            prioritized_sources = crunchbase_sources + other_sources[:3-len(crunchbase_sources)]
+            
+            source_links = "\n".join([f"Source: {url}" for url in prioritized_sources])
             
             return f"""
-Web Search Results for {company_name}:
+Financial Research Summary for {company_name}:
 {combined_data}
 
 Sources:
@@ -167,34 +217,38 @@ def fetch_crunchbase_funding_data(crunchbase_url):
 
 SYSTEM = """
 You are a VC financial analyst specializing in startup financial analysis.
-Extract all available financial metrics from the following text, even if not in a table.
+Extract key financial metrics from the provided context and web search results.
 
-IMPORTANT: 
-1. If Crunchbase funding data is provided in the web_context, prioritize that data for valuation and funding information. Crunchbase data is authoritative and should be used for:
-   - implied_valuation (from post-money valuation)
-   - funding amounts
-   - round types and dates
+IMPORTANT REQUIREMENTS:
+1. Focus on the most critical financial metrics: valuation, funding amounts, and total funding raised
+2. Use Crunchbase data as the primary source when available
+3. Include source URLs for web-sourced data
+4. Generate clean, concise output without thinking process or debugging text
+5. Format URLs as clickable links in the final output
 
-2. If web search results are provided, extract financial data from those sources and include the source URLs in your analysis. Web search data can provide:
-   - Current valuation information
-   - Recent funding rounds
-   - Revenue estimates
-   - Financial metrics from news articles and reports
+CRITICAL METRICS TO EXTRACT:
+- Current valuation (from Crunchbase or web search)
+- Latest funding round amount and date
+- Total funding raised
+- Revenue (if available from reliable sources)
 
-Return a JSON object with as many of the following fields as possible:
-- revenue (by year if available)
-- MRR (monthly recurring revenue)
-- GMV (gross merchandise volume)
-- gross_profit
-- cash_burn_12m
-- runway_months
-- implied_valuation (especially from Crunchbase data or web search)
-- any other key financials
+OUTPUT FORMAT:
+Return a JSON object with these fields:
+{{
+    "implied_valuation": "Current valuation in USD",
+    "latest_round_amount": "Latest funding round amount in USD", 
+    "latest_round_date": "Date of latest funding round",
+    "total_funding_raised": "Total funding raised in USD",
+    "revenue": "Annual revenue if available",
+    "web_sources": ["List of source URLs for web data"]
+}}
 
-If a table is present, extract it as both markdown and JSON. If not, extract from running text.
-If you cannot find reliable data for a field, set it to null. Do NOT guess, estimate, or hallucinate. Only extract numbers that are explicitly present in the text, tables, Crunchbase data, or web search results. If a value is not explicitly stated, return null for that field. Never invent or infer values.
-
-When Crunchbase data is available, use it as the primary source for valuation and funding information. When web search data is available, use it to supplement and validate other financial information.
+IMPORTANT:
+- Only extract numbers that are explicitly stated in the text, Crunchbase data, or web search results
+- Do NOT guess, estimate, or hallucinate values
+- If a value is not explicitly stated, return null for that field
+- Include source URLs for web-sourced data to enable verification
+- Clean output should be ready for direct use in investment memos
 """
 
 PROMPT = ChatPromptTemplate.from_messages([
@@ -241,10 +295,34 @@ def extract_financials_from_text(text):
                 
             if field == "runway_months":
                 num = match.group(1)
+                # Skip if value looks like a year (1900-2030)
+                if 1900 <= float(num) <= 2030:
+                    continue
+                # Skip if value is unreasonably large for runway
+                if float(num) > 100:
+                    continue
                 results[field] = float(num)
             else:
                 num, suffix = match.groups()[:2]
-                results[field] = parse_money_string(num + (suffix or ""))
+                parsed_value = parse_money_string(num + (suffix or ""))
+                
+                # Skip if parsed_value is None
+                if parsed_value is None:
+                    continue
+                
+                # Skip if value looks like a year (1900-2030)
+                if 1900 <= parsed_value <= 2030:
+                    continue
+                
+                # Skip if value is too small for the metric type
+                if field in ["revenue", "cash_burn_12m", "implied_valuation"] and parsed_value < 1000:
+                    continue
+                
+                # Skip if value is unreasonably large for certain metrics
+                if field in ["runway_months"] and parsed_value > 1000:
+                    continue
+                
+                results[field] = parsed_value
     return results
 
 def value_in_text(value, text):
@@ -261,12 +339,64 @@ def run_financial_analysis_chain(profile: StartupProfile, financial_context: str
     if financial_context and financial_context.strip():
         context = financial_context
     else:
-        context = f"""
-Funding: {getattr(profile, 'funding_stage', '')}
-Revenue: {getattr(profile, 'revenue', '')}
-Prior Exits: {getattr(profile, 'prior_exits', '')}
-Sector: {getattr(profile, 'sector', '')}
-"""
+        # Build context from all available financial fields
+        financial_fields = []
+        
+        # Core financial metrics
+        if getattr(profile, 'revenue', None):
+            financial_fields.append(f"Revenue: {profile.revenue}")
+        if getattr(profile, 'funding_amount', None):
+            financial_fields.append(f"Funding Amount: {profile.funding_amount}")
+        if getattr(profile, 'funding_stage', None):
+            financial_fields.append(f"Funding Stage: {profile.funding_stage}")
+        if getattr(profile, 'implied_valuation', None):
+            financial_fields.append(f"Implied Valuation: {profile.implied_valuation}")
+        if getattr(profile, 'total_funding_raised', None):
+            financial_fields.append(f"Total Funding Raised: {profile.total_funding_raised}")
+        if getattr(profile, 'funding_rounds_count', None):
+            financial_fields.append(f"Funding Rounds Count: {profile.funding_rounds_count}")
+        if getattr(profile, 'latest_round_type', None):
+            financial_fields.append(f"Latest Round Type: {profile.latest_round_type}")
+        if getattr(profile, 'latest_round_amount', None):
+            financial_fields.append(f"Latest Round Amount: {profile.latest_round_amount}")
+        if getattr(profile, 'latest_round_date', None):
+            financial_fields.append(f"Latest Round Date: {profile.latest_round_date}")
+        
+        # Additional financial metrics
+        if getattr(profile, 'cash_burn_12m', None):
+            financial_fields.append(f"Cash Burn (12m): {profile.cash_burn_12m}")
+        if getattr(profile, 'runway_months', None):
+            financial_fields.append(f"Runway (months): {profile.runway_months}")
+        if getattr(profile, 'gross_margin', None):
+            financial_fields.append(f"Gross Margin: {profile.gross_margin}")
+        if getattr(profile, 'ebitda', None):
+            financial_fields.append(f"EBITDA: {profile.ebitda}")
+        if getattr(profile, 'net_income', None):
+            financial_fields.append(f"Net Income: {profile.net_income}")
+        if getattr(profile, 'arr', None):
+            financial_fields.append(f"ARR: {profile.arr}")
+        if getattr(profile, 'mrr', None):
+            financial_fields.append(f"MRR: {profile.mrr}")
+        if getattr(profile, 'cac', None):
+            financial_fields.append(f"CAC: {profile.cac}")
+        if getattr(profile, 'ltv', None):
+            financial_fields.append(f"LTV: {profile.ltv}")
+        if getattr(profile, 'payback_period', None):
+            financial_fields.append(f"Payback Period: {profile.payback_period}")
+        if getattr(profile, 'revenue_growth_rate', None):
+            financial_fields.append(f"Revenue Growth Rate: {profile.revenue_growth_rate}")
+        if getattr(profile, 'debt', None):
+            financial_fields.append(f"Debt: {profile.debt}")
+        if getattr(profile, 'cash_on_hand', None):
+            financial_fields.append(f"Cash on Hand: {profile.cash_on_hand}")
+        
+        # Company info
+        if getattr(profile, 'sector', None):
+            financial_fields.append(f"Sector: {profile.sector}")
+        if getattr(profile, 'name', None):
+            financial_fields.append(f"Company: {profile.name}")
+        
+        context = "\n".join(financial_fields) if financial_fields else "No financial data available"
     
     # Check if we have CoreSignal funding data with Crunchbase URLs
     crunchbase_data = ""
@@ -325,7 +455,138 @@ Crunchbase Funding Data:
             web_sources = list(set(urls))  # Remove duplicates
             # Store web sources and data in profile
             profile.web_sources = web_sources
-            profile.web_financial_data = web_search_data
+            # Clean the web financial data before storing
+            cleaned_web_data = web_search_data
+            if cleaned_web_data:
+                # Remove <think> tags and their content
+                cleaned_web_data = re.sub(r'<think>.*?</think>', '', cleaned_web_data, flags=re.DOTALL)
+                
+                # Remove thinking process markers (comprehensive)
+                thinking_patterns = [
+                    r'(Okay, so I need to figure out|First, from the|Looking at the|Based on the|From the search results|Let me start by|I need to analyze|Let me examine).*?(?=\n|$)',
+                    r'(Let me look through|I need to look through|Looking at result|Result mentions|First, result|Result from|Based on result).*?(?=\n|$)',
+                    r'(The user wants|The user asked|The user is asking|The query is about).*?(?=\n|$)',
+                    r'(I need to answer|I need to tackle|Let me tackle|Let me answer).*?(?=\n|$)',
+                    r'(Okay, let\'s tackle|Let\'s tackle|Let me tackle).*?(?=\n|$)',
+                    r'(The user wants me to|The user wants to know|The user is looking for).*?(?=\n|$)',
+                    r'(I should look|I need to look|Let me look).*?(?=\n|$)',
+                    r'(Based on the provided|Based on the search|From the search).*?(?=\n|$)',
+                    r'(Financial Research Summary for|StoreDot:).*?(?=\n|$)',
+                    r'(Okay, I need to find|I need to find|Let me find).*?(?=\n|$)',
+                    r'(The search result|The search results|From the search).*?(?=\n|$)',
+                    r'(Revenue is|Revenue was|The revenue).*?(?=\n|$)',
+                    r'(The answer should state|The answer is|Based on the data).*?(?=\n|$)',
+                    r'(So the answer should|So the answer is|So the data shows).*?(?=\n|$)',
+                    r'(The search result dates|The data dates|The information dates).*?(?=\n|$)',
+                    r'(But I need to check|But I need to verify|But I need to confirm).*?(?=\n|$)',
+                    r'(Maybe the|Maybe there\'s|Maybe it\'s).*?(?=\n|$)',
+                    r'(It\'s possible that|It\'s likely that).*?(?=\n|$)',
+                    r'(Without more|Without additional).*?(?=\n|$)',
+                ]
+                for pattern in thinking_patterns:
+                    cleaned_web_data = re.sub(pattern, '', cleaned_web_data, flags=re.DOTALL)
+                
+                # Remove numbered analysis that's part of thinking process
+                cleaned_web_data = re.sub(r'^\d+\.\s*[A-Z].*?(?=\n|$)', '', cleaned_web_data, flags=re.MULTILINE)
+                
+                # Remove citation markers
+                cleaned_web_data = re.sub(r'\[\d+\]', '', cleaned_web_data)
+                
+                # Remove hashtags and markdown formatting that might be artifacts
+                cleaned_web_data = re.sub(r'#+\s*[A-Za-z\s]+', '', cleaned_web_data)
+                
+                # Remove standalone bullet points that don't have content
+                cleaned_web_data = re.sub(r'^\s*•\s*$', '', cleaned_web_data, flags=re.MULTILINE)
+                
+                # Remove bullet points at the beginning of lines that are followed by whitespace
+                cleaned_web_data = re.sub(r'^\s*•\s+(?=\s|$)', '', cleaned_web_data, flags=re.MULTILINE)
+                
+                            # Clean up extra whitespace and newlines
+            cleaned_web_data = re.sub(r'\n\s*\n', '\n', cleaned_web_data)
+            cleaned_web_data = cleaned_web_data.strip()
+            
+            # Enhanced cleaning function for financial data
+            def clean_think_tags_and_debugging(text):
+                """Comprehensive cleaning function to remove all think tags and debugging sentences."""
+                if not isinstance(text, str):
+                    return text
+                
+                import re
+                
+                # Remove <think> tags and their content (handle nested tags)
+                # First, remove all <think> and </think> tags completely
+                text = re.sub(r'<think>', '', text)
+                text = re.sub(r'</think>', '', text)
+                
+                # Remove thinking process markers (comprehensive list)
+                thinking_patterns = [
+                    r'(Okay, so I need to figure out|First, from the|Looking at the|Based on the|From the search results|Let me start by|I need to analyze|Let me examine).*?(?=\n|$)',
+                    r'(Let me look through|I need to look through|Looking at result|Result mentions|First, result|Result from|Based on result).*?(?=\n|$)',
+                    r'(The user wants|The user asked|The user is asking|The query is about).*?(?=\n|$)',
+                    r'(I need to answer|I need to tackle|Let me tackle|Let me answer).*?(?=\n|$)',
+                    r'(Okay, let\'s tackle|Let\'s tackle|Let me tackle).*?(?=\n|$)',
+                    r'(The user wants me to|The user wants to know|The user is looking for).*?(?=\n|$)',
+                    r'(I should look|I need to look|Let me look).*?(?=\n|$)',
+                    r'(Based on the provided|Based on the search|From the search).*?(?=\n|$)',
+                    r'(Financial Research Summary for|StoreDot:).*?(?=\n|$)',
+                    r'(Wait, but|Wait, the|Wait, that\'s|Wait, no).*?(?=\n|$)',
+                    r'(Hmm,|Hmm.|Hmm, but|Hmm, that\'s).*?(?=\n|$)',
+                    r'(So, putting this together|Putting this together).*?(?=\n|$)',
+                    r'(Need to check|Need to verify|Need to confirm).*?(?=\n|$)',
+                    r'(However,|However, the|However, there\'s).*?(?=\n|$)',
+                    r'(But wait,|But wait.|But wait, the).*?(?=\n|$)',
+                    r'(Maybe the|Maybe there\'s|Maybe it\'s).*?(?=\n|$)',
+                    r'(It\'s possible that|It\'s likely that).*?(?=\n|$)',
+                    r'(Without more|Without additional).*?(?=\n|$)',
+                    r'(The user might need|The user should know).*?(?=\n|$)',
+                    # Add more patterns for <think> sentences
+                    r'(<think>.*?</think>)',
+                    r'(Okay, I need to figure out.*?)(?=\n|$)',
+                    r'(Let me start by.*?)(?=\n|$)',
+                    r'(Based on the search results.*?)(?=\n|$)',
+                    r'(Looking at the data.*?)(?=\n|$)',
+                    r'(From the information provided.*?)(?=\n|$)',
+                    r'(I need to analyze.*?)(?=\n|$)',
+                    r'(Let me examine.*?)(?=\n|$)',
+                ]
+                
+                for pattern in thinking_patterns:
+                    text = re.sub(pattern, '', text, flags=re.DOTALL)
+                
+                # Remove numbered analysis that's part of thinking process
+                text = re.sub(r'^\d+\.\s*[A-Z].*?(?=\n|$)', '', text, flags=re.MULTILINE)
+                
+                # Remove citation markers
+                text = re.sub(r'\[\d+\]', '', text)
+                
+                # Remove hashtags and markdown formatting that might be artifacts
+                text = re.sub(r'#+\s*[A-Za-z\s]+', '', text)
+                
+                # Remove standalone bullet points that don't have content
+                text = re.sub(r'^\s*•\s*$', '', text, flags=re.MULTILINE)
+                
+                # Remove bullet points at the beginning of lines that are followed by whitespace
+                text = re.sub(r'^\s*•\s+(?=\s|$)', '', text, flags=re.MULTILINE)
+                
+                # Remove lines that are just debugging markers
+                text = re.sub(r'^\s*(Sources:|Source:|Sources|Source)\s*$', '', text, flags=re.MULTILINE)
+                
+                # Remove empty tables (lines with just | | |)
+                text = re.sub(r'^\s*\|\s*\|\s*\|\s*$', '', text, flags=re.MULTILINE)
+                text = re.sub(r'^\s*\|\s*Metric\s*\|\s*Value\s*\|\s*$', '', text, flags=re.MULTILINE)
+                text = re.sub(r'^\s*\|\s*--------\s*\|\s*-------\s*\|\s*$', '', text, flags=re.MULTILINE)
+                
+                # Clean up extra whitespace and newlines
+                text = re.sub(r'\n\s*\n', '\n', text)
+                text = re.sub(r' +', ' ', text)
+                text = text.strip()
+                
+                return text
+            
+            # Apply comprehensive cleaning
+            cleaned_web_data = clean_think_tags_and_debugging(cleaned_web_data)
+        
+            profile.web_financial_data = cleaned_web_data
         else:
             print(f"[Financial Analysis] No web search data found for {company_name}")
     
@@ -335,17 +596,111 @@ Crunchbase Funding Data:
     # Optionally, add more fields as needed
     txt = llm.invoke(PROMPT.format(context=context, web_context=combined_context)).content.strip()
     print("[Financial Chain] LLM raw output:", txt)
-    first, last = txt.find("{"), txt.rfind("}")
+    
+    # Clean the LLM output to remove debugging artifacts
+    cleaned_txt = txt
+    import re
+    
+    # Remove <think> tags and their content
+    cleaned_txt = re.sub(r'<think>.*?</think>', '', cleaned_txt, flags=re.DOTALL)
+    
+    # Remove thinking process markers (more comprehensive)
+    thinking_patterns = [
+        r'(Okay, so I need to figure out|First, from the|Looking at the|Based on the|From the search results|Let me start by|I need to analyze|Let me examine).*?(?=\n|$)',
+        r'(Let me look through|I need to look through|Looking at result|Result mentions|First, result|Result from|Based on result).*?(?=\n|$)',
+        r'(The user wants|The user asked|The user is asking|The query is about).*?(?=\n|$)',
+        r'(I need to answer|I need to tackle|Let me tackle|Let me answer).*?(?=\n|$)',
+        r'(Okay, let\'s tackle|Let\'s tackle|Let me tackle).*?(?=\n|$)',
+        r'(The user wants me to|The user wants to know|The user is looking for).*?(?=\n|$)',
+        r'(I should look|I need to look|Let me look).*?(?=\n|$)',
+        r'(Based on the provided|Based on the search|From the search).*?(?=\n|$)',
+        r'(Financial Research Summary for|StoreDot:).*?(?=\n|$)',
+    ]
+    
+    for pattern in thinking_patterns:
+        cleaned_txt = re.sub(pattern, '', cleaned_txt, flags=re.DOTALL)
+    
+    # Remove numbered analysis that's part of thinking process
+    cleaned_txt = re.sub(r'^\d+\.\s*[A-Z].*?(?=\n|$)', '', cleaned_txt, flags=re.MULTILINE)
+    
+    # Remove citation markers
+    cleaned_txt = re.sub(r'\[\d+\]', '', cleaned_txt)
+    
+    # Remove hashtags and markdown formatting that might be artifacts
+    cleaned_txt = re.sub(r'#+\s*[A-Za-z\s]+', '', cleaned_txt)
+    
+    # Remove standalone bullet points that don't have content
+    cleaned_txt = re.sub(r'^\s*•\s*$', '', cleaned_txt, flags=re.MULTILINE)
+    
+    # Remove bullet points at the beginning of lines that are followed by whitespace
+    cleaned_txt = re.sub(r'^\s*•\s+(?=\s|$)', '', cleaned_txt, flags=re.MULTILINE)
+    
+    # Clean up extra whitespace and newlines
+    cleaned_txt = re.sub(r'\n\s*\n', '\n', cleaned_txt)
+    cleaned_txt = cleaned_txt.strip()
+    
+    # Use cleaned text for JSON parsing
+    first, last = cleaned_txt.find("{"), cleaned_txt.rfind("}")
     if first == -1 or last == -1:
         return profile
     try:
+        import json
         data = json.loads(txt[first : last + 1])
         print("[Financial Chain] Parsed JSON:", data)
         # Only assign values if they are present in the original text/tables
         for field in ["cash_burn_12m", "runway_months", "implied_valuation", "revenue", "mrr", "gmv", "gross_profit"]:
             val = data.get(field)
             if val is not None and value_in_text(val, context):
+                # Additional filtering for obviously wrong values
+                if isinstance(val, (int, float)):
+                    # Skip if value looks like a year (1900-2030)
+                    if 1900 <= val <= 2030:
+                        continue
+                    # Skip if value is too small for the metric type
+                    if field in ["revenue", "cash_burn_12m", "implied_valuation"] and val < 1000:
+                        continue
+                    # Skip if value is unreasonably large for certain metrics
+                    if field in ["runway_months"] and val > 1000:
+                        continue
                 setattr(profile, field, float(val))
+        
+        # Store additional financial data from web search
+        if data.get("implied_valuation"):
+            profile.implied_valuation = float(data.get("implied_valuation"))
+            profile.valuation_source = "web_search"
+            # If we have web sources, use the first one as valuation source
+            if web_sources:
+                profile.valuation_source = web_sources[0]
+        
+        if data.get("total_funding_raised"):
+            profile.total_funding_raised = float(data.get("total_funding_raised"))
+            profile.funding_source = "web_search"
+            # If we have web sources, use the first one as funding source
+            if web_sources:
+                profile.funding_source = web_sources[0]
+        
+        if data.get("latest_round_amount"):
+            profile.latest_round_amount = float(data.get("latest_round_amount"))
+        
+        if data.get("latest_round_date"):
+            profile.latest_round_date = data.get("latest_round_date")
+        
+        if data.get("revenue"):
+            profile.revenue = float(data.get("revenue"))
+        
+        # Store web sources for clickable links
+        if data.get("web_sources"):
+            profile.web_sources = data.get("web_sources")
+            print(f"[Financial Analysis] Stored {len(data.get('web_sources'))} web sources from LLM")
+        elif web_sources:
+            profile.web_sources = web_sources
+            print(f"[Financial Analysis] Stored {len(web_sources)} web sources from search")
+        
+        # Store web sources for clickable links
+        if web_sources:
+            profile.web_sources = web_sources
+            print(f"[Financial Analysis] Stored {len(web_sources)} web sources")
+        
         if data.get("summary"):
             profile.financial_summary = data.get("summary")
         if data.get("financials_table"):
@@ -354,16 +709,27 @@ Crunchbase Funding Data:
             profile.financials_by_year = data.get("financials_by_year")
     except Exception as e:
         print(f"[Financial Chain Parsing Error] {e}")
-        pass
+        # Don't pass here, continue with regex fallback
     # Regex fallback: extract from summary text if present
     summary_text = txt if isinstance(txt, str) else ""
     extracted = extract_financials_from_text(summary_text)
     print("[Financial Chain] Regex extracted:", extracted)
     if extracted:
         print("[Financial Chain] Context for extraction:", summary_text[:500] + "..." if len(summary_text) > 500 else summary_text)
+    
+    # Only use regex fallback for fields that weren't already set by LLM JSON parsing
     for k, v in extracted.items():
         if hasattr(profile, k) and v and value_in_text(v, context):
-            setattr(profile, k, v)
+            # Only set if the field is None or if the regex value is more reasonable
+            current_value = getattr(profile, k)
+            if current_value is None:
+                setattr(profile, k, v)
+            elif isinstance(current_value, (int, float)) and isinstance(v, (int, float)):
+                # Only override if the new value is more reasonable (larger for financial metrics)
+                if k in ["revenue", "cash_burn_12m", "implied_valuation"] and v > current_value:
+                    setattr(profile, k, v)
+                elif k in ["runway_months"] and 0 < v < 100:  # Reasonable runway range
+                    setattr(profile, k, v)
     if not profile.startup_id:
         from hashlib import sha1
         profile.startup_id = sha1((profile.name or context[:40]).encode()).hexdigest()[:10]

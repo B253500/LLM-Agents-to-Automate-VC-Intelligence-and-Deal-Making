@@ -198,7 +198,7 @@ You are a VC analyst. Write a concise 3-4 sentence critical assessment of the ov
 Team Information:
 {team_bios}
 """
-        overall_assessment = llm.invoke(prompt).content.strip()
+            overall_assessment = llm.invoke(prompt).content.strip()
         
         # Clean up overall assessment by removing thinking process markers
         if overall_assessment:
@@ -271,6 +271,9 @@ def get_linkedin_profile_proxycurl(founder_name, company_name=None):
     response = requests.get(url, headers=headers, params=params)
     if response.status_code == 200:
         return response.json()
+    elif response.status_code == 404:
+        print(f"Proxycurl: LinkedIn profile not found for {founder_name}")
+        return None
     else:
         print(f"Proxycurl error: {response.status_code} {response.text}")
         return None
@@ -443,8 +446,14 @@ def build_founder_profiling_agent(profile: StartupProfile, trace_id=None):
     )
 
     def _callback(*_):
-        # Run comprehensive founder profiling
-        updated = run_founder_profiling_chain(profile)
+        # Use comprehensive extracted data context
+        from core.hybrid_context import get_hybrid_context
+        
+        # Get comprehensive context including all extracted data
+        comprehensive_context = get_hybrid_context(profile, "founder team executive", use_reports=False)
+        
+        # Run comprehensive founder profiling with full context
+        updated = run_founder_profiling_chain_with_text(comprehensive_context, profile)
         
         # Enrich executives if available - first discover new ones, then enrich details
         if hasattr(profile, 'executives') and isinstance(profile.executives, list):

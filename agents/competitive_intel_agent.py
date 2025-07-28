@@ -152,7 +152,14 @@ def build_competitive_intel_agent(profile: StartupProfile, trace_id=None):
     )
 
     def _callback(*_):
-        updated = run_competitive_intel_chain(profile)
+        # Use comprehensive extracted data context
+        from core.hybrid_context import get_hybrid_context
+        
+        # Get comprehensive context including all extracted data
+        comprehensive_context = get_hybrid_context(profile, "competitive analysis competitors", use_reports=False)
+        
+        # Run competitive analysis with comprehensive context
+        updated = run_competitive_intel_chain(profile, comprehensive_context)
         return updated.model_dump_json(indent=2)
 
     task = Task(
