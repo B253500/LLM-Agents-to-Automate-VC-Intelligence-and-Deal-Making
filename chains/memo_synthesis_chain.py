@@ -53,13 +53,18 @@ def run_problem_statement_chain(profile: StartupProfile) -> str:
     llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
     prompt = f"""
 You are a VC analyst writing the Problem Statement section for an investment memo.
+- Write a comprehensive problem statement that is EXACTLY 4-5 sentences.
 - Clearly state the main problem or pain point that the company's product/service is solving.
+- Provide context about the market need, industry challenges, and why this problem matters.
+- Include specific details about the problem's scope, impact, and urgency.
 - Try to be specific to the company's sector, product, and market context.
 - Do NOT use generic or sector-wide statements—focus on the actual problem this company addresses.
 - Do NOT mention the company's solution or product features—only describe the problem.
 - Use plain, non-marketing language.
 - DO NOT include any headers or section titles in your response.
 - Start directly with the problem description.
+- CRITICAL: Ensure your response is exactly 4-5 sentences, no more, no less.
+
 Context:
 Company: {getattr(profile, 'name', '')}
 Sector: {getattr(profile, 'sector', '')}
@@ -92,11 +97,16 @@ def run_solution_overview_chain(profile: StartupProfile) -> str:
     llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
     prompt = f"""
 You are a VC analyst writing the Solution Overview section for an investment memo.
+- Write a comprehensive solution overview that is EXACTLY 4-5 sentences.
 - Clearly explain how the company's product/service solves the problem described in the Problem Statement.
+- Provide context about the solution's approach, methodology, and key differentiators.
+- Include specific details about how the solution addresses the core problem and its advantages.
 - Focus ONLY on the core solution. Don't describe in detail the product, just the solution.
 - Use plain, non-marketing language.
 - DO NOT include any headers or section titles in your response.
 - Start directly with the solution explanation.
+- CRITICAL: Ensure your response is exactly 4-5 sentences, no more, no less.
+
 Context:
 Company: {getattr(profile, 'name', '')}
 Sector: {getattr(profile, 'sector', '')}
@@ -131,13 +141,21 @@ You are a VC analyst writing the Business Model section for an investment memo.
 - Use tentative language: "appears to", "seems to", "may", "could", "based on available information"
 - Do NOT present assumptions as facts about current revenue streams or business model
 - Clearly describe potential revenue streams, customer segments, and go-to-market strategies
-- If possible, ALWAYS include a Mermaid diagram (or ASCII schema) summarizing the potential business model, using the format:
-Business Model Schema:
+- If possible, ALWAYS include a SIMPLE Mermaid diagram focusing on REVENUE STREAMS, using the format:
 ```mermaid
 graph TD;
-...diagram...
+...SIMPLE diagram focusing on revenue streams...
 ```
+- Create a SIMPLE diagram that shows:
+  * Company/Product (1 node)
+  * Revenue Streams (2-3 main streams)
+  * Customer Segments (2-3 main segments)
+- Use 5-7 nodes maximum for clarity
+- Focus on revenue streams as the central element
+- Use simple connections like "→" 
+- Keep it simple and readable for VC memos
 - If a Mermaid diagram is not possible, provide only the description.
+- DO NOT include "Business Model Schema:" header in your response - it will be added automatically.
 - Use plain, non-marketing language.
 - CRITICAL: Use bold formatting (**text**) for ALL section headers, NOT markdown headers (###).
 - Common headers to bold: **Business Model Overview**, **Potential Revenue Streams**, **Customer Segments**, **Strategy**, **Business Model Schema**, **Additional Research Needed**
@@ -163,13 +181,32 @@ Partners: {getattr(profile, 'partners', '')}
         text = raw.replace(diagram, '').strip()
         # Remove any redundant 'Business Model Schema:' header in the text (not just at the start)
         text = re.sub(r'(?i)business model schema:\s*', '', text)
+        # Also remove any standalone "Business Model Schema" lines that might be in the content
+        text = re.sub(r'^Business Model Schema$', '', text, flags=re.MULTILINE)
+        text = re.sub(r'^\*\*Business Model Schema\*\*$', '', text, flags=re.MULTILINE)
         # Convert markdown headers to bold formatting
         text = re.sub(r'^###\s*\*\*(.*?)\*\*', r'**\1**', text, flags=re.MULTILINE)
         text = re.sub(r'^###\s*(.*?)$', r'**\1**', text, flags=re.MULTILINE)
-        return f"Business Model Schema:\n{diagram}\n\n{text}"
+        return f"**Business Model Schema:**\n{diagram}\n\n{text}"
     # Convert markdown headers to bold formatting for text without diagrams
     raw = re.sub(r'^###\s*\*\*(.*?)\*\*', r'**\1**', raw, flags=re.MULTILINE)
     raw = re.sub(r'^###\s*(.*?)$', r'**\1**', raw, flags=re.MULTILINE)
+    
+    # Fix headers that might be bullet points instead of bold
+    raw = re.sub(r'^•\s*Business Model Overview$', r'**Business Model Overview**', raw, flags=re.MULTILINE)
+    raw = re.sub(r'^•\s*Potential Revenue Streams$', r'**Potential Revenue Streams**', raw, flags=re.MULTILINE)
+    raw = re.sub(r'^•\s*Customer Segments$', r'**Customer Segments**', raw, flags=re.MULTILINE)
+    raw = re.sub(r'^•\s*Go-to-Market Strategies$', r'**Strategy**', raw, flags=re.MULTILINE)
+    raw = re.sub(r'^•\s*Strategy$', r'**Strategy**', raw, flags=re.MULTILINE)
+    raw = re.sub(r'^•\s*Business Model Schema$', r'**Business Model Schema**', raw, flags=re.MULTILINE)
+    raw = re.sub(r'^•\s*Additional Research Needed$', r'**Additional Research Needed**', raw, flags=re.MULTILINE)
+    
+    # Fix market section headers that might be bullet points instead of bold
+    raw = re.sub(r'^•\s*📊 Market Size Metrics$', r'📊 Market Size Metrics', raw, flags=re.MULTILINE)
+    raw = re.sub(r'^•\s*📈 Growth Metrics$', r'📈 Growth Metrics', raw, flags=re.MULTILINE)
+    raw = re.sub(r'^•\s*📰 Sector Analysis$', r'📰 Sector Analysis', raw, flags=re.MULTILINE)
+    raw = re.sub(r'^•\s*🔍 Market Research Sources$', r'🔍 Market Research Sources', raw, flags=re.MULTILINE)
+    raw = re.sub(r'^•\s*🔗 Additional Sources$', r'🔗 Additional Sources', raw, flags=re.MULTILINE)
     
     # Also convert plain text headers to bold formatting
     raw = re.sub(r'^Business Model Overview$', r'**Business Model Overview**', raw, flags=re.MULTILINE)
@@ -177,8 +214,15 @@ Partners: {getattr(profile, 'partners', '')}
     raw = re.sub(r'^Customer Segments$', r'**Customer Segments**', raw, flags=re.MULTILINE)
     raw = re.sub(r'^Go-to-Market Strategies$', r'**Strategy**', raw, flags=re.MULTILINE)
     raw = re.sub(r'^Strategy$', r'**Strategy**', raw, flags=re.MULTILINE)
-    raw = re.sub(r'^Business Model Schema$', r'**Business Model Schema**', raw, flags=re.MULTILINE)
+    raw = re.sub(r'^Business Model Schema$', r'**Business Model Schema:**', raw, flags=re.MULTILINE)
     raw = re.sub(r'^Additional Research Needed$', r'**Additional Research Needed**', raw, flags=re.MULTILINE)
+    
+    # Also convert plain text market headers to bold formatting
+    raw = re.sub(r'^📊 Market Size Metrics$', r'📊 Market Size Metrics', raw, flags=re.MULTILINE)
+    raw = re.sub(r'^📈 Growth Metrics$', r'📈 Growth Metrics', raw, flags=re.MULTILINE)
+    raw = re.sub(r'^📰 Sector Analysis$', r'📰 Sector Analysis', raw, flags=re.MULTILINE)
+    raw = re.sub(r'^🔍 Market Research Sources$', r'🔍 Market Research Sources', raw, flags=re.MULTILINE)
+    raw = re.sub(r'^🔗 Additional Sources$', r'🔗 Additional Sources', raw, flags=re.MULTILINE)
     
     # Convert any remaining plain text headers that might be missed
     raw = re.sub(r'^([A-Z][a-z\s]+):$', r'**\1:**', raw, flags=re.MULTILINE)
@@ -206,12 +250,22 @@ def run_risks_section_chain(profile: StartupProfile) -> str:
     llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
     prompt = f"""
 You are a VC analyst writing the Risks section for an investment memo.
-- Organize risks into clear categories: **Market Risks**, **Technical Risks**, **Operational Risks**, **Regulatory Risks**, **Financial Risks**
+- Organize risks into clear categories with BOLD headers: **Market Risks**, **Technical Risks**, **Operational Risks**, **Regulatory Risks**, **Financial Risks**
+- DO NOT use bullet points for category headers - only use bold formatting (**Header**)
+- Use bullet points ONLY for individual risk items under each category
 - List the POTENTIAL risks relevant to this company and product, sector with a specific explanation for each risk.
 - Make each risk specific to the company's technology, market, or business context. Avoid generic or boilerplate risks.
-- Use bullet points, with each risk followed by a short, specific explanation.
+- Use bullet points for individual risks, with each risk followed by a short, specific explanation.
 - Use plain, non-marketing language.
-- CRITICAL: Use bold formatting (**text**) for ALL category headers, NOT markdown headers (###).
+
+FORMATTING EXAMPLE:
+**Market Risks**
+• Market Adoption Uncertainty: [specific explanation]
+• Competitive Landscape Ambiguity: [specific explanation]
+
+**Technical Risks**
+• Technology Maturity Uncertainty: [specific explanation]
+• Performance and Reliability Concerns: [specific explanation]
 
 IMPORTANT: Use tentative language and clearly indicate when you are making assumptions or interpretations.
 - Use phrases like "appears to be", "seems to", "may be", "could be", "based on available information"
@@ -235,6 +289,13 @@ Regulatory: {getattr(profile, 'regulatory', '')}
     # Convert markdown headers to bold formatting
     raw = re.sub(r'^###\s*\*\*(.*?)\*\*', r'**\1**', raw, flags=re.MULTILINE)
     raw = re.sub(r'^###\s*(.*?)$', r'**\1**', raw, flags=re.MULTILINE)
+    
+    # Fix category headers that might be bullet points instead of bold
+    raw = re.sub(r'^•\s*Market Risks$', r'**Market Risks**', raw, flags=re.MULTILINE)
+    raw = re.sub(r'^•\s*Technical Risks$', r'**Technical Risks**', raw, flags=re.MULTILINE)
+    raw = re.sub(r'^•\s*Operational Risks$', r'**Operational Risks**', raw, flags=re.MULTILINE)
+    raw = re.sub(r'^•\s*Regulatory Risks$', r'**Regulatory Risks**', raw, flags=re.MULTILINE)
+    raw = re.sub(r'^•\s*Financial Risks$', r'**Financial Risks**', raw, flags=re.MULTILINE)
     
     # Also convert plain text category headers to bold formatting
     raw = re.sub(r'^Market Risks$', r'**Market Risks**', raw, flags=re.MULTILINE)
@@ -285,11 +346,12 @@ def run_esg_section_chain(profile: StartupProfile) -> str:
     llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
     prompt = f"""
 You are a VC analyst writing the ESG Considerations section for an investment memo.
-- Write a single, concise paragraph (3-4 sentences maximum).
+- Write a single, concise paragraph (4-5 sentences).
 - Summarize only the most material ESG factors for this company (environmental, social, and governance), focusing on what matters most for investors.
 - Avoid generic, boilerplate, or verbose content. Do not list every ESG subtopic—only mention what is most relevant and specific to the company.
 - Use plain, non-marketing language.
-- Use bold formatting (**text**) for headers, NOT markdown headers (###).
+- DO NOT use any headers, bold formatting, or section dividers. Write as one flowing paragraph.
+- Do NOT separate environmental, social, and governance into different sections.
 Context:
 Company: {getattr(profile, 'name', '')}
 Sector: {getattr(profile, 'sector', '')}
@@ -304,9 +366,20 @@ Certifications: {getattr(profile, 'esg_certifications', '')}
 """
     response = llm.invoke(prompt)
     raw = response.content.strip() if hasattr(response, 'content') else str(response)
-    # Convert markdown headers to bold formatting
-    raw = re.sub(r'^###\s*\*\*(.*?)\*\*', r'**\1**', raw, flags=re.MULTILINE)
-    raw = re.sub(r'^###\s*(.*?)$', r'**\1**', raw, flags=re.MULTILINE)
+    
+    # Remove any bold headers that might have been generated
+    raw = re.sub(r'\*\*Environmental:\*\*', 'Environmental', raw)
+    raw = re.sub(r'\*\*Social:\*\*', 'Social', raw)
+    raw = re.sub(r'\*\*Governance:\*\*', 'Governance', raw)
+    raw = re.sub(r'\*\*ESG:\*\*', 'ESG', raw)
+    
+    # Remove any other bold headers that might appear
+    raw = re.sub(r'\*\*([^*]+):\*\*', r'\1', raw)
+    
+    # Clean up extra spaces and formatting
+    raw = re.sub(r'\s+', ' ', raw)
+    raw = raw.strip()
+    
     return raw
 
 def run_analyst_commentary_chain(profile: StartupProfile) -> str:
@@ -318,6 +391,24 @@ You are a VC analyst writing the Analyst Commentary section for an investment me
 - Only synthesize and comment on information present in the provided context.
 - Use plain, non-marketing language.
 - Use bold formatting (**text**) for headers, NOT markdown headers (###).
+- DO NOT use bullet points for headers - only use bold formatting (**Header**)
+
+FORMATTING EXAMPLE:
+**Key Strengths:**
+[paragraph about strengths]
+
+**Key Weaknesses:**
+[paragraph about weaknesses]
+
+**Opportunities:**
+[paragraph about opportunities]
+
+**Risks:**
+[paragraph about risks]
+
+**Conclusion:**
+[paragraph with conclusion]
+
 Context:
 Company: {getattr(profile, 'name', '')}
 Sector: {getattr(profile, 'sector', '')}
@@ -330,9 +421,25 @@ Risks: {getattr(profile, 'risk_flags', '')}
 """
     response = llm.invoke(prompt)
     text = response.content.strip() if hasattr(response, 'content') else str(response)
+    
+    # Fix headers that might be bullet points instead of bold
+    text = re.sub(r'^•\s*Key Strengths:$', r'**Key Strengths:**', text, flags=re.MULTILINE)
+    text = re.sub(r'^•\s*Key Weaknesses:$', r'**Key Weaknesses:**', text, flags=re.MULTILINE)
+    text = re.sub(r'^•\s*Opportunities:$', r'**Opportunities:**', text, flags=re.MULTILINE)
+    text = re.sub(r'^•\s*Risks:$', r'**Risks:**', text, flags=re.MULTILINE)
+    text = re.sub(r'^•\s*Conclusion:$', r'**Conclusion:**', text, flags=re.MULTILINE)
+    
+    # Also convert plain text headers to bold formatting
+    text = re.sub(r'^Key Strengths:$', r'**Key Strengths:**', text, flags=re.MULTILINE)
+    text = re.sub(r'^Key Weaknesses:$', r'**Key Weaknesses:**', text, flags=re.MULTILINE)
+    text = re.sub(r'^Opportunities:$', r'**Opportunities:**', text, flags=re.MULTILINE)
+    text = re.sub(r'^Risks:$', r'**Risks:**', text, flags=re.MULTILINE)
+    text = re.sub(r'^Conclusion:$', r'**Conclusion:**', text, flags=re.MULTILINE)
+    
     # Convert markdown headers to bold formatting
     text = re.sub(r'^###\s*\*\*(.*?)\*\*', r'**\1**', text, flags=re.MULTILINE)
     text = re.sub(r'^###\s*(.*?)$', r'**\1**', text, flags=re.MULTILINE)
+    
     return clean_blank_bullets(text)
 
 def run_exit_strategies_chain(profile: StartupProfile) -> str:
@@ -344,7 +451,8 @@ You are a VC analyst writing the Investment & Exit Strategies section for an inv
 - Summarize the key options and rationale, but do NOT list them in detail or use bullets/tables.
 - Focus on what is most relevant for investors, based on the company's technology, market, and growth prospects.
 - Use plain, non-marketing language.
-- Use bold formatting (**text**) for headers, NOT markdown headers (###).
+- DO NOT use any headers, bold formatting, or section dividers. Write as one flowing paragraph.
+- DO NOT include "Investment & Exit Strategies:" or any similar header in your response.
 Context:
 Company: {getattr(profile, 'name', '')}
 Sector: {getattr(profile, 'sector', '')}
@@ -356,9 +464,20 @@ Competitive: {getattr(profile, 'top_competitors', '')}
 """
     response = llm.invoke(prompt)
     raw = response.content.strip() if hasattr(response, 'content') else str(response)
-    # Convert markdown headers to bold formatting
-    raw = re.sub(r'^###\s*\*\*(.*?)\*\*', r'**\1**', raw, flags=re.MULTILINE)
-    raw = re.sub(r'^###\s*(.*?)$', r'**\1**', raw, flags=re.MULTILINE)
+    
+    # Remove any bold headers that might have been generated
+    raw = re.sub(r'\*\*Investment & Exit Strategies:\*\*', '', raw)
+    raw = re.sub(r'\*\*Investment & Exit Strategies\*\*', '', raw)
+    raw = re.sub(r'Investment & Exit Strategies:', '', raw)
+    raw = re.sub(r'Investment & Exit Strategies', '', raw)
+    
+    # Remove any other bold headers that might appear
+    raw = re.sub(r'\*\*([^*]+):\*\*', r'\1', raw)
+    
+    # Clean up extra spaces and formatting
+    raw = re.sub(r'\s+', ' ', raw)
+    raw = raw.strip()
+    
     return raw
 
 def run_followup_section_chain(profile: StartupProfile) -> str:
@@ -367,10 +486,19 @@ def run_followup_section_chain(profile: StartupProfile) -> str:
     prompt = f"""
 You are a VC analyst writing the Follow-up Questions & Next Steps section for an investment memo.
 - Organize the section by topic, using bold headers (e.g., **Technology Validation & IP**, **Financials & Funding Stage**, **Competitive Landscape**, **OEM & Manufacturing Partnerships**, **Regulatory & Market Timing**).
-- Do NOT use bullet points for headers—only for the actual questions or action items under each header.
+- DO NOT use bullet points for headers - only use bold formatting (**Header**)
+- Use bullet points ONLY for individual questions or action items under each header
 - For each topic, list 2-4 specific, actionable follow-up questions or next steps as bullet points.
 - Use plain, non-marketing language.
-- CRITICAL: ALL category headers MUST be in bold format (**Header**), not plain text.
+
+FORMATTING EXAMPLE:
+**Technology Validation & IP**
+• What specific milestones has the company achieved in technology development?
+• Can the company provide detailed information on patents or IP protections?
+
+**Financials & Funding Stage**
+• What is the current funding stage and plans for future fundraising?
+• Can the company provide financial projections or revenue models?
 
 Context:
 Company: {getattr(profile, 'name', '')}
@@ -384,35 +512,22 @@ Regulatory: {getattr(profile, 'regulatory', '')}
     response = llm.invoke(prompt)
     raw = response.content.strip() if hasattr(response, 'content') else str(response)
     
-    # Post-process: ensure headers are bold and not bulleted
-    lines = raw.split('\n')
-    formatted = []
-    for i, line in enumerate(lines):
-        if line.strip().startswith('•') and not line.strip().startswith('••'):
-            formatted.append(line)
-        elif line.strip() and not line.strip().startswith('•'):
-            header = line.strip().lstrip('•').strip()
-            if not header.startswith('**'):
-                header = f"**{header}**"
-            formatted.append(header)
-        else:
-            formatted.append(line)
+    # Fix headers that might be bullet points instead of bold
+    raw = re.sub(r'^•\s*Technology Validation & IP$', r'**Technology Validation & IP**', raw, flags=re.MULTILINE)
+    raw = re.sub(r'^•\s*Financials & Funding Stage$', r'**Financials & Funding Stage**', raw, flags=re.MULTILINE)
+    raw = re.sub(r'^•\s*Competitive Landscape$', r'**Competitive Landscape**', raw, flags=re.MULTILINE)
+    raw = re.sub(r'^•\s*OEM & Manufacturing Partnerships$', r'**OEM & Manufacturing Partnerships**', raw, flags=re.MULTILINE)
+    raw = re.sub(r'^•\s*Regulatory & Market Timing$', r'**Regulatory & Market Timing**', raw, flags=re.MULTILINE)
     
-    # Additional post-processing to ensure common headers are bold
-    result = '\n'.join(formatted)
+    # Also convert plain text headers to bold formatting
+    raw = re.sub(r'^Technology Validation & IP$', r'**Technology Validation & IP**', raw, flags=re.MULTILINE)
+    raw = re.sub(r'^Financials & Funding Stage$', r'**Financials & Funding Stage**', raw, flags=re.MULTILINE)
+    raw = re.sub(r'^Competitive Landscape$', r'**Competitive Landscape**', raw, flags=re.MULTILINE)
+    raw = re.sub(r'^OEM & Manufacturing Partnerships$', r'**OEM & Manufacturing Partnerships**', raw, flags=re.MULTILINE)
+    raw = re.sub(r'^Regulatory & Market Timing$', r'**Regulatory & Market Timing**', raw, flags=re.MULTILINE)
     
-    # Convert common headers to bold if they're not already
-    common_headers = [
-        "Technology Validation & IP",
-        "Financials & Funding Stage", 
-        "Competitive Landscape",
-        "OEM & Manufacturing Partnerships",
-        "Regulatory & Market Timing"
-    ]
+    # Remove bold formatting from bullet points (questions should not be bold)
+    raw = re.sub(r'^\*\*•\s*([^*]+)\*\*$', r'• \1', raw, flags=re.MULTILINE)
+    raw = re.sub(r'^•\s*\*\*([^*]+)\*\*$', r'• \1', raw, flags=re.MULTILINE)
     
-    for header in common_headers:
-        # Replace non-bold versions with bold versions
-        result = re.sub(rf'^{re.escape(header)}$', f'**{header}**', result, flags=re.MULTILINE)
-        result = re.sub(rf'^{re.escape(header)}\s*$', f'**{header}**', result, flags=re.MULTILINE)
-    
-    return result 
+    return raw 

@@ -27,7 +27,7 @@ exa_search_tool = EXASearchTool(
     numResults=20
 )
 
-llm = ChatOpenAI(model="gpt-4", temperature=0.2)
+llm = ChatOpenAI(model="gpt-4o", temperature=0.2)
 
 SYSTEM = """
 You are a market research analyst for venture capital.
@@ -136,30 +136,43 @@ def generate_market_size_section(profile: StartupProfile) -> str:
         import re
         cleaned = re.sub(r'<think>.*?</think>', '', response, flags=re.DOTALL)
         
-        # Remove thinking process markers
-        cleaned = re.sub(r'(Okay, so I need to figure out|First, looking at|Let me start by|I need to analyze|Let me examine).*?(?=\n|$)', '', cleaned, flags=re.DOTALL)
+        # Remove thinking process markers (but be more careful)
+        thinking_patterns = [
+            r'Okay, so I need to figure out.*?(?=\n|$)',
+            r'First, looking at.*?(?=\n|$)',
+            r'Let me start by.*?(?=\n|$)',
+            r'I need to analyze.*?(?=\n|$)',
+            r'Let me examine.*?(?=\n|$)',
+            r'Based on my search.*?(?=\n|$)',
+            r'According to the search results.*?(?=\n|$)'
+        ]
         
-        # Remove numbered analysis that's part of thinking process
-        cleaned = re.sub(r'^\d+\.\s*[A-Z].*?(?=\n|$)', '', cleaned, flags=re.MULTILINE)
+        for pattern in thinking_patterns:
+            cleaned = re.sub(pattern, '', cleaned, flags=re.DOTALL)
         
-        # Remove citation markers like [1], [2], etc.
+        # Remove citation markers like [1], [2], etc. (but keep the text)
         cleaned = re.sub(r'\[\d+\]', '', cleaned)
         
         # Clean up extra whitespace and newlines
         cleaned = re.sub(r'\n\s*\n', '\n', cleaned)
         cleaned = cleaned.strip()
         
+        # Remove any remaining single characters that might be artifacts
+        cleaned = re.sub(r'^\s*[a-z]\s+', '', cleaned, flags=re.MULTILINE)
+        cleaned = re.sub(r'^\s*\.\s+', '', cleaned, flags=re.MULTILINE)
+        cleaned = re.sub(r'^\s*,\s+', '', cleaned, flags=re.MULTILINE)
+        
         return cleaned
     
     # --- Perplexity search for market research URLs ---
     market_research_urls = []
     if sector:
+        print(f"[Market Agent] Searching for market research URLs for sector: {sector}")
         try:
             # Use Perplexity to find relevant market research reports with explicit URL requests
             search_queries = [
-                f"Find 3 specific market research report URLs for {sector} market size 2024 2025. Return only the URLs in markdown format: [Report Name](URL)",
-                f"Find 3 industry analysis report URLs for {sector} TAM SAM market research. Return only the URLs in markdown format: [Report Name](URL)",
-                f"Find 3 market research URLs for {sector} growth trends 2024. Return only the URLs in markdown format: [Report Name](URL)"
+                f"Find 2 specific market research report URLs for {sector} market size 2024 2025. Return only the URLs in markdown format: [Report Name](URL)",
+                f"Find 2 industry analysis report URLs for {sector} TAM SAM market research. Return only the URLs in markdown format: [Report Name](URL)"
             ]
             
             # Check if Perplexity API is available
@@ -169,8 +182,8 @@ def generate_market_size_section(profile: StartupProfile) -> str:
                 print("[Market Agent] Perplexity API not available, skipping web searches")
                 # Add fallback URLs for common market research sources
                 market_research_urls = [
-                    "https://www.market.us/report/global-battery-technology-market/",
-                    "https://www.imarcgroup.com/battery-technology-market", 
+                    "https://market.us/report/global-battery-technology-market/",
+                    "https://www.alliedmarketresearch.com/battery-technology-market/", 
                     "https://www.researchandmarkets.com/reports/battery-technology-market"
                 ]
             
@@ -180,31 +193,37 @@ def generate_market_size_section(profile: StartupProfile) -> str:
                     search_results = search_perplexity(query, num_results=3)
                     
                     if search_results:
+                        print(f"[Market Agent] Found search results, extracting URLs...")
                         # Extract URLs BEFORE cleaning the response
                         import re
                         
                         # Look for markdown links first: [text](url) - BEFORE cleaning
                         markdown_links = re.findall(r'\[([^\]]+)\]\((https?://[^\)]+)\)', search_results)
+                        print(f"[Market Agent] Found {len(markdown_links)} markdown links")
                         for text, url in markdown_links:
+                            print(f"[Market Agent] Adding URL: {url}")
                             market_research_urls.append(url)
-                            if len(market_research_urls) >= 3:
+                            if len(market_research_urls) >= 2:
                                 break
                         
                         # If not enough markdown links, look for plain URLs - BEFORE cleaning
-                        if len(market_research_urls) < 3:
+                        if len(market_research_urls) < 2:
+                            print(f"[Market Agent] Looking for plain URLs...")
                             # More comprehensive URL regex
                             urls = re.findall(r'https?://[^\s\)\]<>"]+', search_results)
+                            print(f"[Market Agent] Found {len(urls)} plain URLs")
                             # Filter for market research domains
                             market_domains = ['statista', 'grandviewresearch', 'marketsandmarkets', 'mckinsey', 'bain', 'bcg', 'deloitte', 'pwc', 'kpmg', 'ey', 'forrester', 'gartner', 'idc', 'frost', 'technavio', 'ibisworld', 'marketresearch', 'researchandmarkets', 'alliedmarketresearch', 'persistencemarketresearch', 'factmr', 'coherentmarketinsights', 'transparencymarketresearch', 'emergenresearch', 'precedenceresearch', 'verifiedmarketresearch', 'marketdataforecast', 'marketresearchfuture', '360marketupdates', 'marketwatch', 'bloomberg', 'reuters', 'cnbc', 'wsj', 'ft', 'forbes', 'techcrunch', 'venturebeat']
                             
                             for url in urls:
                                 if any(domain in url.lower() for domain in market_domains):
                                     if url not in market_research_urls:  # Avoid duplicates
+                                        print(f"[Market Agent] Adding filtered URL: {url}")
                                         market_research_urls.append(url)
-                                        if len(market_research_urls) >= 3:
+                                        if len(market_research_urls) >= 2:
                                             break
                     
-                    if len(market_research_urls) >= 3:
+                    if len(market_research_urls) >= 2:
                         break
                         
                 except Exception as e:
@@ -213,6 +232,10 @@ def generate_market_size_section(profile: StartupProfile) -> str:
                     
         except Exception as e:
             print(f"[Market Research] Error during Perplexity search: {e}")
+    
+    print(f"[Market Agent] Final market research URLs found: {len(market_research_urls)}")
+    for i, url in enumerate(market_research_urls, 1):
+        print(f"[Market Agent] URL {i}: {url}")
     
     # --- Perplexity for market analysis content with source extraction ---
     sector_analysis = ""
@@ -250,12 +273,16 @@ def generate_market_size_section(profile: StartupProfile) -> str:
                 
                 # Use LLM to summarize the analysis
                 summary_prompt = f"""
-                Based on the following market research for the '{sector}' sector, provide a concise summary (2-3 sentences) covering:
-                1. Key market trends and drivers
-                2. Growth projections and opportunities
-                3. Important industry developments
+                Based on the following market research for the '{sector}' sector, provide a well-structured, professional analysis covering:
                 
-                Focus on actionable insights for investment analysis. Do not include URLs or citations.
+                1. Market Overview: Current market size and growth trajectory
+                2. Key Drivers: Main factors driving market growth
+                3. Technology Trends: Important technological developments
+                4. Industry Developments: Notable industry changes and innovations
+                
+                Write in clear, complete sentences. Focus on actionable insights for investment analysis. 
+                Do not include URLs, citations, or incomplete fragments.
+                Ensure the analysis flows logically and is suitable for a professional investment memo.
                 
                 Research Results:
                 {cleaned_results}
@@ -458,82 +485,6 @@ Sector: {sector}
         lines.append("")
         for url in market_research_urls:
             try:
-                from urllib.parse import urlparse
-                parsed = urlparse(url)
-                domain = parsed.netloc
-                if domain.startswith('www.'):
-                    domain = domain[4:]
-                
-                # Create readable source names
-                if 'precedenceresearch' in domain.lower():
-                    source_name = "Precedence Research"
-                elif 'oganalysis' in domain.lower():
-                    source_name = "OG Analysis"
-                elif 'grandviewresearch' in domain.lower():
-                    source_name = "Grand View Research"
-                elif 'marketsandmarkets' in domain.lower():
-                    source_name = "MarketsandMarkets"
-                elif 'statista' in domain.lower():
-                    source_name = "Statista"
-                elif 'ibisworld' in domain.lower():
-                    source_name = "IBISWorld"
-                elif 'market.us' in domain.lower():
-                    source_name = "Market.Us"
-                elif 'researchandmarkets' in domain.lower():
-                    source_name = "ResearchandMarkets"
-                elif 'thebusinessresearchcompany' in domain.lower():
-                    source_name = "The Business Research Company"
-                else:
-                    source_name = domain.replace('.com', '').replace('.co', '').title()
-                
-                # Ensure we have a complete URL and clean it
-                if url.startswith('http') and len(url) > 10:
-                    # Clean the URL - only remove trailing periods that are not part of the URL structure
-                    clean_url = url
-                    # Only remove trailing period if it's not part of a domain extension
-                    if clean_url.endswith('.') and not clean_url.endswith('.com') and not clean_url.endswith('.org') and not clean_url.endswith('.net') and not clean_url.endswith('.co') and not clean_url.endswith('.io'):
-                        clean_url = clean_url[:-1]
-                    if len(clean_url) > 200:
-                        clean_url = clean_url[:200]
-                        print(f"[Market Agent] Truncated long URL: {url[:50]}...")
-                    lines.append(f"• [{source_name}]({clean_url})")
-                else:
-                    print(f"[Market Agent] Invalid URL found: {url}")
-            except Exception as e:
-                print(f"[Market Agent] Error processing URL {url}: {e}")
-                # Fallback to domain extraction
-                domain = url.split('/')[2] if len(url.split('/')) > 2 else url
-                if url.startswith('http') and len(url) > 10:
-                    lines.append(f"• [{domain}]({url})")
-        lines.append("")
-    
-    # 6. Additional Web Sources (if any from profile)
-    if web_links:
-        lines.append("**🔗 Additional Sources**")
-        for url in web_links:
-            try:
-                from urllib.parse import urlparse
-                parsed = urlparse(url)
-                domain = parsed.netloc
-                if domain.startswith('www.'):
-                    domain = domain[4:]
-                
-                # Create readable source names
-                if 'precedenceresearch' in domain.lower():
-                    source_name = "Precedence Research"
-                elif 'oganalysis' in domain.lower():
-                    source_name = "OG Analysis"
-                elif 'grandviewresearch' in domain.lower():
-                    source_name = "Grand View Research"
-                elif 'marketsandmarkets' in domain.lower():
-                    source_name = "MarketsandMarkets"
-                elif 'statista' in domain.lower():
-                    source_name = "Statista"
-                elif 'ibisworld' in domain.lower():
-                    source_name = "IBISWorld"
-                else:
-                    source_name = domain.replace('.com', '').replace('.co', '').title()
-                
                 # Clean the URL - only remove trailing periods that are not part of the URL structure
                 clean_url = url
                 # Only remove trailing period if it's not part of a domain extension
@@ -542,11 +493,111 @@ Sector: {sector}
                 if len(clean_url) > 200:
                     clean_url = clean_url[:200]
                     print(f"[Market Agent] Truncated long URL: {url[:50]}...")
-                lines.append(f"• [{source_name}]({clean_url})")
-            except:
-                # Fallback to domain extraction
-                domain = url.split('/')[2] if len(url.split('/')) > 2 else url
-                lines.append(f"• [{domain}]({url})")
+                
+                # Ensure we have a complete URL
+                if clean_url.startswith('http') and len(clean_url) > 10:
+                    # Fix common URL issues before adding to output
+                    corrected_url = clean_url
+                    # Fix market.us URLs
+                    if 'market.us' in clean_url and 'globalbatterytechnologymarket' in clean_url:
+                        corrected_url = clean_url.replace('globalbatterytechnologymarket', 'global-battery-technology-market')
+                    # Fix alliedmarketresearch URLs
+                    elif 'alliedmarketresearch' in clean_url and 'batterytechnologymarket' in clean_url:
+                        corrected_url = clean_url.replace('batterytechnologymarket', 'battery-technology-market')
+                    
+                    # Format as markdown link for proper DOCX hyperlink processing
+                    try:
+                        from urllib.parse import urlparse
+                        parsed = urlparse(corrected_url)
+                        domain = parsed.netloc
+                        if domain.startswith('www.'):
+                            domain = domain[4:]
+                        
+                        # Create readable source names
+                        if 'precedenceresearch' in domain.lower():
+                            source_name = "Precedence Research"
+                        elif 'oganalysis' in domain.lower():
+                            source_name = "OG Analysis"
+                        elif 'grandviewresearch' in domain.lower():
+                            source_name = "Grand View Research"
+                        elif 'marketsandmarkets' in domain.lower():
+                            source_name = "MarketsandMarkets"
+                        elif 'statista' in domain.lower():
+                            source_name = "Statista"
+                        elif 'ibisworld' in domain.lower():
+                            source_name = "IBISWorld"
+                        else:
+                            source_name = domain.replace('.com', '').replace('.co', '').title()
+                        
+                        lines.append(f"• [{corrected_url}]({corrected_url})")
+                    except:
+                        # Fallback to domain extraction
+                        domain = corrected_url.split('/')[2] if len(corrected_url.split('/')) > 2 else corrected_url
+                        lines.append(f"• [{corrected_url}]({corrected_url})")
+                else:
+                    print(f"[Market Agent] Invalid URL found: {url}")
+            except Exception as e:
+                print(f"[Market Agent] Error processing URL {url}: {e}")
+        lines.append("")
+    
+    # 6. Additional Web Sources (if any from profile)
+    if web_links:
+        lines.append("**🔗 Additional Sources**")
+        for url in web_links:
+            try:
+                # Clean the URL - only remove trailing periods that are not part of the URL structure
+                clean_url = url
+                # Only remove trailing period if it's not part of a domain extension
+                if clean_url.endswith('.') and not clean_url.endswith('.com') and not clean_url.endswith('.org') and not clean_url.endswith('.net') and not clean_url.endswith('.co') and not clean_url.endswith('.io'):
+                    clean_url = clean_url[:-1]
+                if len(clean_url) > 200:
+                    clean_url = clean_url[:200]
+                    print(f"[Market Agent] Truncated long URL: {url[:50]}...")
+                
+                # Ensure we have a complete URL
+                if clean_url.startswith('http') and len(clean_url) > 10:
+                    # Fix common URL issues before adding to output
+                    corrected_url = clean_url
+                    # Fix market.us URLs
+                    if 'market.us' in clean_url and 'globalbatterytechnologymarket' in clean_url:
+                        corrected_url = clean_url.replace('globalbatterytechnologymarket', 'global-battery-technology-market')
+                    # Fix alliedmarketresearch URLs
+                    elif 'alliedmarketresearch' in clean_url and 'batterytechnologymarket' in clean_url:
+                        corrected_url = clean_url.replace('batterytechnologymarket', 'battery-technology-market')
+                    
+                    # Format as markdown link for proper DOCX hyperlink processing
+                    try:
+                        from urllib.parse import urlparse
+                        parsed = urlparse(corrected_url)
+                        domain = parsed.netloc
+                        if domain.startswith('www.'):
+                            domain = domain[4:]
+                        
+                        # Create readable source names
+                        if 'precedenceresearch' in domain.lower():
+                            source_name = "Precedence Research"
+                        elif 'oganalysis' in domain.lower():
+                            source_name = "OG Analysis"
+                        elif 'grandviewresearch' in domain.lower():
+                            source_name = "Grand View Research"
+                        elif 'marketsandmarkets' in domain.lower():
+                            source_name = "MarketsandMarkets"
+                        elif 'statista' in domain.lower():
+                            source_name = "Statista"
+                        elif 'ibisworld' in domain.lower():
+                            source_name = "IBISWorld"
+                        else:
+                            source_name = domain.replace('.com', '').replace('.co', '').title()
+                        
+                        lines.append(f"• [{corrected_url}]({corrected_url})")
+                    except:
+                        # Fallback to domain extraction
+                        domain = corrected_url.split('/')[2] if len(corrected_url.split('/')) > 2 else corrected_url
+                        lines.append(f"• [{corrected_url}]({corrected_url})")
+                else:
+                    print(f"[Market Agent] Invalid URL found: {url}")
+            except Exception as e:
+                print(f"[Market Agent] Error processing additional URL {url}: {e}")
         lines.append("")
     
     return '\n'.join(lines)

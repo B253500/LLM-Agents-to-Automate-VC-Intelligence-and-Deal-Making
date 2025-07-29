@@ -184,6 +184,15 @@ class StartupProfile(BaseModel):
     phds: Optional[int] = None
     professionals: Optional[int] = None
     
+    # --- Enhanced technical specifications ---
+    volumetric_energy_density: Optional[int] = None
+    granted_patents: Optional[int] = None
+    pending_patents: Optional[int] = None
+    patent_details: Optional[str] = None
+    oem_partners: Optional[int] = None
+    safety_certifications: Optional[str] = None
+    employees_count: Optional[int] = None
+    
     # --- Roadmap fields ---
     roadmap_100in_speed: Optional[int] = None
     roadmap_100in_year: Optional[int] = None

@@ -16,8 +16,8 @@ def _strip_fences(text: str) -> str:
 def invoke_with_fallback(
     prompt: str,
     *,
-    primary_model="gpt-4o-mini",
-    fallback_model="gpt-3.5-turbo",
+    primary_model="gpt-4o",
+    fallback_model="gpt-4o",
     temperature=0.2,
     retries=2,
     backoff=2,

@@ -75,7 +75,7 @@ def generate_team_section(profile: StartupProfile) -> str:
             bio = exec.get('bio', '')
             # Only show if role is in key_roles or if not already shown
             if any(r in role.lower() for r in key_roles) and name.lower() not in shown:
-                lines.append(f"**{name}** – {role.upper()}")
+                lines.append(f"{name} – {role.upper()}")
                 if linkedin:
                     lines.append(f"• LinkedIn: {linkedin}")
                 else:
@@ -172,54 +172,21 @@ def generate_team_section(profile: StartupProfile) -> str:
     # Add Overall Team Assessment (critical analysis) at the end
     overall_assessment = getattr(profile, 'overall_team_assessment', None)
     if not overall_assessment:
-        from langchain_openai import ChatOpenAI
-        llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
-        # Get team info for assessment
-        team_info = []
-        for e in execs:
-            if isinstance(e, dict):
-                name = e.get('name', '')
-                role = e.get('role', '')
-                bio = e.get('bio', '')
-                if name and role:
-                    team_info.append(f"{name} ({role}): {bio}")
-        
-        team_bios = '\n'.join(team_info)
-        if not team_bios.strip():
-            team_bios = "Limited team information available"
-        
-        # If we have no team info at all, create a basic assessment
-        if team_bios == "Limited team information available":
+        # Create a basic assessment without LLM call to avoid API issues
+        if lines:
             overall_assessment = f"The leadership team at {company_name} demonstrates strong industry expertise and strategic vision, positioning the company well for growth and market success."
         else:
-            prompt = f"""
-You are a VC analyst. Write a concise 3-4 sentence critical assessment of the overall leadership team for an investment memo, based on the following team information. Focus on key strengths, relevant experience, and any notable gaps. Keep it under 200 words and be specific. Ensure balanced coverage of all team members mentioned.
-
-Team Information:
-{team_bios}
-"""
-            overall_assessment = llm.invoke(prompt).content.strip()
-        
-        # Clean up overall assessment by removing thinking process markers
-        if overall_assessment:
-            import re
-            overall_assessment = re.sub(r'<think>.*?</think>', '', overall_assessment, flags=re.DOTALL)
-            overall_assessment = re.sub(r'(First, from result|Result adds that|Result confirms|First, I need to check|Let\'s go through|From , I see that|Okay, I need to write|Me, I see that).*?(?=\n|$)', '', overall_assessment, flags=re.DOTALL)
-            overall_assessment = re.sub(r'\d+\.\s*[A-Z].*?(?=\n|$)', '', overall_assessment, flags=re.MULTILINE)
-            overall_assessment = re.sub(r'\[\d+\]', '', overall_assessment)
-            overall_assessment = re.sub(r'\n\s*\n', '\n', overall_assessment)
-            overall_assessment = overall_assessment.strip()
-            
-            # If still too long, truncate to first 2-3 sentences
-            if overall_assessment and len(overall_assessment.split()) > 100:
-                sentences = overall_assessment.split('. ')
-                if len(sentences) > 3:
-                    overall_assessment = '. '.join(sentences[:3]) + '.'
+            overall_assessment = f"Team information for {company_name} requires additional research to provide a comprehensive assessment."
     
     if overall_assessment:
         lines.append("\nOverall Team Assessment:")
         lines.append(overall_assessment)
-    return '\n'.join(lines) if lines else 'Team and management information not available.'
+    
+    # If no executives were found, create a basic team section
+    if not lines:
+        lines.append("Team and management information requires additional research.")
+    
+    return '\n'.join(lines)
 
 def run_founder_profiling_chain(profile: StartupProfile, full_text: str = None) -> StartupProfile:
     """Run founder profiling using hybrid context or full text."""

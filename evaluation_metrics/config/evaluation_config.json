@@ -1,0 +1,25 @@
+{
+  "evaluation_settings": {
+    "enable_real_time_tracking": true,
+    "save_detailed_metrics": true,
+    "generate_academic_summaries": true,
+    "create_excel_reports": true,
+    "track_system_performance": true
+  },
+  "quality_thresholds": {
+    "minimum_section_completeness": 0.8,
+    "minimum_readability_score": 50.0,
+    "maximum_duplicate_ratio": 0.1,
+    "minimum_quality_score": 7.0
+  },
+  "performance_targets": {
+    "maximum_generation_time_seconds": 300,
+    "maximum_cost_usd": 10.0,
+    "maximum_token_usage": 50000
+  },
+  "traditional_vc_benchmarks": {
+    "traditional_time_hours": 15,
+    "traditional_cost_usd": 2250,
+    "analyst_rate_per_hour": 150
+  }
+}

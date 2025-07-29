@@ -14,7 +14,7 @@ import io
 
 # Local imports
 import sys
-sys.path.append(str(Path(__file__).parent.parent / "memo_api" / "services"))
+sys.path.append(str(Path(__file__).parent.parent / "email_assistant" / "api" / "services"))
 from ocr import process_pdfs as ocr_process_pdfs
 from core.visual_utils import extract_images_from_pdf
 

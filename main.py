@@ -169,7 +169,7 @@ def process_text_with_hyperlinks(paragraph, text):
                 run.font.size = Pt(12)
         
         # Adding the hyperlink with URL included
-        add_hyperlink(paragraph, f"{link_text} ({link_url})", link_url)
+        add_hyperlink(paragraph, link_url, link_url)
         
         last_end = match.end()
     
@@ -201,7 +201,49 @@ def run_market_sizing_chain_with_text(full_text: str, profile: StartupProfile) -
 
 
 def run_financial_analysis_chain_with_text(full_text: str, profile: StartupProfile) -> StartupProfile:
-    return run_financial_analysis_chain(profile)
+    try:
+        # Use the enhanced financial analysis chain from new_main.py
+        from chains.financial_analysis_chain import run_financial_analysis_chain
+        
+        # Build comprehensive financial context
+        financial_context = ""
+        
+        # Add tables data if available
+        if hasattr(profile, 'tables_text') and profile.tables_text:
+            financial_context += f"\n\nTABLES DATA:\n{profile.tables_text}"
+        
+        # Add figures/OCR data if available
+        if hasattr(profile, 'figures_ocr') and profile.figures_ocr:
+            financial_context += f"\n\nFIGURES/OCR DATA:\n{profile.figures_ocr}"
+        
+        # Add full text as backup
+        if full_text:
+            financial_context += f"\n\nFULL TEXT:\n{full_text[:3000]}"
+        
+        # Call the enhanced chain with comprehensive context
+        updated_profile = run_financial_analysis_chain(profile, financial_context=financial_context)
+        
+        # Copy updated fields back to the original profile
+        for field_name in updated_profile.model_fields.keys():
+            try:
+                new_value = getattr(updated_profile, field_name)
+                if new_value is not None and new_value != '':
+                    setattr(profile, field_name, new_value)
+            except Exception:
+                continue
+        
+        return profile
+        
+    except Exception as e:
+        print(f"[Financial Analysis] Error in enhanced chain: {e}")
+        # Fallback to original simple approach
+        try:
+            from chains.financial_analysis_chain import run_financial_analysis_chain
+            return run_financial_analysis_chain(profile)
+        except ImportError as import_error:
+            print(f"[Financial Analysis] Import error: {import_error}")
+            # Final fallback to basic financial formatting
+            return profile
 
 
 def run_competitive_intel_chain_with_text(full_text: str, profile: StartupProfile) -> StartupProfile:
@@ -374,6 +416,92 @@ def format_company_overview_section(profile):
     return '\n'.join(lines)
 
 
+def detect_product_type(profile):
+    """Detect the product type from profile data to make descriptions sector-agnostic."""
+    # Check for explicit product type indicators
+    product_type = getattr(profile, 'product_type', None)
+    if product_type:
+        return product_type.lower()
+    
+    # Check sector for hints
+    sector = getattr(profile, 'sector', '').lower()
+    if 'battery' in sector or 'energy' in sector or 'storage' in sector:
+        return 'battery'
+    elif 'software' in sector or 'saas' in sector or 'platform' in sector:
+        return 'software'
+    elif 'biotech' in sector or 'pharma' in sector or 'medical' in sector:
+        return 'biotech'
+    elif 'fintech' in sector or 'financial' in sector:
+        return 'fintech'
+    elif 'consumer' in sector or 'retail' in sector:
+        return 'consumer'
+    elif 'ai' in sector or 'machine learning' in sector:
+        return 'ai'
+    elif 'hardware' in sector or 'iot' in sector:
+        return 'hardware'
+    
+    # Check product description for keywords
+    desc = getattr(profile, 'product_description', '').lower()
+    if any(word in desc for word in ['battery', 'energy', 'storage', 'charging']):
+        return 'battery'
+    elif any(word in desc for word in ['software', 'platform', 'app', 'saas']):
+        return 'software'
+    elif any(word in desc for word in ['drug', 'therapy', 'medical', 'biotech']):
+        return 'biotech'
+    elif any(word in desc for word in ['payment', 'banking', 'financial', 'fintech']):
+        return 'fintech'
+    elif any(word in desc for word in ['ai', 'machine learning', 'algorithm']):
+        return 'ai'
+    
+    # Default to generic product
+    return 'product'
+
+def get_sector_specific_metrics(profile, product_type):
+    """Get sector-specific metrics based on product type."""
+    metrics = []
+    
+    if product_type == 'battery':
+        cycle_life = getattr(profile, 'cycle_life', None)
+        energy_density = getattr(profile, 'energy_density', None)
+        if cycle_life:
+            metrics.append(f"cycle life of {cycle_life}")
+        if energy_density:
+            metrics.append(f"energy density of {energy_density}")
+    
+    elif product_type == 'software':
+        uptime = getattr(profile, 'uptime', None)
+        response_time = getattr(profile, 'response_time', None)
+        if uptime:
+            metrics.append(f"uptime of {uptime}")
+        if response_time:
+            metrics.append(f"response time of {response_time}")
+    
+    elif product_type == 'biotech':
+        efficacy = getattr(profile, 'efficacy', None)
+        safety_profile = getattr(profile, 'safety_profile', None)
+        if efficacy:
+            metrics.append(f"efficacy of {efficacy}")
+        if safety_profile:
+            metrics.append(f"safety profile of {safety_profile}")
+    
+    elif product_type == 'fintech':
+        transaction_speed = getattr(profile, 'transaction_speed', None)
+        security_score = getattr(profile, 'security_score', None)
+        if transaction_speed:
+            metrics.append(f"transaction speed of {transaction_speed}")
+        if security_score:
+            metrics.append(f"security score of {security_score}")
+    
+    elif product_type == 'ai':
+        accuracy = getattr(profile, 'accuracy', None)
+        training_time = getattr(profile, 'training_time', None)
+        if accuracy:
+            metrics.append(f"accuracy of {accuracy}")
+        if training_time:
+            metrics.append(f"training time of {training_time}")
+    
+    return metrics
+
 def format_product_description_section(profile):
     # Gathering all relevant fields
     desc = getattr(profile, 'product_description', None)
@@ -381,9 +509,6 @@ def format_product_description_section(profile):
     roadmap = getattr(profile, 'product_roadmap', None)
     unique = getattr(profile, 'unique_features', None)
     status = getattr(profile, 'status', None)
-    cell_format = getattr(profile, 'cell_format', None)
-    cycle_life = getattr(profile, 'cycle_life', None)
-    energy_density = getattr(profile, 'energy_density', None)
     uniqueness = getattr(profile, 'uniqueness', None)
     diff = getattr(profile, 'difference_from_competitors', None)
     scalability = getattr(profile, 'scalability', None)
@@ -392,6 +517,12 @@ def format_product_description_section(profile):
     testing = getattr(profile, 'testing', None)
     security = getattr(profile, 'security', None)
 
+    # Detect product type for sector-agnostic description
+    product_type = detect_product_type(profile)
+    
+    # Get sector-specific metrics
+    sector_metrics = get_sector_specific_metrics(profile, product_type)
+
     # Synthesising a narrative lead sentence
     lead = None
     if desc and len(desc.split()) > 6:
@@ -399,20 +530,14 @@ def format_product_description_section(profile):
     else:
         # Trying to synthesise a narrative
         parts = []
-        if cell_format or status:
-            parts.append(f"The core product is a {cell_format or ''} {status or ''} battery".strip() + ".")
+        if status:
+            parts.append(f"The core {product_type} is {status}.")
         if unique:
             parts.append(f"It features {unique}.")
         if specs:
             parts.append(f"Key specs: {specs}.")
-        if cycle_life or energy_density:
-            ce = []
-            if cycle_life:
-                ce.append(f"cycle life of {cycle_life}")
-            if energy_density:
-                ce.append(f"energy density of {energy_density}")
-            if ce:
-                parts.append("It offers " + " and ".join(ce) + ".")
+        if sector_metrics:
+            parts.append(f"It offers " + " and ".join(sector_metrics) + ".")
         if roadmap:
             parts.append(f"Product roadmap: {roadmap}.")
         if uniqueness:
@@ -433,7 +558,7 @@ def format_product_description_section(profile):
         lead = ' '.join(parts)
     if not lead or len(lead.strip()) < 20:
         # Fallback: concatenate all fields if no narrative possible
-        all_fields = [desc, specs, roadmap, unique, status, cell_format, cycle_life, energy_density, uniqueness, diff, scalability, sustainability, regulatory, testing, security]
+        all_fields = [desc, specs, roadmap, unique, status, uniqueness, diff, scalability, sustainability, regulatory, testing, security]
         all_fields = [str(f) for f in all_fields if f]
         if all_fields:
             lead = ' '.join(all_fields)
@@ -464,7 +589,12 @@ def format_enhanced_financials_section(profile, current_date):
         from agents.financial_analysis_agent import build_financial_analysis_agent
         
         # Build the financial analysis agent
-        agent, task = build_financial_analysis_agent(profile)
+        agent, task = build_financial_analysis_agent(
+            profile,
+            full_text=getattr(profile, '_full_text', ''),
+            tables_text=getattr(profile, 'tables_text', ''),
+            figures_ocr=getattr(profile, 'figures_ocr', '')
+        )
         
         # Get the agent output
         agent_output = task.callback()
@@ -507,22 +637,43 @@ def format_clean_financials_section(profile, current_date):
     lines.append("**📊 Financial Analysis**")
     lines.append("")
     
-    # Add key metrics with sources
-    if implied_valuation and isinstance(implied_valuation, (int, float)) and implied_valuation > 1_000_000:
-        lines.append(f"• **Current Valuation**: ${implied_valuation:,.0f}")
+    # Add key metrics with sources - handle both numeric and string values
+    if implied_valuation:
+        if isinstance(implied_valuation, (int, float)) and implied_valuation > 1_000_000:
+            lines.append(f"• **Current Valuation**: ${implied_valuation:,.0f}")
+        elif isinstance(implied_valuation, str) and implied_valuation.strip():
+            lines.append(f"• **Current Valuation**: {implied_valuation}")
     
-    if latest_round_amount and isinstance(latest_round_amount, (int, float)) and latest_round_amount > 10_000:
-        lines.append(f"• **Latest Funding Round**: ${latest_round_amount:,.0f}")
+    if latest_round_amount:
+        if isinstance(latest_round_amount, (int, float)) and latest_round_amount > 10_000:
+            lines.append(f"• **Latest Funding Round**: ${latest_round_amount:,.0f}")
+        elif isinstance(latest_round_amount, str) and latest_round_amount.strip():
+            lines.append(f"• **Latest Funding Round**: {latest_round_amount}")
     
-    if total_funding_raised and isinstance(total_funding_raised, (int, float)) and total_funding_raised > 100_000:
-        lines.append(f"• **Total Funding Raised**: ${total_funding_raised:,.0f}")
+    if total_funding_raised:
+        if isinstance(total_funding_raised, (int, float)) and total_funding_raised > 100_000:
+            lines.append(f"• **Total Funding Raised**: ${total_funding_raised:,.0f}")
+        elif isinstance(total_funding_raised, str) and total_funding_raised.strip():
+            lines.append(f"• **Total Funding Raised**: {total_funding_raised}")
     
     # Add data sources if available
     if web_sources:
         lines.append("")
         lines.append("**🔗 Data Sources**")
         for source in web_sources[:3]:  # Limit to 3 sources
+            # Handle both markdown links [text](url) and plain URLs
             if source.startswith('http'):
+                lines.append(f"• {source}")
+            elif '[' in source and '](' in source and ')' in source:
+                # Extract URL from markdown link [text](url)
+                import re
+                url_match = re.search(r'\[([^\]]+)\]\(([^)]+)\)', source)
+                if url_match:
+                    text = url_match.group(1)
+                    url = url_match.group(2)
+                    lines.append(f"• [{text}]({url})")
+            else:
+                # Fallback: display as-is
                 lines.append(f"• {source}")
     
     return "\n".join(lines)
@@ -1058,13 +1209,30 @@ def format_followup_section(profile):
 def clean_discussion_section(discussion):
     lines = discussion.split('\n')
     cleaned = []
-    for line in lines:
-        # Removing lines that are just a bullet or whitespace
-        if line.strip() in ['•', '-', '*', '']:
+    conclusion_found = False
+    
+    for i, line in enumerate(lines):
+        # Check if we've reached the conclusion
+        if 'conclusion:' in line.lower():
+            conclusion_found = True
+        
+        # If we're after the conclusion, be more aggressive about removing bullets
+        if conclusion_found:
+            # Remove any standalone bullet points after conclusion
+            if line.strip() in ['•', '-', '*']:
+                continue
+            # Remove bullet points that are the last content before the footer
+            if line.strip() in ['•', '-', '*'] and i == len(lines) - 2:  # Second to last line
+                continue
+        
+        # Normal cleaning for lines before conclusion
+        if not conclusion_found and line.strip() in ['•', '-', '*', '']:
             continue
+        
         # Removing leading bullet from the first non-empty line
         if cleaned == [] and line.strip().startswith('•'):
             line = line.lstrip('•').strip()
+        
         cleaned.append(line)
     
     # Removing redundant conclusion at the bottom
@@ -1073,10 +1241,20 @@ def clean_discussion_section(discussion):
     # Removing the redundant "Conclusion:" line at the bottom
     result = re.sub(r'\n\s*Conclusion:\s*\n\s*Based on the analysis above, this investment opportunity presents both significant potential and notable risks that require careful consideration\.\s*$', '', result, flags=re.MULTILINE)
     
-    # Removing trailing bullet points and redundant elements
+    # Remove any bullet points that appear after "Conclusion:" 
+    result = re.sub(r'(Conclusion:.*?)(\n\s*•\s*)+', r'\1', result, flags=re.MULTILINE | re.DOTALL)
+    
+    # Remove any standalone bullet points at the very end (before footer)
+    result = re.sub(r'\n\s*•\s*\n\s*Generated by', '\n\nGenerated by', result, flags=re.MULTILINE)
+    
+    # Removing trailing bullet points and redundant elements - MORE AGGRESSIVE CLEANING
     result = re.sub(r'\n\s*•\s*$', '', result, flags=re.MULTILINE)  # Remove trailing bullet point
     result = re.sub(r'\n\s*-\s*$', '', result, flags=re.MULTILINE)   # Remove trailing dash
     result = re.sub(r'\n\s*\*\s*$', '', result, flags=re.MULTILINE)  # Remove trailing asterisk
+    
+    # Remove any standalone bullet points at the end
+    result = re.sub(r'\n\s*•\s*\n\s*$', '\n', result, flags=re.MULTILINE)
+    result = re.sub(r'\n\s*•\s*$', '', result, flags=re.MULTILINE)
     
     # Removing multiple consecutive blank lines at the end
     result = re.sub(r'\n\s*\n\s*$', '\n', result, flags=re.MULTILINE)
@@ -1253,7 +1431,7 @@ def format_memo(profile: StartupProfile) -> str:
 {clean_think_tags_and_debugging(run_business_model_chain(profile))}
 
 9. TECHNICAL DUE DILIGENCE
-{clean_think_tags_and_debugging(clean(format_enhanced_technical_section(profile)))}
+{clean_think_tags_and_debugging(clean(format_technical_dd_section(profile)))}
 
 10. FINANCIAL ANALYSIS
 {clean_think_tags_and_debugging(format_enhanced_financials_section(profile, current_date))}
@@ -1481,10 +1659,30 @@ def save_memo_with_template(memo_text, profile, output_path):
                         last_para = para
                         continue
                     if (line_stripped.startswith('•') or line_stripped.startswith('-') or line_stripped.startswith('*')):
+                        # Process as bullet point
                         bullet_line = re.sub(r"^[•\-*#]+\s*", "• ", line_stripped)
+                        # Only remove hyphens that are not part of URLs
+                        # First, temporarily replace URL hyphens to protect them
+                        # Find URLs and temporarily replace hyphens in them
+                        url_pattern = r'https?://[^\s]+'
+                        urls = re.findall(url_pattern, bullet_line)
+                        for i, url in enumerate(urls):
+                            # Replace hyphens in URLs with a temporary marker
+                            protected_url = url.replace('-', '___HYPHEN___')
+                            bullet_line = bullet_line.replace(url, protected_url)
+                        
+                        # Now remove hyphens from bullet point markers (but not from URLs)
                         bullet_line = bullet_line.replace('*', '').replace('-', '').strip()
+                        
+                        # Restore hyphens in URLs
+                        for i, url in enumerate(urls):
+                            protected_url = url.replace('-', '___HYPHEN___')
+                            restored_url = protected_url.replace('___HYPHEN___', '-')
+                            bullet_line = bullet_line.replace(protected_url, restored_url)
+                        
                         if not bullet_line.startswith('•'):
                             bullet_line = '• ' + bullet_line.lstrip()
+                        
                         para = doc.add_paragraph()
                         # Use the new function to process text with hyperlinks
                         process_text_with_hyperlinks(para, bullet_line)
@@ -1710,7 +1908,7 @@ def main():
                     print(f"[Structured Data] Set {profile_key} = {value}")
         
         # Initialising evaluation tracker with real-time tracking
-        from evaluation_metrics import MemoEvaluator
+        from evaluation_metrics.core.evaluation_metrics import MemoEvaluator
         evaluator = MemoEvaluator()
         evaluator.start_evaluation()
         
@@ -1796,7 +1994,7 @@ def main():
             json.dump(metrics.__dict__, f, indent=2, default=str)
         
         # Generating summary of evaulation metrics
-        from integrate_evaluation import create_academic_summary
+        from evaluation_metrics.core.integrate_evaluation import create_academic_summary
         summary_file = create_academic_summary(metrics_file, evaluation_dir)
         
         # Print 
@@ -1852,8 +2050,13 @@ def format_enhanced_technical_section(profile):
     except Exception as e:
         print(f"[Technical Agent] Error: {e}")
         # Use direct formatting since the agent is failing
-        from agents.technical_dd_agent import format_technical_dd_section
-        return format_technical_dd_section(profile)
+        try:
+            from agents.technical_dd_agent import format_technical_dd_section
+            return format_technical_dd_section(profile)
+        except ImportError as import_error:
+            print(f"[Technical Agent] Import error: {import_error}")
+            # Fallback to basic technical formatting
+            return "Technical Due Diligence information requires additional research."
 
 
 if __name__ == "__main__":

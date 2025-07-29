@@ -18,7 +18,7 @@ from core.hybrid_context import get_hybrid_context
 
 # ------------------------------------------------------------------
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.1)
+llm = ChatOpenAI(model="gpt-4o", temperature=0.1)
 
 def web_search_financial_context(company_name):
     """Search for company financial data and valuation information with source attribution."""
@@ -256,8 +256,88 @@ PROMPT = ChatPromptTemplate.from_messages([
 ])
 
 def parse_money_string(s):
-    s = s.replace(",", "").strip()
-    match = re.match(r"\$?([\d\.]+)\s*([KMB]?)", s, re.IGNORECASE)
+    """Enhanced money string parser that handles various currency formats."""
+    if s is None:
+        return None
+    
+    s = str(s).replace(",", "").strip()
+    
+    # Remove currency codes (USD, EUR, etc.) first - look anywhere in the string
+    import re
+    s = re.sub(r'\s*(USD|EUR|GBP|CAD|AUD|JPY)\s*', '', s, flags=re.IGNORECASE)
+    
+    # Remove $ and other currency symbols first
+    s = re.sub(r'[\$\€\£\¥]', '', s)
+    
+    # Clean up any extra whitespace that might have been left
+    s = re.sub(r'\s+', ' ', s).strip()
+    
+    # Handle various formats like "1.5 billion", "1.5B", "1,500M", etc.
+    
+    # Handle billion/million/thousand suffixes with various formats
+    if 'billion' in s.lower() or 'b' in s.lower():
+        try:
+            # Remove 'billion' or 'b' and clean up
+            clean_s = re.sub(r'\s*(billion|b)\s*', '', s.lower())
+            # Handle ranges like "70-80 million" by taking the average
+            if '-' in clean_s:
+                parts = clean_s.split('-')
+                if len(parts) == 2:
+                    try:
+                        num1 = float(parts[0].strip())
+                        num2 = float(parts[1].strip())
+                        return ((num1 + num2) / 2) * 1e9
+                    except (ValueError, TypeError):
+                        pass
+            # Try to extract just the number part - look for the first number
+            num_match = re.search(r'([\d\.]+)', clean_s)
+            if num_match:
+                num = float(num_match.group(1))
+                return num * 1e9
+            # If no number found, try to parse the whole string
+            num = float(clean_s.strip())
+            return num * 1e9
+        except (ValueError, TypeError):
+            return None
+    elif 'million' in s.lower() or 'm' in s.lower():
+        try:
+            # Remove 'million' or 'm' and clean up
+            clean_s = re.sub(r'\s*(million|m)\s*', '', s.lower())
+            # Handle ranges like "70-80 million" by taking the average
+            if '-' in clean_s:
+                parts = clean_s.split('-')
+                if len(parts) == 2:
+                    try:
+                        num1 = float(parts[0].strip())
+                        num2 = float(parts[1].strip())
+                        return ((num1 + num2) / 2) * 1e6
+                    except (ValueError, TypeError):
+                        pass
+            # Try to extract just the number part
+            num_match = re.search(r'([\d\.]+)', clean_s)
+            if num_match:
+                num = float(num_match.group(1))
+                return num * 1e6
+            num = float(clean_s.strip())
+            return num * 1e6
+        except (ValueError, TypeError):
+            return None
+    elif 'thousand' in s.lower() or 'k' in s.lower():
+        try:
+            # Remove 'thousand' or 'k' and clean up
+            clean_s = re.sub(r'\s*(thousand|k)\s*', '', s.lower())
+            # Try to extract just the number part
+            num_match = re.search(r'([\d\.]+)', clean_s)
+            if num_match:
+                num = float(num_match.group(1))
+                return num * 1e3
+            num = float(clean_s.strip())
+            return num * 1e3
+        except (ValueError, TypeError):
+            return None
+    
+    # Original pattern matching for K, M, B suffixes
+    match = re.match(r"([\d\.]+)\s*([KMB]?)", s, re.IGNORECASE)
     if not match:
         return None
     num, suffix = match.groups()
@@ -664,29 +744,71 @@ Crunchbase Funding Data:
                         continue
                 setattr(profile, field, float(val))
         
-        # Store additional financial data from web search
+        # Store additional financial data from web search - prefer original string format for readability
         if data.get("implied_valuation"):
-            profile.implied_valuation = float(data.get("implied_valuation"))
-            profile.valuation_source = "web_search"
-            # If we have web sources, use the first one as valuation source
-            if web_sources:
-                profile.valuation_source = web_sources[0]
+            valuation_str = str(data.get("implied_valuation")).strip()
+            if valuation_str and valuation_str.lower() not in ['none', 'null', 'n/a', 'unknown']:
+                # Store the original string format for better readability
+                profile.implied_valuation = valuation_str
+                # Also store parsed number for calculations if needed
+                try:
+                    parsed_val = parse_money_string(valuation_str)
+                    if parsed_val is not None:
+                        profile.implied_valuation_numeric = parsed_val
+                except Exception:
+                    pass
+                
+                profile.valuation_source = "web_search"
+                # If we have web sources, use the first one as valuation source
+                if web_sources:
+                    profile.valuation_source = web_sources[0]
+                print(f"[Financial Analysis] Stored implied_valuation: {profile.implied_valuation}")
         
         if data.get("total_funding_raised"):
-            profile.total_funding_raised = float(data.get("total_funding_raised"))
-            profile.funding_source = "web_search"
-            # If we have web sources, use the first one as funding source
-            if web_sources:
-                profile.funding_source = web_sources[0]
+            funding_str = str(data.get("total_funding_raised")).strip()
+            if funding_str and funding_str.lower() not in ['none', 'null', 'n/a', 'unknown']:
+                # Store the original string format for better readability
+                profile.total_funding_raised = funding_str
+                # Also store parsed number for calculations if needed
+                try:
+                    parsed_val = parse_money_string(funding_str)
+                    if parsed_val is not None:
+                        profile.total_funding_raised_numeric = parsed_val
+                except Exception:
+                    pass
+                
+                profile.funding_source = "web_search"
+                # If we have web sources, use the first one as funding source
+                if web_sources:
+                    profile.funding_source = web_sources[0]
+                print(f"[Financial Analysis] Stored total_funding_raised: {profile.total_funding_raised}")
         
         if data.get("latest_round_amount"):
-            profile.latest_round_amount = float(data.get("latest_round_amount"))
+            round_str = str(data.get("latest_round_amount")).strip()
+            if round_str and round_str.lower() not in ['none', 'null', 'n/a', 'unknown']:
+                # Store the original string format for better readability
+                profile.latest_round_amount = round_str
+                # Also store parsed number for calculations if needed
+                try:
+                    parsed_val = parse_money_string(round_str)
+                    if parsed_val is not None:
+                        profile.latest_round_amount_numeric = parsed_val
+                except Exception:
+                    pass
+                print(f"[Financial Analysis] Stored latest_round_amount: {profile.latest_round_amount}")
         
         if data.get("latest_round_date"):
             profile.latest_round_date = data.get("latest_round_date")
         
         if data.get("revenue"):
-            profile.revenue = float(data.get("revenue"))
+            try:
+                parsed_val = parse_money_string(str(data.get("revenue")))
+                if parsed_val is not None:
+                    profile.revenue = parsed_val
+                else:
+                    print(f"[Financial Analysis] Could not parse revenue: {data.get('revenue')}")
+            except Exception as e:
+                print(f"[Financial Analysis] Error parsing revenue: {e}")
         
         # Store web sources for clickable links
         if data.get("web_sources"):

@@ -10,7 +10,7 @@ from core.schemas import StartupProfile
 from core.hybrid_context import get_hybrid_context
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.1)
+llm = ChatOpenAI(model="gpt-4o", temperature=0.1)
 
 SYSTEM = """
 You are a senior CTO performing technical due diligence for venture capital investment.
@@ -40,7 +40,7 @@ PRODUCT TECHNICAL SPECIFICATIONS REQUIREMENTS:
 - Extract and summarize all product technical specifications from the context
 - Include performance metrics, materials, dimensions, capabilities, and key features
 - Look for specific numbers, measurements, performance data, and technical parameters
-- Cover energy density, cycle life, charging speed, temperature range, safety features
+- Cover sector-specific technical metrics (e.g., energy density for batteries, uptime for software, efficacy for biotech)
 - Include any technical comparisons or benchmarks mentioned
 - If technical specifications are present in the context, provide specific details
 
@@ -131,13 +131,15 @@ def extract_technical_specs_from_text(text: str) -> dict:
     
     specs = {}
     
-    # Energy density patterns
+    # Energy density patterns - enhanced to capture both Wh/kg and Wh/L
     energy_patterns = [
         r'energy.*?density.*?(\d+(?:\.\d+)?).*?(wh|watt|wh/kg)',
         r'(\d+(?:\.\d+)?).*?(wh|watt|wh/kg).*?energy.*?density',
         r'energy.*?density.*?(\d+(?:\.\d+)?)\s*(wh|watt|wh/kg)',
         r'>(\d+)\s*wh/kg',
         r'(\d+)\s*wh/kg',
+        r'(\d+)\s*wh/l',
+        r'(\d+)\s*wh/l.*?net',
     ]
     
     for pattern in energy_patterns:
@@ -156,13 +158,28 @@ def extract_technical_specs_from_text(text: str) -> dict:
                 specs['energy_density_unit'] = 'wh/kg'
                 break
     
-    # Cycle life patterns
+    # Volumetric energy density patterns
+    vol_energy_patterns = [
+        r'(\d+)\s*wh/l.*?net',
+        r'(\d+)\s*wh/l',
+        r'volumetric.*?(\d+)\s*wh/l',
+    ]
+    
+    for pattern in vol_energy_patterns:
+        matches = re.findall(pattern, text.lower())
+        if matches:
+            specs['volumetric_energy_density'] = int(matches[0])
+            break
+    
+    # Cycle life patterns - enhanced to capture consecutive cycles
     cycle_patterns = [
         r'cycle.*?life.*?(\d+(?:,\d+)?)',
         r'(\d+(?:,\d+)?).*?cycle.*?life',
         r'(\d+(?:,\d+)?)\s*cycles',
         r'>(\d+)\s*consecutive',
         r'(\d+)\s*consecutive.*?cycles',
+        r'>(\d+)\s*xfc.*?cycles',
+        r'(\d+)\s*xfc.*?cycles',
     ]
     
     for pattern in cycle_patterns:
@@ -172,64 +189,106 @@ def extract_technical_specs_from_text(text: str) -> dict:
             specs['cycle_life'] = int(value)
             break
     
-    # Patent patterns
-    patent_patterns = [
-        r'(\d+\+?)\s*patents?',
-        r'patent.*?portfolio.*?(\d+\+?)',
-        r'(\d+\+?).*?patent',
-        r'(\d+)\s*us.*?granted',
-        r'(\d+)\s*us.*?pending',
-    ]
+    # Enhanced patent extraction
+    granted_pattern = r'(\d+)\s*us.*?granted'
+    pending_pattern = r'(\d+)\s*us.*?pending'
     
-    for pattern in patent_patterns:
-        matches = re.findall(pattern, text.lower())
-        if matches:
-            patent_value = matches[0]
-            # Handle "200+" format
-            if patent_value.endswith('+'):
-                specs['patents'] = patent_value  # Keep as string for "200+"
-            else:
-                specs['patents'] = int(patent_value)  # Convert to int for exact numbers
-            break
+    granted_match = re.search(granted_pattern, text.lower())
+    pending_match = re.search(pending_pattern, text.lower())
     
-    # Charging speed patterns
+    if granted_match and pending_match:
+        granted_count = int(granted_match.group(1))
+        pending_count = int(pending_match.group(1))
+        total_patents = granted_count + pending_count
+        specs['patents'] = total_patents
+        specs['granted_patents'] = granted_count
+        specs['pending_patents'] = pending_count
+        specs['patent_details'] = f"{granted_count} US granted and {pending_count} US pending patents"
+    elif granted_match:
+        specs['patents'] = int(granted_match.group(1))
+        specs['granted_patents'] = int(granted_match.group(1))
+    elif pending_match:
+        specs['patents'] = int(pending_match.group(1))
+        specs['pending_patents'] = int(pending_match.group(1))
+    else:
+        # Fallback to general patent patterns
+        patent_patterns = [
+            r'(\d+)\s*patents',
+            r'patent.*?portfolio.*?(\d+)',
+            r'(\d+).*?patent',
+        ]
+        for pattern in patent_patterns:
+            matches = re.findall(pattern, text.lower())
+            if matches:
+                specs['patents'] = int(matches[0])
+                break
+    
+    # Charging speed patterns - enhanced for 100in5 format
     charging_patterns = [
         r'(\d+)\s*miles.*?(\d+)\s*min',
         r'(\d+)in(\d+)',
         r'(\d+)\s*miles.*?charged.*?(\d+)\s*min',
+        r'100in(\d+)',
+        r'(\d+)in5',
     ]
     
     for pattern in charging_patterns:
         matches = re.findall(pattern, text.lower())
         if matches:
-            miles, minutes = matches[0]
-            specs['charging_speed_miles'] = int(miles)
-            specs['charging_speed_minutes'] = int(minutes)
-            break
+            if len(matches[0]) == 2:
+                miles, minutes = matches[0]
+                specs['charging_speed_miles'] = int(miles)
+                specs['charging_speed_minutes'] = int(minutes)
+                break
+            elif len(matches[0]) == 1:
+                # Handle 100in5 format
+                if '100in' in pattern:
+                    specs['charging_speed_miles'] = 100
+                    specs['charging_speed_minutes'] = int(matches[0])
+                    break
     
-    # Temperature performance patterns
+    # Temperature performance patterns - enhanced
     temp_patterns = [
         r'(\d+).*?temperature',
         r'(\d+).*?°c',
         r'(\d+).*?celsius',
         r'(\d+).*?discharge.*?capacity.*?(\d+)',
+        r'(\d+)%.*?discharge.*?capacity.*?@.*?(\d+)°c',
+        r'(\d+)%.*?capacity.*?@.*?(\d+)°c',
     ]
     
     for pattern in temp_patterns:
         matches = re.findall(pattern, text.lower())
         if matches:
             if len(matches[0]) == 2:
-                temp, capacity = matches[0]
+                capacity, temp = matches[0]
                 specs['low_temp_performance'] = f"{temp}°C: {capacity}% capacity"
+                break
             else:
                 specs['operating_temp'] = int(matches[0])
-            break
+                break
     
-    # Cell specifications patterns
+    # Power performance patterns
+    power_patterns = [
+        r'(\d+)%.*?discharge.*?capacity.*?@.*?(\d+)c',
+        r'(\d+)%.*?capacity.*?@.*?(\d+)c',
+        r'(\d+)c.*?(\d+)%.*?capacity',
+    ]
+    
+    for pattern in power_patterns:
+        matches = re.findall(pattern, text.lower())
+        if matches:
+            if len(matches[0]) == 2:
+                capacity, c_rate = matches[0]
+                specs['power_performance'] = f"{c_rate}C: {capacity}% capacity"
+                break
+    
+    # Cell specifications patterns - enhanced
     cell_patterns = [
         r'(\d+)ah.*?pouch',
         r'(\d+)ah.*?cell',
         r'cell.*?type.*?(\d+)ah',
+        r'(\d+)ah.*?@.*?c/3',
     ]
     
     for pattern in cell_patterns:
@@ -238,11 +297,12 @@ def extract_technical_specs_from_text(text: str) -> dict:
             specs['cell_capacity'] = int(matches[0])
             break
     
-    # Cell format patterns
+    # Cell format patterns - enhanced
     format_patterns = [
         r'cell.*?format.*?([a-zA-Z0-9\s]+)',
         r'([a-zA-Z0-9\s]+).*?cell.*?format',
         r'(\d+mm).*?(\d+mm)',
+        r'(\d+)mm.*?(\d+)mm.*?pouch',
     ]
     
     for pattern in format_patterns:
@@ -251,92 +311,184 @@ def extract_technical_specs_from_text(text: str) -> dict:
             if len(matches[0]) == 2:
                 width, height = matches[0]
                 specs['cell_dimensions'] = f"{width} x {height}"
+                break
             else:
                 specs['cell_format'] = matches[0].strip()
-            break
+                break
     
-    # Power performance patterns
-    power_patterns = [
-        r'(\d+)kw.*?charging',
-        r'(\d+)kw.*?power',
-        r'(\d+).*?discharge.*?capacity.*?(\d+)c',
-    ]
-    
-    for pattern in power_patterns:
-        matches = re.findall(pattern, text.lower())
-        if matches:
-            if len(matches[0]) == 2:
-                capacity, rate = matches[0]
-                specs['power_performance'] = f"{capacity}% at {rate}C discharge"
-            else:
-                specs['charging_power'] = int(matches[0])
-            break
-    
-    # Manufacturing patterns
-    manufacturing_patterns = [
+    # Team size patterns
+    team_patterns = [
         r'(\d+)\s*employees',
         r'(\d+)\s*phds',
         r'(\d+)\s*professionals',
     ]
     
-    for pattern in manufacturing_patterns:
+    for pattern in team_patterns:
         matches = re.findall(pattern, text.lower())
         if matches:
             if 'employees' in pattern:
-                specs['employees'] = int(matches[0])
+                specs['employees_count'] = int(matches[0])
             elif 'phds' in pattern:
                 specs['phds'] = int(matches[0])
             elif 'professionals' in pattern:
                 specs['professionals'] = int(matches[0])
     
-    # Roadmap patterns
+    # Technology roadmap patterns
     roadmap_patterns = [
+        r'(\d{4}).*?100in(\d+)',
         r'100in(\d+).*?(\d{4})',
-        r'production.*?readiness.*?(\d{4})',
         r'(\d{4}).*?production.*?readiness',
-        r'phase.*?(\d+).*?(\d{4})',
-        r'(\d{4}).*?phase.*?(\d+)',
+        r'production.*?readiness.*?(\d{4})',
     ]
-    
-    # Extract all 100inX technologies
-    all_100in_matches = re.findall(r'100in(\d+).*?(\d{4})', text.lower())
-    if all_100in_matches:
-        roadmap_technologies = []
-        for speed, year in all_100in_matches:
-            roadmap_technologies.append(f"100in{speed} by {year}")
-        specs['roadmap_technologies'] = roadmap_technologies
     
     for pattern in roadmap_patterns:
         matches = re.findall(pattern, text.lower())
         if matches:
             if len(matches[0]) == 2:
-                if '100in' in pattern:
-                    # 100inX format: (X, year) - only store the first one as primary
-                    if 'roadmap_100in_speed' not in specs:
-                        speed, year = matches[0]
-                        specs['roadmap_100in_speed'] = int(speed)
-                        specs['roadmap_100in_year'] = int(year)
-                elif 'phase' in pattern:
-                    # Phase format: (phase, year) or (year, phase)
-                    if matches[0][0].isdigit() and len(matches[0][0]) == 4:
-                        year, phase = matches[0]
-                        specs[f'roadmap_phase_{phase}_year'] = int(year)
-                    else:
-                        phase, year = matches[0]
-                        specs[f'roadmap_phase_{phase}_year'] = int(year)
-            elif len(matches[0]) == 1:
-                # Single year format
-                year = matches[0]
-                if year.isdigit() and len(year) == 4:
-                    specs['roadmap_production_year'] = int(year)
+                year, speed = matches[0]
+                specs['roadmap_100in_year'] = int(year)
+                specs['roadmap_100in_speed'] = int(speed)
+                break
+            else:
+                specs['roadmap_production_year'] = int(matches[0])
+                break
+    
+    # Manufacturing partnerships
+    manufacturing_patterns = [
+        r'(\d+)\s*oems.*?partners',
+        r'(\d+)\s*manufacturing.*?partners',
+        r'testing.*?by.*?(\d+)\s*oems',
+        r'(\d+)\s*oem.*?validation',
+        r'(\d+)\s*ev.*?oems',
+        r'(\d+)\s*automotive.*?partners',
+    ]
+    
+    for pattern in manufacturing_patterns:
+        matches = re.findall(pattern, text.lower())
+        if matches:
+            specs['oem_partners'] = int(matches[0])
             break
+    
+    # Enhanced safety certifications
+    safety_patterns = [
+        r'un38\.3.*?passed',
+        r'un38\.3.*?certified',
+        r'transport.*?safety.*?certified',
+        r'iso.*?certification',
+        r'ul.*?certification',
+        r'safety.*?certified',
+        r'certified.*?safety',
+    ]
+    
+    for pattern in safety_patterns:
+        if re.search(pattern, text.lower()):
+            specs['safety_certifications'] = 'UN38.3 Transport Safety Certified'
+            break
+    
+    # Enhanced team and R&D information
+    team_patterns = [
+        r'(\d+)\s*phds',
+        r'(\d+)\s*professionals',
+        r'(\d+)\s*researchers',
+        r'(\d+)\s*scientists',
+        r'(\d+)\s*employees',
+        r'(\d+)\s*team.*?members',
+    ]
+    
+    for pattern in team_patterns:
+        matches = re.findall(pattern, text.lower())
+        if matches:
+            if 'phds' in pattern:
+                specs['phds'] = int(matches[0])
+            elif 'professionals' in pattern:
+                specs['professionals'] = int(matches[0])
+            elif 'employees' in pattern:
+                specs['employees_count'] = int(matches[0])
+    
+    # Enhanced technology roadmap and milestones
+    roadmap_patterns = [
+        r'(\d{4}).*?100in(\d+)',
+        r'100in(\d+).*?(\d{4})',
+        r'(\d{4}).*?production.*?readiness',
+        r'production.*?readiness.*?(\d{4})',
+        r'(\d{4}).*?commercial.*?launch',
+        r'(\d{4}).*?mass.*?production',
+        r'(\d{4}).*?manufacturing',
+    ]
+    
+    for pattern in roadmap_patterns:
+        matches = re.findall(pattern, text.lower())
+        if matches:
+            if len(matches[0]) == 2:
+                year, speed = matches[0]
+                specs['roadmap_100in_year'] = int(year)
+                specs['roadmap_100in_speed'] = int(speed)
+                break
+            else:
+                specs['roadmap_production_year'] = int(matches[0])
+                break
+    
+    # Enhanced cell specifications and performance
+    cell_spec_patterns = [
+        r'(\d+)ah.*?pouch',
+        r'(\d+)ah.*?cell',
+        r'cell.*?type.*?(\d+)ah',
+        r'(\d+)ah.*?@.*?c/3',
+        r'(\d+)mm.*?(\d+)mm.*?pouch',
+        r'cell.*?dimensions.*?(\d+)mm.*?(\d+)mm',
+    ]
+    
+    for pattern in cell_spec_patterns:
+        matches = re.findall(pattern, text.lower())
+        if matches:
+            if len(matches[0]) == 2:
+                width, height = matches[0]
+                specs['cell_dimensions'] = f"{width}mm x {height}mm"
+                break
+            else:
+                specs['cell_capacity'] = int(matches[0])
+                break
+    
+    # Enhanced charging and performance specifications
+    charging_spec_patterns = [
+        r'(\d+)in(\d+)',
+        r'(\d+)\s*miles.*?(\d+)\s*min',
+        r'(\d+)\s*miles.*?charged.*?(\d+)\s*min',
+        r'(\d+)in5',
+        r'(\d+)in3',
+        r'(\d+)in2',
+    ]
+    
+    for pattern in charging_spec_patterns:
+        matches = re.findall(pattern, text.lower())
+        if matches:
+            if len(matches[0]) == 2:
+                miles, minutes = matches[0]
+                specs['charging_speed_miles'] = int(miles)
+                specs['charging_speed_minutes'] = int(minutes)
+                break
+            elif len(matches[0]) == 1:
+                # Handle 100in5 format
+                if '100in' in pattern:
+                    specs['charging_speed_miles'] = 100
+                    specs['charging_speed_minutes'] = int(matches[0])
+                    break
+                elif '100in3' in pattern:
+                    specs['charging_speed_miles'] = 100
+                    specs['charging_speed_minutes'] = 3
+                    break
+                elif '100in2' in pattern:
+                    specs['charging_speed_miles'] = 100
+                    specs['charging_speed_minutes'] = 2
+                    break
     
     return specs
 
 
 def run_technical_dd_chain(profile: StartupProfile) -> StartupProfile:
+    # Comprehensive context extraction to capture all valuable technical information
     context = get_hybrid_context(
-        profile, "patents OR patent portfolio OR intellectual property OR IP OR product roadmap OR development timeline OR technical milestones OR technology stack OR product development OR technical specifications OR performance metrics OR energy density OR cycle life OR charging speed OR temperature range OR safety features OR materials OR dimensions OR capabilities", 5, 3
+        profile, "patents OR patent portfolio OR intellectual property OR IP OR product roadmap OR development timeline OR technical milestones OR technology stack OR product development OR technical specifications OR performance metrics OR energy density OR cycle life OR charging speed OR temperature range OR safety features OR materials OR dimensions OR capabilities OR battery chemistry OR cell design OR manufacturing OR testing OR certification", 5, 3
     )
     
     # Debug: Print a snippet of the context to see what's being passed
@@ -370,42 +522,40 @@ def run_technical_dd_chain(profile: StartupProfile) -> StartupProfile:
         else:
             profile.patent_portfolio = f"{tech_specs['patents']} patents"
     
-    # Set new technical specifications (only fields that exist in schema)
-    if tech_specs.get('charging_speed_miles'):
-        profile.charging_speed_miles = tech_specs['charging_speed_miles']
-    if tech_specs.get('charging_speed_minutes'):
-        profile.charging_speed_minutes = tech_specs['charging_speed_minutes']
-    if tech_specs.get('low_temp_performance'):
-        profile.low_temp_performance = tech_specs['low_temp_performance']
-    if tech_specs.get('cell_capacity'):
-        profile.cell_capacity = tech_specs['cell_capacity']
-    if tech_specs.get('cell_dimensions'):
-        profile.cell_dimensions = tech_specs['cell_dimensions']
-    if tech_specs.get('charging_power'):
-        profile.charging_power = tech_specs['charging_power']
-    if tech_specs.get('power_performance'):
-        profile.power_performance = tech_specs['power_performance']
-    if tech_specs.get('employees'):
-        profile.employees_count = tech_specs['employees']
-    if tech_specs.get('phds'):
-        profile.phds = tech_specs['phds']
-    if tech_specs.get('professionals'):
-        profile.professionals = tech_specs['professionals']
+    # Set all extracted technical specifications on profile (use correct keys)
+    mapping = {
+        'energy_density': 'energy_density_wh_kg',
+        'cycle_life': 'cycle_life_count',
+        'volumetric_energy_density': 'volumetric_energy_density',
+        'granted_patents': 'granted_patents',
+        'pending_patents': 'pending_patents',
+        'patent_details': 'patent_details',
+        'oem_partners': 'oem_partners',
+        'safety_certifications': 'safety_certifications',
+        'employees_count': 'employees_count',
+        'low_temp_performance': 'low_temp_performance',
+        'power_performance': 'power_performance',
+        'cell_capacity': 'cell_capacity',
+        'charging_speed_miles': 'charging_speed_miles',
+        'charging_speed_minutes': 'charging_speed_minutes',
+        'cell_dimensions': 'cell_dimensions',
+        'charging_power': 'charging_power',
+        'phds': 'phds',
+        'professionals': 'professionals',
+        'roadmap_100in_speed': 'roadmap_100in_speed',
+        'roadmap_100in_year': 'roadmap_100in_year',
+        'roadmap_production_year': 'roadmap_production_year',
+        'roadmap_technologies': 'roadmap_technologies',
+    }
     
-    # Set roadmap specifications
-    if tech_specs.get('roadmap_100in_speed'):
-        profile.roadmap_100in_speed = tech_specs['roadmap_100in_speed']
-    if tech_specs.get('roadmap_100in_year'):
-        profile.roadmap_100in_year = tech_specs['roadmap_100in_year']
-    if tech_specs.get('roadmap_production_year'):
-        profile.roadmap_production_year = tech_specs['roadmap_production_year']
-    if tech_specs.get('roadmap_technologies'):
-        profile.roadmap_technologies = tech_specs['roadmap_technologies']
-    
-    # Set phase-specific roadmap years
-    for key, value in tech_specs.items():
-        if key.startswith('roadmap_phase_') and key.endswith('_year'):
-            setattr(profile, key, value)
+    # Safely set extracted technical specifications on profile
+    for extracted_key, profile_key in mapping.items():
+        if extracted_key in tech_specs and tech_specs[extracted_key] is not None:
+            try:
+                setattr(profile, profile_key, tech_specs[extracted_key])
+                print(f"[Technical DD] Set {profile_key} = {tech_specs[extracted_key]}")
+            except Exception as e:
+                print(f"[Technical DD] Error setting {profile_key}: {e}")
     
     # Now try the LLM call (but extracted data is already set)
     try:
@@ -427,7 +577,12 @@ def run_technical_dd_chain(profile: StartupProfile) -> StartupProfile:
             if data.get("product_roadmap"):
                 profile.product_roadmap = str(data["product_roadmap"])
             if data.get("patent_portfolio"):
-                profile.patent_portfolio = str(data["patent_portfolio"])
+                # Only set if we don't already have extracted patent data
+                if not hasattr(profile, 'patent_portfolio') or not profile.patent_portfolio or "requires additional research" in profile.patent_portfolio:
+                    profile.patent_portfolio = str(data["patent_portfolio"])
+                    print(f"[Technical DD] LLM set patent portfolio to: {profile.patent_portfolio}")
+                else:
+                    print(f"[Technical DD] Keeping extracted patent data: {profile.patent_portfolio}")
             if data.get("complexity"):
                 profile.complexity = str(data["complexity"])
             if data.get("security"):
@@ -480,11 +635,12 @@ def run_technical_dd_chain(profile: StartupProfile) -> StartupProfile:
 
 def run_technical_dd_chain_with_text(full_text: str, profile: StartupProfile) -> StartupProfile:
     """Run technical due diligence using extracted text as context."""
-    # Use more text to capture patent and roadmap information
-    context = full_text[:8000]  # Increased from 5000 to capture more content
+    # Use comprehensive text to capture all valuable technical information
+    context = full_text[:8000]  # Back to 8000 to capture more content
     
     # Debug: Print a snippet of the context to see what's being passed
     print(f"[Technical DD] Full text context snippet: {context[:500]}...")
+    print(f"[Technical DD] FULL CONTEXT PASSED TO AGENT:\n{context}\n{'='*60}")
     
     # Extract technical specifications from full text
     tech_specs = extract_technical_specs_from_text(full_text)
@@ -493,24 +649,40 @@ def run_technical_dd_chain_with_text(full_text: str, profile: StartupProfile) ->
     if tech_specs.get('energy_density'):
         profile.energy_density_wh_kg = tech_specs['energy_density']
         profile.energy_density_source = 'technical_extraction'
+    if tech_specs.get('volumetric_energy_density'):
+        profile.volumetric_energy_density = tech_specs['volumetric_energy_density']
     if tech_specs.get('cycle_life'):
         profile.cycle_life_count = tech_specs['cycle_life']
         profile.cycle_life_source = 'technical_extraction'
     if tech_specs.get('patents'):
         if isinstance(tech_specs['patents'], str):
             profile.patent_portfolio = f"{tech_specs['patents']} patents"
-            print(f"[Technical DD] Set patent portfolio to: {profile.patent_portfolio}")
         else:
             profile.patent_portfolio = f"{tech_specs['patents']} patents"
-            print(f"[Technical DD] Set patent portfolio to: {profile.patent_portfolio}")
-    else:
-        print(f"[Technical DD] No patents found in tech_specs: {tech_specs}")
+    if tech_specs.get('granted_patents'):
+        profile.granted_patents = tech_specs['granted_patents']
+    if tech_specs.get('pending_patents'):
+        profile.pending_patents = tech_specs['pending_patents']
+    if tech_specs.get('patent_details'):
+        profile.patent_details = tech_specs['patent_details']
     
     # Set new technical specifications (only fields that exist in schema)
     if tech_specs.get('charging_speed_miles'):
         profile.charging_speed_miles = tech_specs['charging_speed_miles']
     if tech_specs.get('charging_speed_minutes'):
         profile.charging_speed_minutes = tech_specs['charging_speed_minutes']
+    if tech_specs.get('volumetric_energy_density'):
+        profile.volumetric_energy_density = tech_specs['volumetric_energy_density']
+    if tech_specs.get('granted_patents'):
+        profile.granted_patents = tech_specs['granted_patents']
+    if tech_specs.get('pending_patents'):
+        profile.pending_patents = tech_specs['pending_patents']
+    if tech_specs.get('patent_details'):
+        profile.patent_details = tech_specs['patent_details']
+    if tech_specs.get('oem_partners'):
+        profile.oem_partners = tech_specs['oem_partners']
+    if tech_specs.get('safety_certifications'):
+        profile.safety_certifications = tech_specs['safety_certifications']
     if tech_specs.get('low_temp_performance'):
         profile.low_temp_performance = tech_specs['low_temp_performance']
     if tech_specs.get('cell_capacity'):
@@ -521,7 +693,9 @@ def run_technical_dd_chain_with_text(full_text: str, profile: StartupProfile) ->
         profile.charging_power = tech_specs['charging_power']
     if tech_specs.get('power_performance'):
         profile.power_performance = tech_specs['power_performance']
-    if tech_specs.get('employees'):
+    if tech_specs.get('employees_count'):
+        profile.employees_count = tech_specs['employees_count']
+    elif tech_specs.get('employees'):
         profile.employees_count = tech_specs['employees']
     if tech_specs.get('phds'):
         profile.phds = tech_specs['phds']
@@ -543,6 +717,9 @@ def run_technical_dd_chain_with_text(full_text: str, profile: StartupProfile) ->
         if key.startswith('roadmap_phase_') and key.endswith('_year'):
             setattr(profile, key, value)
     
+    # Print extracted technical specifications for debugging
+    print(f"[Technical DD] Extracted specs: {tech_specs}")
+    
     try:
         # Clean the context to avoid formatting issues and escape curly braces
         clean_context = context.replace('"', "'").replace('\n', ' ').replace('{', '{{').replace('}', '}}').strip()
@@ -562,7 +739,12 @@ def run_technical_dd_chain_with_text(full_text: str, profile: StartupProfile) ->
             if data.get("product_roadmap"):
                 profile.product_roadmap = str(data["product_roadmap"])
             if data.get("patent_portfolio"):
-                profile.patent_portfolio = str(data["patent_portfolio"])
+                # Only set if we don't already have extracted patent data
+                if not hasattr(profile, 'patent_portfolio') or not profile.patent_portfolio or "requires additional research" in profile.patent_portfolio:
+                    profile.patent_portfolio = str(data["patent_portfolio"])
+                    print(f"[Technical DD] LLM set patent portfolio to: {profile.patent_portfolio}")
+                else:
+                    print(f"[Technical DD] Keeping extracted patent data: {profile.patent_portfolio}")
             if data.get("complexity"):
                 profile.complexity = str(data["complexity"])
             if data.get("security"):

@@ -24,14 +24,14 @@ exa_search_tool = EXASearchTool(
     numResults=20
 )
 
-llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0.2)
+llm = ChatOpenAI(model="gpt-4o", temperature=0.2)
 
 def generate_competitive_landscape(profile: StartupProfile) -> str:
     """Enhanced competitive landscape with detailed competitor analysis"""
     competitors = getattr(profile, 'top_competitors', [])
     if not competitors:
         from langchain_openai import ChatOpenAI
-        llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0.2)
+        llm = ChatOpenAI(model="gpt-4o", temperature=0.2)
         # Try to generate competitors from context with detailed descriptions
         prompt = f"""
         Based on this company's profile, identify exactly 3 main competitors in their space. For each competitor, provide:

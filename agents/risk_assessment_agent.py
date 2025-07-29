@@ -8,7 +8,7 @@ from core.schemas import StartupProfile
 from chains.risk_assessment_chain import run_risk_assessment_chain
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
-llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0.2)
+llm = ChatOpenAI(model="gpt-4o", temperature=0.2)
 
 def deduplicate_and_paraphrase(text, min_phrase_len=3, max_allowed=2):
     """

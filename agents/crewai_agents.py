@@ -48,7 +48,7 @@ def vc_get_portkey_llm(trace_id=None, span_id=None, agent_name=None):
     else:
         # Fallback to direct OpenAI usage
         return ChatOpenAI(
-            model="gpt-4",
+            model="gpt-4o",
             api_key=os.getenv("OPENAI_API_KEY")
         )
 
@@ -108,7 +108,7 @@ def find_company_website(company_name, founder_name=None, sector=None):
         f"{' The sector is ' + sector + '.' if sector else ''}"
         " Use Google or web search if needed. Return only the official website URL. If ambiguous, explain your reasoning."
     )
-    llm = ChatOpenAI(model='gpt-4', api_key=os.getenv('OPENAI_API_KEY'))
+    llm = ChatOpenAI(model='gpt-4o', api_key=os.getenv('OPENAI_API_KEY'))
     result = llm.invoke(prompt).content.strip()
     return result
 

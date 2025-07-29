@@ -61,6 +61,13 @@ def get_hybrid_context(profile, topic, k_local=3, k_web=2, use_reports=True):
     #     if web_texts:
     #         context_parts.extend(web_texts)
     
-    # Combine and truncate
-    context = "\n\n".join(context_parts)[:4000]
+    # Combine and use larger context limit for technical information
+    context = "\n\n".join(context_parts)
+    
+    # Use larger context limit for technical topics to capture more valuable information
+    if any(tech_term in topic.lower() for tech_term in ['technical', 'energy', 'battery', 'patent', 'specification', 'manufacturing']):
+        context = context[:8000]  # Larger limit for technical information
+    else:
+        context = context[:4000]  # Standard limit for other topics
+    
     return context or "No relevant information found."

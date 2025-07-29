@@ -7,7 +7,7 @@ from langchain.prompts import ChatPromptTemplate
 from core.schemas import StartupProfile
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
-llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.2)
+llm = ChatOpenAI(model="gpt-4o", temperature=0.2)
 
 SYSTEM = """
 You are a VC analyst specializing in exit strategies.

@@ -4,6 +4,8 @@ from dotenv import load_dotenv
 from pathlib import Path
 from core.schemas import StartupProfile
 from chains.technical_dd_chain import run_technical_dd_chain, run_technical_dd_chain_with_text
+# Import format_technical_dd_section at the top to avoid local variable errors
+# (If this is the same file, this import is not needed)
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 llm = ChatOpenAI(model="gpt-4o", temperature=0.2)
@@ -48,7 +50,8 @@ def format_technical_dd_section(profile):
     # Add product specifications if available
     product_specs = getattr(profile, 'product_specifications', None)
     if product_specs and len(product_specs.strip()) > 50:
-        lines.append("Product Technical Specifications")
+        lines.append("**Product Technical Specifications**")
+        lines.append("")
         lines.append(product_specs)
         lines.append("")
     
@@ -76,7 +79,8 @@ def format_technical_dd_section(profile):
         cleaned_tech_stack = cleaned_tech_stack.strip()
         
         if len(cleaned_tech_stack.split()) >= 20:
-            lines.append("Technical Specifications")
+            lines.append("**Technical Specifications**")
+            lines.append("")
             lines.append(cleaned_tech_stack)
             lines.append("")
     
@@ -94,31 +98,40 @@ def format_technical_dd_section(profile):
             roadmap = "Product roadmap details require additional research to understand current development stage and future milestones."
     
     if roadmap:
-        lines.append("Product Roadmap")
+        lines.append("**Product Roadmap**")
+        lines.append("")
         lines.append(roadmap)
         lines.append("")
     
     # Add patent portfolio if available
     patent_portfolio = getattr(profile, 'patent_portfolio', None)
-    if patent_portfolio and len(patent_portfolio.strip()) > 20:
-        lines.append("Patent Portfolio")
+    if patent_portfolio and len(patent_portfolio.strip()) > 5:
+        lines.append("**Patent Portfolio**")
+        lines.append("")
         lines.append(patent_portfolio)
         lines.append("")
     
     # Enhanced technical specifications display
     bullets = []
     
-    # Display energy density with source
-    if energy_density:
-        source_str = f" [Source: {energy_density_source}]" if energy_density_source else ""
-        bullets.append(f"• Energy Density: {energy_density}{source_str}")
+    # Display enhanced technical specifications if available
+    if hasattr(profile, 'energy_density_wh_kg') and profile.energy_density_wh_kg:
+        bullets.append(f"• Energy Density: {profile.energy_density_wh_kg} Wh/kg")
     
-    # Display cycle life with source
-    if cycle_life:
-        source_str = f" [Source: {cycle_life_source}]" if cycle_life_source else ""
-        bullets.append(f"• Cycle Life: {cycle_life}{source_str}")
+    if hasattr(profile, 'volumetric_energy_density') and profile.volumetric_energy_density:
+        bullets.append(f"• Volumetric Energy Density: {profile.volumetric_energy_density} Wh/L")
     
-    # Display additional technical specs from enhanced extraction
+    if hasattr(profile, 'cycle_life_count') and profile.cycle_life_count:
+        bullets.append(f"• Cycle Life: {profile.cycle_life_count} consecutive XFC cycles")
+    
+    # Enhanced patent information
+    if hasattr(profile, 'patent_portfolio') and profile.patent_portfolio:
+        if hasattr(profile, 'granted_patents') and hasattr(profile, 'pending_patents'):
+            bullets.append(f"• Patent Portfolio: {profile.granted_patents} US granted and {profile.pending_patents} US pending patents")
+        else:
+            bullets.append(f"• Patent Portfolio: {profile.patent_portfolio}")
+    
+    # Enhanced charging specifications
     charging_speed_miles = getattr(profile, 'charging_speed_miles', None)
     charging_speed_minutes = getattr(profile, 'charging_speed_minutes', None)
     if charging_speed_miles and charging_speed_minutes:
@@ -126,27 +139,25 @@ def format_technical_dd_section(profile):
     elif charging_speed_miles:
         bullets.append(f"• Charging Speed: {charging_speed_miles} miles")
     
-    low_temp_performance = getattr(profile, 'low_temperature_performance', None)
+    # Enhanced temperature and power performance
+    low_temp_performance = getattr(profile, 'low_temp_performance', None)
     if low_temp_performance:
         bullets.append(f"• Low Temperature Performance: {low_temp_performance}")
-    
-    cell_capacity = getattr(profile, 'cell_capacity', None)
-    if cell_capacity:
-        bullets.append(f"• Cell Capacity: {cell_capacity}")
-    
-    cell_dimensions = getattr(profile, 'cell_dimensions', None)
-    if cell_dimensions:
-        bullets.append(f"• Cell Dimensions: {cell_dimensions}")
-    
-    charging_power = getattr(profile, 'charging_power', None)
-    if charging_power:
-        bullets.append(f"• Charging Power: {charging_power}")
     
     power_performance = getattr(profile, 'power_performance', None)
     if power_performance:
         bullets.append(f"• Power Performance: {power_performance}")
     
-    # Team metrics
+    # Enhanced cell specifications
+    cell_capacity = getattr(profile, 'cell_capacity', None)
+    if cell_capacity:
+        bullets.append(f"• Cell Capacity: {cell_capacity}Ah")
+    
+    cell_dimensions = getattr(profile, 'cell_dimensions', None)
+    if cell_dimensions:
+        bullets.append(f"• Cell Dimensions: {cell_dimensions}")
+    
+    # Enhanced team metrics
     employees_count = getattr(profile, 'employees_count', None)
     if employees_count:
         bullets.append(f"• Total Employees: {employees_count}")
@@ -155,38 +166,36 @@ def format_technical_dd_section(profile):
     if phds:
         bullets.append(f"• PhD Scientists: {phds}")
     
-    professionals = getattr(profile, 'professionals', None)
-    if professionals:
-        bullets.append(f"• Technical Professionals: {professionals}")
+    # Enhanced manufacturing and partnerships
+    oem_partners = getattr(profile, 'oem_partners', None)
+    if oem_partners:
+        bullets.append(f"• OEM Partners: Testing with {oem_partners} OEMs and manufacturing partners")
     
-    # Technology roadmap
-    technology_roadmap = getattr(profile, 'technology_roadmap', None)
-    if technology_roadmap:
-        bullets.append(f"• Technology Roadmap: {technology_roadmap}")
+    safety_certifications = getattr(profile, 'safety_certifications', None)
+    if safety_certifications:
+        bullets.append(f"• Safety Certifications: {safety_certifications}")
+    
+    # Enhanced technology roadmap
+    roadmap_100in_speed = getattr(profile, 'roadmap_100in_speed', None)
+    roadmap_100in_year = getattr(profile, 'roadmap_100in_year', None)
+    if roadmap_100in_speed and roadmap_100in_year:
+        bullets.append(f"• Technology Roadmap: 100in{roadmap_100in_speed} by {roadmap_100in_year}")
     
     production_readiness = getattr(profile, 'production_readiness', None)
     if production_readiness:
         bullets.append(f"• Production Readiness: {production_readiness}")
     
-    development_phases = getattr(profile, 'development_phases', None)
-    if development_phases:
-        bullets.append(f"• Development Phases: {development_phases}")
-    
-    technology_milestones = getattr(profile, 'technology_milestones', None)
-    if technology_milestones:
-        bullets.append(f"• Technology Milestones: {technology_milestones}")
-    
-    # Technical feasibility and performance
+    # Technical maturity
     if tech and tech != 'N/A':
-        bullets.append(f"• Technical Feasibility and Performance: {tech}")
+        bullets.append(f"• Technical Maturity: {tech}")
     else:
-        bullets.append("• Technical Feasibility and Performance: Technical assessment unavailable")
+        bullets.append("• Technical Maturity: Technical assessment unavailable")
     
     # Moat analysis
     if moat and moat.strip():
-        bullets.append(f"• Moat: {moat}")
+        bullets.append(f"• Moat Strength: {moat}")
     else:
-        bullets.append("• Moat: Moat analysis unavailable")
+        bullets.append("• Moat Strength: Moat analysis unavailable")
     
     # Complexity assessment
     if complexity and complexity.strip():
@@ -218,10 +227,30 @@ def format_technical_dd_section(profile):
     else:
         bullets.append("• Testing: Testing and validation information requires additional research")
     
-    bullets.append("• Further technical due diligence is required, including independent validation of performance claims, cycle life, and safety")
+    # Only add the bullets if we have meaningful technical data
+    if bullets:
+        lines.append("**Technical Assessment**")
+        lines.append("")
+        lines.extend(bullets)
+        lines.append("")
     
-    # Add bullets to lines
-    lines.extend(bullets)
+    # Add the narrative if available and meaningful
+    if narrative and len(narrative.strip()) > 100:
+        # Clean the narrative
+        import re
+        cleaned_narrative = re.sub(r'<think>.*?</think>', '', narrative, flags=re.DOTALL)
+        cleaned_narrative = re.sub(r'(Okay, so I need to figure out|First, from the|Looking at the|Based on the|From the search results|Let me start by|I need to analyze|Let me examine).*?(?=\n|$)', '', cleaned_narrative, flags=re.DOTALL)
+        cleaned_narrative = cleaned_narrative.strip()
+        
+        if len(cleaned_narrative) > 100:
+            lines.append("**Technical Analysis**")
+            lines.append("")
+            lines.append(cleaned_narrative)
+            lines.append("")
+    
+    # Add conclusion only if we have some meaningful content
+    if len(lines) > 0:
+        lines.append("• Further technical due diligence is required, including independent validation of performance claims, cycle life, and safety")
     
     # Remove any duplicate lines
     seen = set()
@@ -231,19 +260,9 @@ def format_technical_dd_section(profile):
             seen.add(line)
             unique_lines.append(line)
     
-    return '\n'.join(unique_lines)
-    
-    # Add the narrative if available
-    if narrative:
-        lines.append(narrative.strip())
-    
-    # Remove any duplicate lines
-    seen = set()
-    unique_lines = []
-    for line in lines:
-        if line not in seen:
-            seen.add(line)
-            unique_lines.append(line)
+    # If we have no meaningful content, provide a default message
+    if len(unique_lines) == 0:
+        return "Technical due diligence information requires additional research and independent validation of the company's technology claims, performance metrics, and development roadmap."
     
     return '\n'.join(unique_lines)
 
@@ -261,14 +280,20 @@ def build_technical_dd_agent(profile: StartupProfile, trace_id=None):
     )
 
     def _callback(*_):
-        # Use comprehensive extracted data context
+        # Use comprehensive extracted data context to capture all valuable technical information
         from core.hybrid_context import get_hybrid_context
         
-        # Get comprehensive context including all extracted data with technical focus
-        comprehensive_context = get_hybrid_context(profile, "technical analysis OR energy density OR cycle life OR battery technology OR technical specifications", use_reports=False)
+        # Get comprehensive technical context
+        full_text = ""
+        if hasattr(profile, 'extracted_data_context') and profile.extracted_data_context:
+            # Use comprehensive search within extracted data
+            full_text = get_hybrid_context(profile, "technical analysis OR energy density OR cycle life OR battery technology OR technical specifications OR patents OR product roadmap OR manufacturing OR testing", use_reports=False)
+        else:
+            # Fallback to comprehensive hybrid context
+            full_text = get_hybrid_context(profile, "technical analysis OR energy density OR cycle life OR battery technology OR technical specifications OR patents OR product roadmap OR manufacturing OR testing", use_reports=False)
         
         # Use the comprehensive context for technical analysis
-        updated = run_technical_dd_chain_with_text(comprehensive_context, profile)
+        updated = run_technical_dd_chain_with_text(full_text, profile)
         return updated.model_dump_json(indent=2)
 
     task = Task(
