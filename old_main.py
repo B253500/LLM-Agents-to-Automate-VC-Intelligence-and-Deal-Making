@@ -133,78 +133,47 @@ def add_hyperlink(paragraph, text, url):
     print(f"[Hyperlink] Fallback to blue text: {text} -> {url[:50]}...")
 
 
-def strip_markdown_bold(text):
-    """Strip markdown bold formatting (**text**) and return plain text."""
-    import re
-    # Remove markdown bold formatting: **text** -> text
-    return re.sub(r'\*\*(.*?)\*\*', r'\1', text)
-
-def process_text_with_hyperlinks_and_targeted_bold(paragraph, text):
-    """Process text and convert markdown links to DOCX hyperlinks and competitor bold to DOCX bold."""
+def process_text_with_hyperlinks(paragraph, text):
+    """Process text and convert markdown links to DOCX hyperlinks."""
     import re
     
     # Pattern to match markdown links: [text](url)
     link_pattern = r'\[([^\]]+)\]\(([^)]+)\)'
     
-    # Pattern to match competitor names in bold: **Company Name** (website.com)
-    competitor_pattern = r'\*\*([^*]+)\*\*\s*\(([^)]+)\)'
-    
-    # Find all links and competitor sections in the text
+    # Find all links in the text
     links = list(re.finditer(link_pattern, text))
-    competitor_sections = list(re.finditer(competitor_pattern, text))
     
-    if not links and not competitor_sections:
-        # No special formatting found, just adding the text normally
+    if not links:
+        # No links found, just adding the text normally
         run = paragraph.add_run(text)
         run.font.name = 'Times New Roman'
         run.font.size = Pt(12)
         return
     
-    print(f"[Text Processing] Found {len(links)} links and {len(competitor_sections)} competitor sections in text: {text[:100]}...")
+    print(f"[Hyperlink Processing] Found {len(links)} links in text: {text[:100]}...")
     
-    # Combine all matches and sort by position
-    all_matches = []
-    for match in links:
-        all_matches.append((match.start(), match.end(), 'link', match))
-    for match in competitor_sections:
-        all_matches.append((match.start(), match.end(), 'competitor', match))
-    
-    all_matches.sort(key=lambda x: x[0])
-    
-    # Processing text with links and competitor bold formatting
+    # Processing text with links
     last_end = 0
-    for start, end, match_type, match in all_matches:
-        # Add text before the current match
-        if start > last_end:
-            before_text = text[last_end:start]
+    for match in links:
+        link_text = match.group(1)
+        link_url = match.group(2)
+        
+        print(f"[Hyperlink Processing] Processing link: [{link_text}]({link_url})")
+        
+        # Add text before the link
+        if match.start() > last_end:
+            before_text = text[last_end:match.start()]
             if before_text.strip():
                 run = paragraph.add_run(before_text)
                 run.font.name = 'Times New Roman'
                 run.font.size = Pt(12)
         
-        if match_type == 'link':
-            # Process link
-            link_text = match.group(1)
-            link_url = match.group(2)
-            print(f"[Text Processing] Processing link: [{link_text}]({link_url})")
-            add_hyperlink(paragraph, link_url, link_url)
-        elif match_type == 'competitor':
-            # Process competitor bold text
-            company_name = match.group(1)
-            website = match.group(2)
-            print(f"[Text Processing] Processing competitor: **{company_name}** ({website})")
-            run = paragraph.add_run(company_name)
-            run.font.name = 'Times New Roman'
-            run.font.size = Pt(12)
-            run.bold = True
-            # Add the website part normally
-            run = paragraph.add_run(f" ({website})")
-            run.font.name = 'Times New Roman'
-            run.font.size = Pt(12)
+        # Adding the hyperlink with URL included
+        add_hyperlink(paragraph, f"{link_text} ({link_url})", link_url)
         
-        last_end = end
+        last_end = match.end()
     
-    # Adding any remaining text after the last match
+    # Adding any remaining text after the last link
     if last_end < len(text):
         remaining_text = text[last_end:]
         if remaining_text.strip():
@@ -553,19 +522,7 @@ def format_clean_financials_section(profile, current_date):
         lines.append("")
         lines.append("**🔗 Data Sources**")
         for source in web_sources[:3]:  # Limit to 3 sources
-            # Handle both markdown links [text](url) and plain URLs
             if source.startswith('http'):
-                lines.append(f"• {source}")
-            elif '[' in source and '](' in source and ')' in source:
-                # Extract URL from markdown link [text](url)
-                import re
-                url_match = re.search(r'\[([^\]]+)\]\(([^)]+)\)', source)
-                if url_match:
-                    text = url_match.group(1)
-                    url = url_match.group(2)
-                    lines.append(f"• [{text}]({url})")
-            else:
-                # Fallback: display as-is
                 lines.append(f"• {source}")
     
     return "\n".join(lines)
@@ -851,24 +808,23 @@ def deduplicate_memo(text):
     
     return result_text
 
-def format_risk_section(paragraph, text):
-    """Format risk section with section headers as bold."""
-    import re
-    
-    # Check if this is a risk section header
-    risk_headers = [
-        "⚠️ Risk Assessment", "🔍 Risk Analysis", "📊 Risk Metrics"
-    ]
-    
-    if any(header in text for header in risk_headers):
-        # Process as bold header (no bullet point)
-        run = paragraph.add_run(text)
-        run.font.name = 'Times New Roman'
-        run.font.size = Pt(12)
-        run.bold = True
+def format_risk_section(profile):
+    risk_flags = getattr(profile, 'risk_flags', [])
+    regulatory = getattr(profile, 'regulatory', None)
+    testing = getattr(profile, 'testing', None)
+    security = getattr(profile, 'security', None)
+    discussion = []
+    # Enumerate and describe all risks
+    if risk_flags:
+        for rf in risk_flags:
+            discussion.append(f"• {rf}")
     else:
-        # Process with hyperlinks and targeted bold
-        process_text_with_hyperlinks_and_targeted_bold(paragraph, text)
+        discussion.append("• Risks are present but not fully disclosed. Investors should request more information and conduct further diligence.")
+    # Always including regulatory, testing, security
+    discussion.append(f"• Regulatory: {regulatory or 'Compliance with evolving standards and certifications is required.'}")
+    discussion.append(f"• Testing: {testing or 'Independent validation and certification are recommended.'}")
+    discussion.append(f"• Security: {security or 'Product safety, data, and IP protection should be addressed.'}")
+    return '\n'.join(discussion)
 
 def format_financial_history_section(profile):
     lines = []
@@ -1071,24 +1027,33 @@ def format_financial_history_section(profile):
 
 
 
-def format_followup_section(paragraph, text):
-    """Format followup section with headers as bold and content as bullet points."""
-    import re
-    
-    # Strip markdown bold formatting from headers
-    text = strip_markdown_bold(text)
-    
-    followup_headers = [
-        "Follow-up Questions", "Next Steps", "Additional Research Needed",
-        "Key Questions", "Due Diligence Items", "Action Items"
-    ]
-    if any(header in text for header in followup_headers):
-        run = paragraph.add_run(text)
-        run.font.name = 'Times New Roman'
-        run.font.size = Pt(12)
-        run.bold = True
-    else:
-        process_text_with_hyperlinks_and_targeted_bold(paragraph, text)
+def format_followup_section(profile):
+    fq = getattr(profile, 'follow_up_questions', None) or ''
+    # Removing all '**' and leading '-' from every line
+    lines = []
+    for line in fq.split('\n'):
+        clean_line = line.replace('**', '').strip()
+        # Removing leading '-' and any whitespace after it
+        if clean_line.startswith('-'):
+            clean_line = clean_line[1:].lstrip()
+        if clean_line.startswith('• -'):
+            clean_line = clean_line[3:].lstrip()
+        elif clean_line.startswith('•') and clean_line[1:2] in [' ', '-']:
+            clean_line = '•' + clean_line[2:].lstrip('-').lstrip()
+        # Header if ends with ':' after cleaning, or if it is a title-like line (contains & or is Title Case)
+        is_header = False
+        if clean_line.endswith(':'):
+            is_header = True
+        elif clean_line and (clean_line.istitle() or ('&' in clean_line and clean_line == clean_line.title())):
+            is_header = True
+        # Special case: if line started with '• -', treat as header if it looks like a section
+        if line.strip().startswith('• -') and (':' not in clean_line and (clean_line.istitle() or '&' in clean_line)):
+            is_header = True
+        if is_header:
+            lines.append(f"<HEADER>{clean_line.rstrip(':')}")
+        elif clean_line:
+            lines.append(f"• {clean_line}")
+    return '\n'.join(lines) if lines else 'No follow-up questions generated.'
 
 def clean_discussion_section(discussion):
     lines = discussion.split('\n')
@@ -1210,19 +1175,6 @@ def clean_think_tags_and_debugging(text):
     # Remove hashtags and markdown formatting that might be artifacts
     text = re.sub(r'#+\s*[A-Za-z\s]+', '', text)
     
-    # Preserve asterisks for competitor names and other bold formatting
-    # Don't remove ** patterns as they're used for bold formatting in the memo
-    
-    # Ensure competitor names with ** are preserved
-    # This pattern looks for **Company Name** (website.com) format
-    competitor_pattern = r'\*\*([^*]+)\*\*\s*\(([^)]+)\)'
-    # We'll preserve this pattern by temporarily replacing it, then restoring it
-    import re
-    competitors = re.findall(competitor_pattern, text)
-    for company_name, website in competitors:
-        placeholder = f"COMPETITOR_PLACEHOLDER_{company_name}_{website}"
-        text = text.replace(f"**{company_name}** ({website})", placeholder)
-    
     # Remove standalone bullet points that don't have content
     text = re.sub(r'^\s*•\s*$', '', text, flags=re.MULTILINE)
     
@@ -1241,11 +1193,6 @@ def clean_think_tags_and_debugging(text):
     text = re.sub(r'\n\s*\n', '\n', text)
     text = re.sub(r' +', ' ', text)
     text = text.strip()
-    
-    # Restore competitor placeholders
-    for company_name, website in competitors:
-        placeholder = f"COMPETITOR_PLACEHOLDER_{company_name}_{website}"
-        text = text.replace(placeholder, f"**{company_name}** ({website})")
     
     return text
 
@@ -1469,10 +1416,9 @@ def save_memo_with_template(memo_text, profile, output_path):
                     if img_path and os.path.exists(img_path):
                         para = doc.add_paragraph()
                         para.paragraph_format.first_line_indent = Pt(0)
-                        para.paragraph_format.space_before = Pt(18)  # Add more space before diagram
                         run = para.add_run()
                         try:
-                            run.add_picture(img_path, width=Pt(450), height=Pt(350))
+                            run.add_picture(img_path, width=Pt(320))
                             para.alignment = WD_ALIGN_PARAGRAPH.CENTER
                             print(f"[Mermaid] Inserted diagram {mermaid_idx} into DOCX.")
                         except Exception as e:
@@ -1482,7 +1428,6 @@ def save_memo_with_template(memo_text, profile, output_path):
                         # Fallback: show Mermaid code as text
                         para = doc.add_paragraph()
                         para.paragraph_format.first_line_indent = Pt(0)
-                        para.paragraph_format.space_before = Pt(18)  # Add more space before diagram
                         run = para.add_run("Business Model Schema (Mermaid Diagram):")
                         run.bold = True
                         para.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -1507,12 +1452,12 @@ def save_memo_with_template(memo_text, profile, output_path):
                     continue
                 # Otherwise, process as text (split by lines)
                 for line in block.split('\n'):
-                    line_stripped = line.strip().replace('<HEADER>', '').strip()
+                    line_stripped = line.strip().replace('**', '').replace('<HEADER>', '').strip()
                     if line_stripped == '•' or not line_stripped:
                         continue
                     header_cleaned = re.sub(r"\s*\([^)]*\)", "", line_stripped)
                     header_cleaned = re.sub(r"^[-=*•#]+\s*", "", header_cleaned)
-                    header_cleaned = header_cleaned.replace("#", "").strip()
+                    header_cleaned = header_cleaned.replace("**", "").replace("#", "").strip()
                     is_numbered_header = section_header_pattern.match(header_cleaned)
                     is_all_caps = all_caps_pattern.match(header_cleaned) and len(header_cleaned) > 6
                     is_known_header = header_cleaned.lower() in known_headers_lower
@@ -1536,231 +1481,22 @@ def save_memo_with_template(memo_text, profile, output_path):
                         last_para = para
                         continue
                     if (line_stripped.startswith('•') or line_stripped.startswith('-') or line_stripped.startswith('*')):
-                        # Check if this is a header that should be processed by section-specific formatting
-                        # Remove bullet point for header detection
-                        header_check = re.sub(r"^[•\-*#]+\s*", "", line_stripped).strip()
-                        
-                        # Check if this is a market header
-                        market_headers = [
-                            "📊 Market Size Metrics", "📈 Growth Metrics", "📰 Sector Analysis",
-                            "🔍 Market Research Sources", "🔗 Additional Sources"
-                        ]
-                        
-                        # Check if this is a business model header
-                        business_model_headers = [
-                            "Business Model Schema", "Business Model Overview", "Potential Revenue Streams",
-                            "Customer Segments", "Strategy", "Additional Research Needed"
-                        ]
-                        
-                        # Check if this is a financial analysis header
-                        financial_analysis_headers = [
-                            "Financial Analysis📊", "Data Sources 🔗", "Funding Rounds:", "Current Valuation:",
-                            "Latest Funding Round:", "Total Funding Raised:", "Financial Data", "Funding History"
-                        ]
-                        
-                        # Check if this is a team management header
-                        team_management_headers = [
-                            "CEO", "CFO", "CTO", "CHAIRMAN", "COFOUNDER", "FOUNDER"
-                        ]
-                        
-                        # Check if this is a risks header
-                        risks_headers = [
-                            "Market Risks", "Technical Risks", "Operational Risks", 
-                            "Regulatory Risks", "Financial Risks", "Strategic Risks",
-                            "Competitive Risks", "Technology Risks", "Execution Risks"
-                        ]
-                        
-                        # Check if this is a followup header
-                        followup_headers = [
-                            "Follow-up Questions", "Next Steps", "Additional Research Needed",
-                            "Key Questions", "Due Diligence Items", "Action Items"
-                        ]
-                        
-                        # Check if this is an AI commentary header
-                        ai_commentary_headers = [
-                            "Key Strengths", "Key Weaknesses", "Opportunities", "Risks", "Conclusion",
-                            "Investment Thesis", "Critical Analysis", "Recommendation"
-                        ]
-                        
-                        # If it's a header, process it normally (will be caught by section detection)
-                        if (any(header in header_check for header in market_headers) or
-                            any(header in header_check for header in business_model_headers) or
-                            any(header in header_check for header in financial_analysis_headers) or
-                            any(header in header_check for header in team_management_headers) or
-                            any(header in header_check for header in risks_headers) or
-                            any(header in header_check for header in followup_headers) or
-                            any(header in header_check for header in ai_commentary_headers)):
-                            # Process as normal paragraph (will be caught by section detection)
-                            pass
-                        else:
-                            # Process as bullet point
-                            bullet_line = re.sub(r"^[•\-*#]+\s*", "• ", line_stripped)
-                            # Only remove hyphens that are not part of URLs
-                            # First, temporarily replace URL hyphens to protect them
-                            # Find URLs and temporarily replace hyphens in them
-                            url_pattern = r'https?://[^\s]+'
-                            urls = re.findall(url_pattern, bullet_line)
-                            for i, url in enumerate(urls):
-                                # Replace hyphens in URLs with a temporary marker
-                                protected_url = url.replace('-', '___HYPHEN___')
-                                bullet_line = bullet_line.replace(url, protected_url)
-                            
-                            # Now remove hyphens from bullet point markers (but not from URLs)
-                            bullet_line = bullet_line.replace('*', '').replace('-', '').strip()
-                            
-                            # Restore hyphens in URLs
-                            for i, url in enumerate(urls):
-                                protected_url = url.replace('-', '___HYPHEN___')
-                                restored_url = protected_url.replace('___HYPHEN___', '-')
-                                bullet_line = bullet_line.replace(protected_url, restored_url)
-                            
-                            if not bullet_line.startswith('•'):
-                                bullet_line = '• ' + bullet_line.lstrip()
-                            
-                            para = doc.add_paragraph()
-                            # Use the new function to process text with hyperlinks and targeted bold
-                            process_text_with_hyperlinks_and_targeted_bold(para, bullet_line)
-                            
-                            para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-                            para.paragraph_format.line_spacing = 1.5
-                            para.paragraph_format.first_line_indent = Pt(0)
-                            last_para = para
-                            continue
+                        bullet_line = re.sub(r"^[•\-*#]+\s*", "• ", line_stripped)
+                        bullet_line = bullet_line.replace('*', '').replace('-', '').strip()
+                        if not bullet_line.startswith('•'):
+                            bullet_line = '• ' + bullet_line.lstrip()
+                        para = doc.add_paragraph()
+                        # Use the new function to process text with hyperlinks
+                        process_text_with_hyperlinks(para, bullet_line)
+                        para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+                        para.paragraph_format.line_spacing = 1.5
+                        para.paragraph_format.first_line_indent = Pt(0)
+                        last_para = para
+                        continue
                     # Normal paragraph
                     para = doc.add_paragraph()
-                    
-                    # Track if the previous line was a section header
-                    if 'previous_was_header' not in locals():
-                        previous_was_header = False
-                    
-                    # Detect which section we're in based on the content
-                    current_section = "default"
-                    
-                    # Check if this line is a section header
-                    is_section_header = False
-                    if any(header in line_stripped for header in [
-                        "📊 Market Size Metrics", "📈 Growth Metrics", "📰 Sector Analysis",
-                        "🔍 Market Research Sources", "🔗 Additional Sources"
-                    ]) or "MARKET SIZE & ANALYSIS" in line_stripped:
-                        current_section = "market"
-                        is_section_header = True
-                    elif any(header in line_stripped for header in [
-                        "📊 Financial Analysis", "📊 Financial Data", "📈 Additional Financial Metrics",
-                        "🏢 Ownership & Investors", "🔗 Data Sources"
-                    ]):
-                        current_section = "financial"
-                        is_section_header = True
-                    elif any(header in line_stripped for header in [
-                        "🔧 Technical Specifications", "⚙️ Technical Analysis", "📋 Technical Assessment"
-                    ]):
-                        current_section = "technical"
-                        is_section_header = True
-                    elif any(header in line_stripped for header in [
-                        "⚠️ Risk Assessment", "🔍 Risk Analysis", "📊 Risk Metrics"
-                    ]):
-                        current_section = "risk"
-                        is_section_header = True
-                    elif "COMPETITORS" in line_stripped or "Key Competitors Analysis" in line_stripped:
-                        current_section = "competitor"
-                        is_section_header = True
-                    elif "TEAM" in line_stripped or "Team:" in line_stripped:
-                        current_section = "team"
-                        is_section_header = True
-                    elif "BUSINESS MODEL" in line_stripped or any(bm_header in line_stripped for bm_header in [
-                        "Business Model Schema", "Business Model Overview", "Potential Revenue Streams",
-                        "Customer Segments", "Strategy", "Additional Research Needed"
-                    ]):
-                        current_section = "business_model"
-                        is_section_header = True
-                    elif "FINANCIAL ANALYSIS" in line_stripped or any(fa_header in line_stripped for fa_header in [
-                        "Financial Analysis📊", "Data Sources 🔗", "Funding Rounds:", "Current Valuation:",
-                        "Latest Funding Round:", "Total Funding Raised:", "Financial Data", "Funding History"
-                    ]):
-                        current_section = "financial_analysis"
-                        is_section_header = True
-                    elif "TEAM" in line_stripped or "MANAGEMENT" in line_stripped or any(tm_header in line_stripped for tm_header in [
-                        "CEO", "CFO", "CTO", "CHAIRMAN", "COFOUNDER", "FOUNDER"
-                    ]):
-                        current_section = "team_management"
-                        is_section_header = True
-                    elif "RISKS" in line_stripped or any(rh_header in line_stripped for rh_header in [
-                        "Market Risks", "Technical Risks", "Operational Risks", 
-                        "Regulatory Risks", "Financial Risks", "Strategic Risks",
-                        "Competitive Risks", "Technology Risks", "Execution Risks"
-                    ]):
-                        current_section = "risks"
-                        is_section_header = True
-                    elif "FOLLOW-UP" in line_stripped or "NEXT STEPS" in line_stripped or any(fh_header in line_stripped for fh_header in [
-                        "Follow-up Questions", "Next Steps", "Additional Research Needed",
-                        "Key Questions", "Due Diligence Items", "Action Items"
-                    ]):
-                        current_section = "followup"
-                        is_section_header = True
-                    elif "AI DISCUSSION" in line_stripped or "COMMENTARY" in line_stripped or any(ac_header in line_stripped for ac_header in [
-                        "Key Strengths", "Key Weaknesses", "Opportunities", "Risks", "Conclusion",
-                        "Investment Thesis", "Critical Analysis", "Recommendation"
-                    ]):
-                        current_section = "ai_commentary"
-                        is_section_header = True
-                    
-                    # Update previous_was_header for next iteration
-                    previous_was_header = is_section_header
-                    
-                    # Use section-specific formatting
-                    if current_section == "competitor":
-                        format_competitor_section(para, line_stripped)
-                    elif current_section == "market":
-                        # Use default processing like in old version (no special formatting)
-                        process_text_with_hyperlinks_and_targeted_bold(para, line_stripped)
-                    elif current_section == "financial":
-                        format_financial_section(para, line_stripped)
-                    elif current_section == "team":
-                        format_team_section(para, line_stripped)
-                    elif current_section == "technical":
-                        format_technical_section(para, line_stripped)
-                    elif current_section == "risk":
-                        format_risk_section(para, line_stripped)
-                    elif current_section == "business_model":
-                        # Use default processing like in old version (no special formatting)
-                        process_text_with_hyperlinks_and_targeted_bold(para, line_stripped)
-                    elif current_section == "financial_analysis":
-                        format_financial_analysis_section(para, line_stripped)
-                    elif current_section == "team_management":
-                        format_team_management_section(para, line_stripped)
-                    elif current_section == "risks":
-                        format_risks_section(para, line_stripped)
-                    elif current_section == "followup":
-                        format_followup_section(para, line_stripped)
-                    elif current_section == "ai_commentary":
-                        format_ai_commentary_section(para, line_stripped)
-                    else:
-                        # Default formatting for other sections
-                        # Check if this line contains headers that should be bold
-                        if any(header in line_stripped for header in [
-                            "Business Model Overview", "Potential Revenue Streams", "Customer Segments", 
-                            "Strategy", "Business Model Schema", "Additional Research Needed",
-                            "Product Technical Specifications", "Technical Specifications", "Product Roadmap", 
-                            "Patent Portfolio", "Technical Feasibility and Performance", "Moat", "Complexity", 
-                            "Security", "Implementation", "Regulatory", "Testing",
-                            "Market Risks", "Technical Risks", "Operational Risks", "Regulatory Risks", "Financial Risks",
-                            "Key Strengths", "Key Weaknesses", "Opportunities", "Risks", "Conclusion"
-                        ]):
-                            # Process headers with bold formatting
-                            run = para.add_run(line_stripped)
-                            run.font.name = 'Times New Roman'
-                            run.font.size = Pt(12)
-                            run.bold = True
-                        # Special case for Team line in Company Overview
-                        elif line_stripped.startswith("Team:"):
-                            # Process Team line without bold formatting for executive names
-                            run = para.add_run(line_stripped)
-                            run.font.name = 'Times New Roman'
-                            run.font.size = Pt(12)
-                            run.bold = False
-                        else:
-                            # Use the new function to process text with hyperlinks and targeted bold
-                            process_text_with_hyperlinks_and_targeted_bold(para, line_stripped)
-                    
+                    # Use the new function to process text with hyperlinks
+                    process_text_with_hyperlinks(para, line_stripped)
                     para.alignment = alignment if alignment is not None else WD_ALIGN_PARAGRAPH.JUSTIFY
                     para.paragraph_format.line_spacing = 1.5
                     para.paragraph_format.first_line_indent = Pt(0)
@@ -1974,7 +1710,7 @@ def main():
                     print(f"[Structured Data] Set {profile_key} = {value}")
         
         # Initialising evaluation tracker with real-time tracking
-        from evaluation_metrics.core.evaluation_metrics import MemoEvaluator
+        from evaluation_metrics import MemoEvaluator
         evaluator = MemoEvaluator()
         evaluator.start_evaluation()
         
@@ -2060,7 +1796,7 @@ def main():
             json.dump(metrics.__dict__, f, indent=2, default=str)
         
         # Generating summary of evaulation metrics
-        from evaluation_metrics.core.integrate_evaluation import create_academic_summary
+        from integrate_evaluation import create_academic_summary
         summary_file = create_academic_summary(metrics_file, evaluation_dir)
         
         # Print 
@@ -2116,245 +1852,8 @@ def format_enhanced_technical_section(profile):
     except Exception as e:
         print(f"[Technical Agent] Error: {e}")
         # Use direct formatting since the agent is failing
-        try:
-            from agents.technical_dd_agent import format_technical_dd_section
-            return format_technical_dd_section(profile)
-        except ImportError as import_error:
-            print(f"[Technical Agent] Import error: {import_error}")
-            # Fallback to basic technical formatting
-            return "Technical Due Diligence information requires additional research."
-
-
-def format_competitor_section(paragraph, text):
-    """Format competitor section with company names as bold headers."""
-    import re
-    
-    # Pattern to match company names with bullet points: • Company Name (website.com)
-    company_pattern = r'•\s*([^(]+)\s*\(([^)]+)\)'
-    
-    # Find all company sections in the text
-    company_sections = list(re.finditer(company_pattern, text))
-    
-    if not company_sections:
-        # No special formatting found, just adding the text normally
-        run = paragraph.add_run(text)
-        run.font.name = 'Times New Roman'
-        run.font.size = Pt(12)
-        return
-    
-    print(f"[Competitor Formatting] Found {len(company_sections)} company sections in text: {text[:100]}...")
-    
-    # Sort by position
-    company_sections.sort(key=lambda x: x.start())
-    
-    # Processing text with company bold formatting
-    last_end = 0
-    for start, end, match in [(m.start(), m.end(), m) for m in company_sections]:
-        # Add text before the current match
-        if start > last_end:
-            before_text = text[last_end:start]
-            if before_text.strip():
-                run = paragraph.add_run(before_text)
-                run.font.name = 'Times New Roman'
-                run.font.size = Pt(12)
-        
-        # Process company bold text
-        company_name = match.group(1).strip()
-        website = match.group(2)
-        print(f"[Competitor Formatting] Processing company: • {company_name} ({website})")
-        
-        # Add company name as bold header (without bullet point)
-        run = paragraph.add_run(company_name)
-        run.font.name = 'Times New Roman'
-        run.font.size = Pt(12)
-        run.bold = True
-        
-        # Add the website part normally
-        run = paragraph.add_run(f" ({website})")
-        run.font.name = 'Times New Roman'
-        run.font.size = Pt(12)
-        
-        last_end = end
-    
-    # Adding any remaining text after the last match
-    if last_end < len(text):
-        remaining_text = text[last_end:]
-        if remaining_text.strip():
-            run = paragraph.add_run(remaining_text)
-            run.font.name = 'Times New Roman'
-            run.font.size = Pt(12)
-
-
-
-
-
-def format_financial_section(paragraph, text):
-    """Format financial section with section headers as bold and data as bullet points."""
-    import re
-    
-    # Check if this is a financial section header
-    financial_headers = [
-        "📊 Financial Analysis", "📊 Financial Data", "📈 Additional Financial Metrics",
-        "🏢 Ownership & Investors", "🔗 Data Sources"
-    ]
-    
-    if any(header in text for header in financial_headers):
-        # Process as bold header (no bullet point)
-        run = paragraph.add_run(text)
-        run.font.name = 'Times New Roman'
-        run.font.size = Pt(12)
-        run.bold = True
-    else:
-        # Process with hyperlinks and targeted bold
-        process_text_with_hyperlinks_and_targeted_bold(paragraph, text)
-
-
-def format_team_section(paragraph, text):
-    """Format team section with executive names as plain text (not bold)."""
-    # Process with hyperlinks but ensure executive names are not bold
-    process_text_with_hyperlinks_and_targeted_bold(paragraph, text)
-
-
-def format_technical_section(paragraph, text):
-    """Format technical section with section headers as bold."""
-    import re
-    
-    # Check if this is a technical section header
-    technical_headers = [
-        "🔧 Technical Specifications", "⚙️ Technical Analysis", "📋 Technical Assessment"
-    ]
-    
-    if any(header in text for header in technical_headers):
-        # Process as bold header (no bullet point)
-        run = paragraph.add_run(text)
-        run.font.name = 'Times New Roman'
-        run.font.size = Pt(12)
-        run.bold = True
-    else:
-        # Process with hyperlinks and targeted bold
-        process_text_with_hyperlinks_and_targeted_bold(paragraph, text)
-
-
-def format_risk_section(paragraph, text):
-    """Format risk section with section headers as bold."""
-    import re
-    
-    # Strip markdown bold formatting from headers
-    text = strip_markdown_bold(text)
-    
-    risk_headers = [
-        "Market Risks", "Technical Risks", "Operational Risks",
-        "Regulatory Risks", "Financial Risks", "Strategic Risks",
-        "Competitive Risks", "Technology Risks", "Execution Risks"
-    ]
-    if any(header in text for header in risk_headers):
-        run = paragraph.add_run(text)
-        run.font.name = 'Times New Roman'
-        run.font.size = Pt(12)
-        run.bold = True
-    else:
-        process_text_with_hyperlinks_and_targeted_bold(paragraph, text)
-
-
-
-def format_financial_analysis_section(paragraph, text):
-    """Format financial analysis section with headers as bold and content as bullet points."""
-    import re
-    
-    # Strip markdown bold formatting from headers
-    text = strip_markdown_bold(text)
-    
-    # Check if this is a financial analysis header
-    financial_analysis_headers = [
-        "Financial Analysis📊", "Data Sources 🔗", "Funding Rounds:", "Current Valuation:",
-        "Latest Funding Round:", "Total Funding Raised:", "Financial Data", "Funding History"
-    ]
-    
-    if any(header in text for header in financial_analysis_headers):
-        # Process as bold header (no bullet point)
-        run = paragraph.add_run(text)
-        run.font.name = 'Times New Roman'
-        run.font.size = Pt(12)
-        run.bold = True
-    else:
-        # Process with hyperlinks and targeted bold
-        process_text_with_hyperlinks_and_targeted_bold(paragraph, text)
-
-def format_team_management_section(paragraph, text):
-    """Format team management section with executive names as bold headers."""
-    import re
-    
-    # Check if this is an executive name header (contains "–" or "-" followed by title)
-    executive_pattern = r'^[•\s]*([^–-]+)[–-]\s*([A-Z\s]+)$'
-    match = re.match(executive_pattern, text.strip())
-    
-    if match:
-        # Process as bold header (no bullet point)
-        run = paragraph.add_run(text)
-        run.font.name = 'Times New Roman'
-        run.font.size = Pt(12)
-        run.bold = True
-    else:
-        # Process with hyperlinks and targeted bold
-        process_text_with_hyperlinks_and_targeted_bold(paragraph, text)
-
-def format_risks_section(paragraph, text):
-    """Format risks section with headers as bold and content as bullet points."""
-    import re
-    
-    # Strip markdown bold formatting from headers
-    text = strip_markdown_bold(text)
-    
-    risk_headers = [
-        "Market Risks", "Technical Risks", "Operational Risks",
-        "Regulatory Risks", "Financial Risks", "Strategic Risks",
-        "Competitive Risks", "Technology Risks", "Execution Risks"
-    ]
-    if any(header in text for header in risk_headers):
-        run = paragraph.add_run(text)
-        run.font.name = 'Times New Roman'
-        run.font.size = Pt(12)
-        run.bold = True
-    else:
-        process_text_with_hyperlinks_and_targeted_bold(paragraph, text)
-
-def format_followup_section(paragraph, text):
-    """Format followup section with headers as bold and content as bullet points."""
-    import re
-    
-    # Strip markdown bold formatting from headers
-    text = strip_markdown_bold(text)
-    
-    followup_headers = [
-        "Follow-up Questions", "Next Steps", "Additional Research Needed",
-        "Key Questions", "Due Diligence Items", "Action Items"
-    ]
-    if any(header in text for header in followup_headers):
-        run = paragraph.add_run(text)
-        run.font.name = 'Times New Roman'
-        run.font.size = Pt(12)
-        run.bold = True
-    else:
-        process_text_with_hyperlinks_and_targeted_bold(paragraph, text)
-
-def format_ai_commentary_section(paragraph, text):
-    """Format AI commentary section with headers as bold and content as normal text."""
-    import re
-    
-    # Strip markdown bold formatting from headers
-    text = strip_markdown_bold(text)
-    
-    ai_commentary_headers = [
-        "Key Strengths", "Key Weaknesses", "Opportunities", "Risks", "Conclusion",
-        "Investment Thesis", "Critical Analysis", "Recommendation"
-    ]
-    if any(header in text for header in ai_commentary_headers):
-        run = paragraph.add_run(text)
-        run.font.name = 'Times New Roman'
-        run.font.size = Pt(12)
-        run.bold = True
-    else:
-        process_text_with_hyperlinks_and_targeted_bold(paragraph, text)
+        from agents.technical_dd_agent import format_technical_dd_section
+        return format_technical_dd_section(profile)
 
 
 if __name__ == "__main__":

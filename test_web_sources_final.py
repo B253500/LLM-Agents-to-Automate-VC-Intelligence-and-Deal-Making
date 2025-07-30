@@ -20,9 +20,9 @@ def test_web_sources_final():
     profile.latest_round_amount = "$370 million"
     profile.total_funding_raised = "$2.777 billion"
     profile.web_sources = [
-        "https://www.crunchbase.com/organization/octopus-energy",
-        "https://www.cbinsights.com/company/octopus-energy",
-        "https://www.ionanalytics.com/octopus-energy-funding-round"
+        "https://www.crunchbase.com/organization/sample-company",
+        "https://www.cbinsights.com/company/sample-company",
+        "https://www.ionanalytics.com/sample-company-funding-round"
     ]
     
     print(f"📊 Initial web_sources: {profile.web_sources}")
@@ -40,12 +40,17 @@ def test_web_sources_final():
         # Check if web sources are in the output
         if "🔗 Data Sources" in formatted_section:
             print("\n✅ Web sources section found in output!")
+            # Check for Crunchbase URL
             if "crunchbase.com" in formatted_section:
-                print("✅ Crunchbase link found!")
+                print("✅ Crunchbase URL found in formatted section")
+            else:
+                print("❌ Crunchbase URL not found in formatted section")
+            
+            # Check for CB Insights URL
             if "cbinsights.com" in formatted_section:
-                print("✅ CB Insights link found!")
-            if "ionanalytics.com" in formatted_section:
-                print("✅ ION Analytics link found!")
+                print("✅ CB Insights URL found in formatted section")
+            else:
+                print("❌ CB Insights URL not found in formatted section")
         else:
             print("\n❌ Web sources section NOT found in output!")
             print("\n📋 Formatted section preview:")

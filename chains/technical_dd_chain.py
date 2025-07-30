@@ -131,67 +131,75 @@ def extract_technical_specs_from_text(text: str) -> dict:
     
     specs = {}
     
-    # Energy density patterns - enhanced to capture both Wh/kg and Wh/L
-    energy_patterns = [
-        r'energy.*?density.*?(\d+(?:\.\d+)?).*?(wh|watt|wh/kg)',
-        r'(\d+(?:\.\d+)?).*?(wh|watt|wh/kg).*?energy.*?density',
-        r'energy.*?density.*?(\d+(?:\.\d+)?)\s*(wh|watt|wh/kg)',
-        r'>(\d+)\s*wh/kg',
-        r'(\d+)\s*wh/kg',
-        r'(\d+)\s*wh/l',
-        r'(\d+)\s*wh/l.*?net',
-    ]
+    # Generic technical specification patterns that work for any sector
+    technical_patterns = {
+        'performance': [
+            r'(\d+(?:\.\d+)?)\s*(wh|watt|wh/kg|wh/l|mhz|ghz|gb|mb|tb)',
+            r'performance.*?(\d+(?:\.\d+)?)',
+            r'(\d+(?:\.\d+)?).*?performance',
+            r'speed.*?(\d+(?:\.\d+)?)',
+            r'(\d+(?:\.\d+)?).*?speed',
+        ],
+        'capacity': [
+            r'capacity.*?(\d+(?:\.\d+)?)',
+            r'(\d+(?:\.\d+)?).*?capacity',
+            r'(\d+(?:\.\d+)?)\s*(gb|mb|tb|wh|ah)',
+        ],
+        'efficiency': [
+            r'efficiency.*?(\d+(?:\.\d+)?)',
+            r'(\d+(?:\.\d+)?).*?efficiency',
+            r'(\d+(?:\.\d+)?)\s*%',
+        ],
+        'accuracy': [
+            r'accuracy.*?(\d+(?:\.\d+)?)',
+            r'(\d+(?:\.\d+)?).*?accuracy',
+            r'(\d+(?:\.\d+)?)\s*%',
+        ],
+        'reliability': [
+            r'reliability.*?(\d+(?:\.\d+)?)',
+            r'(\d+(?:\.\d+)?).*?reliability',
+            r'uptime.*?(\d+(?:\.\d+)?)',
+            r'(\d+(?:\.\d+)?).*?uptime',
+        ],
+        'cycles': [
+            r'cycle.*?life.*?(\d+(?:,\d+)?)',
+            r'(\d+(?:,\d+)?).*?cycle.*?life',
+            r'(\d+(?:,\d+)?)\s*cycles',
+            r'>(\d+)\s*consecutive',
+            r'(\d+)\s*consecutive.*?cycles',
+        ],
+        'time': [
+            r'(\d+)\s*(min|minutes|sec|seconds|ms)',
+            r'response.*?time.*?(\d+(?:\.\d+)?)',
+            r'(\d+(?:\.\d+)?).*?response.*?time',
+        ],
+        'temperature': [
+            r'temperature.*?(\d+(?:\.\d+)?)',
+            r'(\d+(?:\.\d+)?).*?temperature',
+            r'(\d+(?:\.\d+)?)\s*°[cf]',
+        ]
+    }
     
-    for pattern in energy_patterns:
-        matches = re.findall(pattern, text.lower())
-        if matches:
-            match = matches[0]
-            if isinstance(match, tuple) and len(match) >= 2:
-                value, unit = match[0], match[1]
-                specs['energy_density'] = float(value)
-                specs['energy_density_unit'] = unit
-                break
-            elif isinstance(match, str):
-                # Handle single value patterns like ">300 wh/kg"
-                value = match
-                specs['energy_density'] = float(value)
-                specs['energy_density_unit'] = 'wh/kg'
-                break
+    # Extract technical specifications using generic patterns
+    for spec_type, patterns in technical_patterns.items():
+        for pattern in patterns:
+            matches = re.findall(pattern, text.lower())
+            if matches:
+                match = matches[0]
+                if isinstance(match, tuple) and len(match) >= 2:
+                    value, unit = match[0], match[1]
+                    specs[f'{spec_type}_value'] = float(value)
+                    specs[f'{spec_type}_unit'] = unit
+                    break
+                elif isinstance(match, str):
+                    # Handle single value patterns
+                    value = match.replace(',', '')
+                    specs[f'{spec_type}_value'] = float(value)
+                    break
     
-    # Volumetric energy density patterns
-    vol_energy_patterns = [
-        r'(\d+)\s*wh/l.*?net',
-        r'(\d+)\s*wh/l',
-        r'volumetric.*?(\d+)\s*wh/l',
-    ]
-    
-    for pattern in vol_energy_patterns:
-        matches = re.findall(pattern, text.lower())
-        if matches:
-            specs['volumetric_energy_density'] = int(matches[0])
-            break
-    
-    # Cycle life patterns - enhanced to capture consecutive cycles
-    cycle_patterns = [
-        r'cycle.*?life.*?(\d+(?:,\d+)?)',
-        r'(\d+(?:,\d+)?).*?cycle.*?life',
-        r'(\d+(?:,\d+)?)\s*cycles',
-        r'>(\d+)\s*consecutive',
-        r'(\d+)\s*consecutive.*?cycles',
-        r'>(\d+)\s*xfc.*?cycles',
-        r'(\d+)\s*xfc.*?cycles',
-    ]
-    
-    for pattern in cycle_patterns:
-        matches = re.findall(pattern, text.lower())
-        if matches:
-            value = matches[0].replace(',', '')
-            specs['cycle_life'] = int(value)
-            break
-    
-    # Enhanced patent extraction
-    granted_pattern = r'(\d+)\s*us.*?granted'
-    pending_pattern = r'(\d+)\s*us.*?pending'
+    # Enhanced patent extraction (generic)
+    granted_pattern = r'(\d+)\s*(us|patent).*?granted'
+    pending_pattern = r'(\d+)\s*(us|patent).*?pending'
     
     granted_match = re.search(granted_pattern, text.lower())
     pending_match = re.search(pending_pattern, text.lower())
@@ -223,264 +231,26 @@ def extract_technical_specs_from_text(text: str) -> dict:
                 specs['patents'] = int(matches[0])
                 break
     
-    # Charging speed patterns - enhanced for 100in5 format
-    charging_patterns = [
-        r'(\d+)\s*miles.*?(\d+)\s*min',
-        r'(\d+)in(\d+)',
-        r'(\d+)\s*miles.*?charged.*?(\d+)\s*min',
-        r'100in(\d+)',
-        r'(\d+)in5',
+    # Generic charging/processing speed patterns
+    speed_patterns = [
+        r'(\d+)\s*(miles|km).*?(\d+)\s*(min|minutes)',
+        r'(\d+)in(\d+)',  # Generic format like "100in5"
+        r'(\d+)\s*(gb|mb).*?(\d+)\s*(sec|seconds)',
+        r'(\d+)\s*(requests|queries).*?(\d+)\s*(sec|seconds)',
     ]
     
-    for pattern in charging_patterns:
+    for pattern in speed_patterns:
         matches = re.findall(pattern, text.lower())
         if matches:
-            if len(matches[0]) == 2:
-                miles, minutes = matches[0]
-                specs['charging_speed_miles'] = int(miles)
-                specs['charging_speed_minutes'] = int(minutes)
+            match = matches[0]
+            if len(match) >= 2:
+                value1, unit1 = match[0], match[1]
+                if len(match) >= 4:
+                    value2, unit2 = match[2], match[3]
+                    specs['speed_value'] = f"{value1} {unit1} in {value2} {unit2}"
+                else:
+                    specs['speed_value'] = f"{value1} {unit1}"
                 break
-            elif len(matches[0]) == 1:
-                # Handle 100in5 format
-                if '100in' in pattern:
-                    specs['charging_speed_miles'] = 100
-                    specs['charging_speed_minutes'] = int(matches[0])
-                    break
-    
-    # Temperature performance patterns - enhanced
-    temp_patterns = [
-        r'(\d+).*?temperature',
-        r'(\d+).*?°c',
-        r'(\d+).*?celsius',
-        r'(\d+).*?discharge.*?capacity.*?(\d+)',
-        r'(\d+)%.*?discharge.*?capacity.*?@.*?(\d+)°c',
-        r'(\d+)%.*?capacity.*?@.*?(\d+)°c',
-    ]
-    
-    for pattern in temp_patterns:
-        matches = re.findall(pattern, text.lower())
-        if matches:
-            if len(matches[0]) == 2:
-                capacity, temp = matches[0]
-                specs['low_temp_performance'] = f"{temp}°C: {capacity}% capacity"
-                break
-            else:
-                specs['operating_temp'] = int(matches[0])
-                break
-    
-    # Power performance patterns
-    power_patterns = [
-        r'(\d+)%.*?discharge.*?capacity.*?@.*?(\d+)c',
-        r'(\d+)%.*?capacity.*?@.*?(\d+)c',
-        r'(\d+)c.*?(\d+)%.*?capacity',
-    ]
-    
-    for pattern in power_patterns:
-        matches = re.findall(pattern, text.lower())
-        if matches:
-            if len(matches[0]) == 2:
-                capacity, c_rate = matches[0]
-                specs['power_performance'] = f"{c_rate}C: {capacity}% capacity"
-                break
-    
-    # Cell specifications patterns - enhanced
-    cell_patterns = [
-        r'(\d+)ah.*?pouch',
-        r'(\d+)ah.*?cell',
-        r'cell.*?type.*?(\d+)ah',
-        r'(\d+)ah.*?@.*?c/3',
-    ]
-    
-    for pattern in cell_patterns:
-        matches = re.findall(pattern, text.lower())
-        if matches:
-            specs['cell_capacity'] = int(matches[0])
-            break
-    
-    # Cell format patterns - enhanced
-    format_patterns = [
-        r'cell.*?format.*?([a-zA-Z0-9\s]+)',
-        r'([a-zA-Z0-9\s]+).*?cell.*?format',
-        r'(\d+mm).*?(\d+mm)',
-        r'(\d+)mm.*?(\d+)mm.*?pouch',
-    ]
-    
-    for pattern in format_patterns:
-        matches = re.findall(pattern, text.lower())
-        if matches:
-            if len(matches[0]) == 2:
-                width, height = matches[0]
-                specs['cell_dimensions'] = f"{width} x {height}"
-                break
-            else:
-                specs['cell_format'] = matches[0].strip()
-                break
-    
-    # Team size patterns
-    team_patterns = [
-        r'(\d+)\s*employees',
-        r'(\d+)\s*phds',
-        r'(\d+)\s*professionals',
-    ]
-    
-    for pattern in team_patterns:
-        matches = re.findall(pattern, text.lower())
-        if matches:
-            if 'employees' in pattern:
-                specs['employees_count'] = int(matches[0])
-            elif 'phds' in pattern:
-                specs['phds'] = int(matches[0])
-            elif 'professionals' in pattern:
-                specs['professionals'] = int(matches[0])
-    
-    # Technology roadmap patterns
-    roadmap_patterns = [
-        r'(\d{4}).*?100in(\d+)',
-        r'100in(\d+).*?(\d{4})',
-        r'(\d{4}).*?production.*?readiness',
-        r'production.*?readiness.*?(\d{4})',
-    ]
-    
-    for pattern in roadmap_patterns:
-        matches = re.findall(pattern, text.lower())
-        if matches:
-            if len(matches[0]) == 2:
-                year, speed = matches[0]
-                specs['roadmap_100in_year'] = int(year)
-                specs['roadmap_100in_speed'] = int(speed)
-                break
-            else:
-                specs['roadmap_production_year'] = int(matches[0])
-                break
-    
-    # Manufacturing partnerships
-    manufacturing_patterns = [
-        r'(\d+)\s*oems.*?partners',
-        r'(\d+)\s*manufacturing.*?partners',
-        r'testing.*?by.*?(\d+)\s*oems',
-        r'(\d+)\s*oem.*?validation',
-        r'(\d+)\s*ev.*?oems',
-        r'(\d+)\s*automotive.*?partners',
-    ]
-    
-    for pattern in manufacturing_patterns:
-        matches = re.findall(pattern, text.lower())
-        if matches:
-            specs['oem_partners'] = int(matches[0])
-            break
-    
-    # Enhanced safety certifications
-    safety_patterns = [
-        r'un38\.3.*?passed',
-        r'un38\.3.*?certified',
-        r'transport.*?safety.*?certified',
-        r'iso.*?certification',
-        r'ul.*?certification',
-        r'safety.*?certified',
-        r'certified.*?safety',
-    ]
-    
-    for pattern in safety_patterns:
-        if re.search(pattern, text.lower()):
-            specs['safety_certifications'] = 'UN38.3 Transport Safety Certified'
-            break
-    
-    # Enhanced team and R&D information
-    team_patterns = [
-        r'(\d+)\s*phds',
-        r'(\d+)\s*professionals',
-        r'(\d+)\s*researchers',
-        r'(\d+)\s*scientists',
-        r'(\d+)\s*employees',
-        r'(\d+)\s*team.*?members',
-    ]
-    
-    for pattern in team_patterns:
-        matches = re.findall(pattern, text.lower())
-        if matches:
-            if 'phds' in pattern:
-                specs['phds'] = int(matches[0])
-            elif 'professionals' in pattern:
-                specs['professionals'] = int(matches[0])
-            elif 'employees' in pattern:
-                specs['employees_count'] = int(matches[0])
-    
-    # Enhanced technology roadmap and milestones
-    roadmap_patterns = [
-        r'(\d{4}).*?100in(\d+)',
-        r'100in(\d+).*?(\d{4})',
-        r'(\d{4}).*?production.*?readiness',
-        r'production.*?readiness.*?(\d{4})',
-        r'(\d{4}).*?commercial.*?launch',
-        r'(\d{4}).*?mass.*?production',
-        r'(\d{4}).*?manufacturing',
-    ]
-    
-    for pattern in roadmap_patterns:
-        matches = re.findall(pattern, text.lower())
-        if matches:
-            if len(matches[0]) == 2:
-                year, speed = matches[0]
-                specs['roadmap_100in_year'] = int(year)
-                specs['roadmap_100in_speed'] = int(speed)
-                break
-            else:
-                specs['roadmap_production_year'] = int(matches[0])
-                break
-    
-    # Enhanced cell specifications and performance
-    cell_spec_patterns = [
-        r'(\d+)ah.*?pouch',
-        r'(\d+)ah.*?cell',
-        r'cell.*?type.*?(\d+)ah',
-        r'(\d+)ah.*?@.*?c/3',
-        r'(\d+)mm.*?(\d+)mm.*?pouch',
-        r'cell.*?dimensions.*?(\d+)mm.*?(\d+)mm',
-    ]
-    
-    for pattern in cell_spec_patterns:
-        matches = re.findall(pattern, text.lower())
-        if matches:
-            if len(matches[0]) == 2:
-                width, height = matches[0]
-                specs['cell_dimensions'] = f"{width}mm x {height}mm"
-                break
-            else:
-                specs['cell_capacity'] = int(matches[0])
-                break
-    
-    # Enhanced charging and performance specifications
-    charging_spec_patterns = [
-        r'(\d+)in(\d+)',
-        r'(\d+)\s*miles.*?(\d+)\s*min',
-        r'(\d+)\s*miles.*?charged.*?(\d+)\s*min',
-        r'(\d+)in5',
-        r'(\d+)in3',
-        r'(\d+)in2',
-    ]
-    
-    for pattern in charging_spec_patterns:
-        matches = re.findall(pattern, text.lower())
-        if matches:
-            if len(matches[0]) == 2:
-                miles, minutes = matches[0]
-                specs['charging_speed_miles'] = int(miles)
-                specs['charging_speed_minutes'] = int(minutes)
-                break
-            elif len(matches[0]) == 1:
-                # Handle 100in5 format
-                if '100in' in pattern:
-                    specs['charging_speed_miles'] = 100
-                    specs['charging_speed_minutes'] = int(matches[0])
-                    break
-                elif '100in3' in pattern:
-                    specs['charging_speed_miles'] = 100
-                    specs['charging_speed_minutes'] = 3
-                    break
-                elif '100in2' in pattern:
-                    specs['charging_speed_miles'] = 100
-                    specs['charging_speed_minutes'] = 2
-                    break
     
     return specs
 

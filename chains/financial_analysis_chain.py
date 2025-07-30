@@ -85,7 +85,7 @@ def web_search_financial_context(company_name):
                         web_data.append(cleaned_result)
                         # Extract URLs from the result
                         urls = re.findall(r'https?://[^\s]+', cleaned_result)
-                    sources.extend(urls[:2])  # Limit to first 2 URLs per query
+                    sources.extend(urls[:1])  # Limit to first 1 URL per query (reduced from 2)
             except Exception as e:
                 print(f"[Financial Analysis] Web search error for query '{query}': {e}")
                 continue
@@ -99,8 +99,8 @@ def web_search_financial_context(company_name):
             crunchbase_sources = [s for s in unique_sources if 'crunchbase' in s.lower()]
             other_sources = [s for s in unique_sources if 'crunchbase' not in s.lower()]
             
-            # Put Crunchbase first, then others (limit to 3 total)
-            prioritized_sources = crunchbase_sources + other_sources[:3-len(crunchbase_sources)]
+            # Put Crunchbase first, then others (limit to 2 total)
+            prioritized_sources = crunchbase_sources + other_sources[:2-len(crunchbase_sources)]
             
             source_links = "\n".join([f"Source: {url}" for url in prioritized_sources])
             
@@ -359,8 +359,8 @@ def extract_financials_from_text(text):
         (r"implied valuation[^\d$]*\$?([\d\.]+)\s*([KMB]?)", "implied_valuation"),
     ]
     
-    # Additional validation: exclude technical specifications
-    technical_indicators = ['wh/l', 'wh/kg', 'watt', 'voltage', 'current', 'capacity', 'density', 'energy density']
+    # Additional validation: exclude technical specifications that might be confused with financial data
+    technical_indicators = ['mhz', 'ghz', 'gb', 'mb', 'tb', 'pixels', 'resolution', 'fps', 'latency']
     
     results = {}
     for pat, field in patterns:
@@ -369,7 +369,7 @@ def extract_financials_from_text(text):
             # Get the full matched text for context validation
             full_match = match.group(0)
             
-            # Skip if the match contains technical indicators
+            # Skip if the match contains technical indicators (not financial)
             if any(indicator in full_match.lower() for indicator in technical_indicators):
                 continue
                 

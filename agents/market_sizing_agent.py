@@ -180,11 +180,14 @@ def generate_market_size_section(profile: StartupProfile) -> str:
             test_result = search_perplexity("test", num_results=1)
             if test_result is None:
                 print("[Market Agent] Perplexity API not available, skipping web searches")
-                # Add fallback URLs for common market research sources
+                # Add fallback URLs for generic market research sources
                 market_research_urls = [
-                    "https://market.us/report/global-battery-technology-market/",
-                    "https://www.alliedmarketresearch.com/battery-technology-market/", 
-                    "https://www.researchandmarkets.com/reports/battery-technology-market"
+                    "https://www.grandviewresearch.com/",
+                    "https://www.marketsandmarkets.com/",
+                    "https://www.alliedmarketresearch.com/",
+                    "https://www.researchandmarkets.com/",
+                    "https://www.ibisworld.com/",
+                    "https://www.statista.com/"
                 ]
             
             for query in search_queries:
@@ -292,7 +295,7 @@ def generate_market_size_section(profile: StartupProfile) -> str:
             print(f"[Market Analysis] Error during sector analysis: {e}")
     
     web_sources = getattr(profile, 'market_size_sources', []) or []
-    web_links = [url for url in web_sources if url.startswith('http') and len(url) > 15][:3]
+    web_links = [url for url in web_sources if url.startswith('http') and len(url) > 15][:2]  # Limit to 2 sources (reduced from 3)
     
     # Generate market discussion
     prompt = f"""
@@ -496,19 +499,21 @@ Sector: {sector}
                 
                 # Ensure we have a complete URL
                 if clean_url.startswith('http') and len(clean_url) > 10:
-                    # Fix common URL issues before adding to output
-                    corrected_url = clean_url
-                    # Fix market.us URLs
-                    if 'market.us' in clean_url and 'globalbatterytechnologymarket' in clean_url:
-                        corrected_url = clean_url.replace('globalbatterytechnologymarket', 'global-battery-technology-market')
-                    # Fix alliedmarketresearch URLs
-                    elif 'alliedmarketresearch' in clean_url and 'batterytechnologymarket' in clean_url:
-                        corrected_url = clean_url.replace('batterytechnologymarket', 'battery-technology-market')
+                    # Fix URLs with missing hyphens - generic approach
+                    if 'market.us' in clean_url and 'global' in clean_url and 'market' in clean_url:
+                        # Generic fix for market.us URLs - add hyphens between words
+                        clean_url = re.sub(r'([a-z])([A-Z])', r'\1-\2', clean_url)
+                        clean_url = clean_url.replace('--', '-')  # Fix double hyphens
+                    
+                    elif 'alliedmarketresearch' in clean_url and 'market' in clean_url:
+                        # Generic fix for alliedmarketresearch URLs - add hyphens between words
+                        clean_url = re.sub(r'([a-z])([A-Z])', r'\1-\2', clean_url)
+                        clean_url = clean_url.replace('--', '-')  # Fix double hyphens
                     
                     # Format as markdown link for proper DOCX hyperlink processing
                     try:
                         from urllib.parse import urlparse
-                        parsed = urlparse(corrected_url)
+                        parsed = urlparse(clean_url)
                         domain = parsed.netloc
                         if domain.startswith('www.'):
                             domain = domain[4:]
@@ -529,11 +534,11 @@ Sector: {sector}
                         else:
                             source_name = domain.replace('.com', '').replace('.co', '').title()
                         
-                        lines.append(f"• [{corrected_url}]({corrected_url})")
+                        lines.append(f"• [{clean_url}]({clean_url})")
                     except:
                         # Fallback to domain extraction
-                        domain = corrected_url.split('/')[2] if len(corrected_url.split('/')) > 2 else corrected_url
-                        lines.append(f"• [{corrected_url}]({corrected_url})")
+                        domain = clean_url.split('/')[2] if len(clean_url.split('/')) > 2 else clean_url
+                        lines.append(f"• [{clean_url}]({clean_url})")
                 else:
                     print(f"[Market Agent] Invalid URL found: {url}")
             except Exception as e:
@@ -556,19 +561,21 @@ Sector: {sector}
                 
                 # Ensure we have a complete URL
                 if clean_url.startswith('http') and len(clean_url) > 10:
-                    # Fix common URL issues before adding to output
-                    corrected_url = clean_url
-                    # Fix market.us URLs
-                    if 'market.us' in clean_url and 'globalbatterytechnologymarket' in clean_url:
-                        corrected_url = clean_url.replace('globalbatterytechnologymarket', 'global-battery-technology-market')
-                    # Fix alliedmarketresearch URLs
-                    elif 'alliedmarketresearch' in clean_url and 'batterytechnologymarket' in clean_url:
-                        corrected_url = clean_url.replace('batterytechnologymarket', 'battery-technology-market')
+                    # Fix URLs with missing hyphens - generic approach
+                    if 'market.us' in clean_url and 'global' in clean_url and 'market' in clean_url:
+                        # Generic fix for market.us URLs - add hyphens between words
+                        clean_url = re.sub(r'([a-z])([A-Z])', r'\1-\2', clean_url)
+                        clean_url = clean_url.replace('--', '-')  # Fix double hyphens
+                    
+                    elif 'alliedmarketresearch' in clean_url and 'market' in clean_url:
+                        # Generic fix for alliedmarketresearch URLs - add hyphens between words
+                        clean_url = re.sub(r'([a-z])([A-Z])', r'\1-\2', clean_url)
+                        clean_url = clean_url.replace('--', '-')  # Fix double hyphens
                     
                     # Format as markdown link for proper DOCX hyperlink processing
                     try:
                         from urllib.parse import urlparse
-                        parsed = urlparse(corrected_url)
+                        parsed = urlparse(clean_url)
                         domain = parsed.netloc
                         if domain.startswith('www.'):
                             domain = domain[4:]
@@ -589,11 +596,11 @@ Sector: {sector}
                         else:
                             source_name = domain.replace('.com', '').replace('.co', '').title()
                         
-                        lines.append(f"• [{corrected_url}]({corrected_url})")
+                        lines.append(f"• [{clean_url}]({clean_url})")
                     except:
                         # Fallback to domain extraction
-                        domain = corrected_url.split('/')[2] if len(corrected_url.split('/')) > 2 else corrected_url
-                        lines.append(f"• [{corrected_url}]({corrected_url})")
+                        domain = clean_url.split('/')[2] if len(clean_url.split('/')) > 2 else clean_url
+                        lines.append(f"• [{clean_url}]({clean_url})")
                 else:
                     print(f"[Market Agent] Invalid URL found: {url}")
             except Exception as e:
@@ -639,6 +646,47 @@ def extract_bev_data_from_text(text):
             bev_data['target_year'] = '2023'  # Default to 2023 if no valid years found
     
     return bev_data
+
+def extract_technical_data_from_text(text):
+    """Extract technical specifications and performance data from deck text."""
+    if not text:
+        return {}
+    
+    import re
+    
+    tech_data = {}
+    
+    # Extract performance metrics
+    performance_matches = re.findall(r'(\d+(?:\.\d+)?)\s*(wh|watt|mhz|ghz|gb|mb|tb|fps|ms)', text.lower())
+    if performance_matches:
+        tech_data['performance_metrics'] = performance_matches[:3]  # Top 3 metrics
+    
+    # Extract efficiency metrics
+    efficiency_matches = re.findall(r'(\d+(?:\.\d+)?)\s*%', text.lower())
+    if efficiency_matches:
+        tech_data['efficiency_metrics'] = efficiency_matches[:3]  # Top 3 percentages
+    
+    # Extract time-based metrics
+    time_matches = re.findall(r'(\d+)\s*(min|minutes|sec|seconds|ms)', text.lower())
+    if time_matches:
+        tech_data['time_metrics'] = time_matches[:3]  # Top 3 time metrics
+    
+    # Extract capacity/volume metrics
+    capacity_matches = re.findall(r'(\d+(?:\.\d+)?)\s*(gb|mb|tb|wh|ah|l)', text.lower())
+    if capacity_matches:
+        tech_data['capacity_metrics'] = capacity_matches[:3]  # Top 3 capacity metrics
+    
+    # Extract year references (prioritize recent years)
+    year_matches = re.findall(r'(\d{4})', text)
+    if year_matches:
+        # Filter for reasonable years (2000-2030)
+        valid_years = [int(y) for y in year_matches if 2000 <= int(y) <= 2030]
+        if valid_years:
+            tech_data['target_year'] = str(max(valid_years))  # Use the most recent year
+        else:
+            tech_data['target_year'] = '2023'  # Default to 2023 if no valid years found
+    
+    return tech_data
 
 def build_market_sizing_agent(profile: StartupProfile, trace_id=None):
     analyst = Agent(

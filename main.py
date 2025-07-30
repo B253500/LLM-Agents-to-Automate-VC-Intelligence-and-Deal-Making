@@ -34,6 +34,9 @@ from core.vector_store import clear_collection
 from core.visual_utils import extract_images_from_pdf, generate_sample_market_chart, extract_market_and_financials_from_visuals
 from core.coresignal_utils import get_full_company_data
 
+# Configuration
+from config import Config
+
 # Chain imports
 from chains.pitch_deck_chain import run_pitch_deck_chain
 from chains.technical_dd_chain import run_technical_dd_chain
@@ -416,88 +419,87 @@ def format_company_overview_section(profile):
 
 
 def detect_product_type(profile):
-    """Detect the product type from profile data to make descriptions sector-agnostic."""
-    # Check for explicit product type indicators
+    """Generic product type detection that works for any startup sector."""
+    # Check for explicit product type indicators first
     product_type = getattr(profile, 'product_type', None)
     if product_type:
         return product_type.lower()
     
-    # Check sector for hints
+    # Use the actual sector from the profile data
     sector = getattr(profile, 'sector', '').lower()
-    if 'battery' in sector or 'energy' in sector or 'storage' in sector:
-        return 'battery'
-    elif 'software' in sector or 'saas' in sector or 'platform' in sector:
-        return 'software'
-    elif 'biotech' in sector or 'pharma' in sector or 'medical' in sector:
-        return 'biotech'
-    elif 'fintech' in sector or 'financial' in sector:
-        return 'fintech'
-    elif 'consumer' in sector or 'retail' in sector:
-        return 'consumer'
-    elif 'ai' in sector or 'machine learning' in sector:
-        return 'ai'
-    elif 'hardware' in sector or 'iot' in sector:
-        return 'hardware'
+    if sector:
+        return sector
     
-    # Check product description for keywords
+    # Check product description for any technical indicators
     desc = getattr(profile, 'product_description', '').lower()
-    if any(word in desc for word in ['battery', 'energy', 'storage', 'charging']):
-        return 'battery'
-    elif any(word in desc for word in ['software', 'platform', 'app', 'saas']):
-        return 'software'
-    elif any(word in desc for word in ['drug', 'therapy', 'medical', 'biotech']):
-        return 'biotech'
-    elif any(word in desc for word in ['payment', 'banking', 'financial', 'fintech']):
-        return 'fintech'
-    elif any(word in desc for word in ['ai', 'machine learning', 'algorithm']):
-        return 'ai'
+    if desc:
+        # Extract any technical terms from the description
+        technical_terms = extract_technical_terms(desc)
+        if technical_terms:
+            return technical_terms[0]  # Use the most prominent technical term
     
     # Default to generic product
     return 'product'
 
+def extract_technical_terms(description):
+    """Extract technical terms from product description dynamically."""
+    # Common technical terms across all sectors
+    technical_terms = [
+        'platform', 'software', 'hardware', 'device', 'app', 'service',
+        'technology', 'solution', 'system', 'tool', 'product', 'service',
+        'algorithm', 'model', 'framework', 'protocol', 'standard',
+        'component', 'module', 'interface', 'api', 'database',
+        'network', 'cloud', 'mobile', 'web', 'desktop', 'embedded',
+        'analytics', 'automation', 'optimization', 'integration',
+        'security', 'compliance', 'scalability', 'performance',
+        'reliability', 'efficiency', 'accuracy', 'speed', 'capacity'
+    ]
+    
+    found_terms = []
+    for term in technical_terms:
+        if term in description:
+            found_terms.append(term)
+    
+    return found_terms
+
 def get_sector_specific_metrics(profile, product_type):
-    """Get sector-specific metrics based on product type."""
+    """Get metrics dynamically based on available profile data."""
     metrics = []
     
-    if product_type == 'battery':
-        cycle_life = getattr(profile, 'cycle_life', None)
-        energy_density = getattr(profile, 'energy_density', None)
-        if cycle_life:
-            metrics.append(f"cycle life of {cycle_life}")
-        if energy_density:
-            metrics.append(f"energy density of {energy_density}")
+    # Get all available profile attributes
+    profile_attrs = [attr for attr in dir(profile) if not attr.startswith('_')]
     
-    elif product_type == 'software':
-        uptime = getattr(profile, 'uptime', None)
-        response_time = getattr(profile, 'response_time', None)
-        if uptime:
-            metrics.append(f"uptime of {uptime}")
-        if response_time:
-            metrics.append(f"response time of {response_time}")
+    # Common metric patterns across all sectors
+    metric_patterns = {
+        'performance': ['performance', 'speed', 'efficiency', 'throughput', 'capacity'],
+        'quality': ['quality', 'accuracy', 'precision', 'reliability', 'durability'],
+        'scale': ['scale', 'size', 'volume', 'capacity', 'throughput'],
+        'cost': ['cost', 'price', 'value', 'efficiency', 'economy'],
+        'time': ['time', 'duration', 'speed', 'latency', 'response'],
+        'security': ['security', 'safety', 'protection', 'compliance'],
+        'user': ['user', 'customer', 'adoption', 'engagement', 'satisfaction']
+    }
     
-    elif product_type == 'biotech':
-        efficacy = getattr(profile, 'efficacy', None)
-        safety_profile = getattr(profile, 'safety_profile', None)
-        if efficacy:
-            metrics.append(f"efficacy of {efficacy}")
-        if safety_profile:
-            metrics.append(f"safety profile of {safety_profile}")
+    # Check for any metrics in the profile data
+    for attr in profile_attrs:
+        try:
+            value = getattr(profile, attr)
+            if value and isinstance(value, (str, int, float)):
+                # Check if this attribute looks like a metric
+                attr_lower = attr.lower()
+                for metric_type, keywords in metric_patterns.items():
+                    if any(keyword in attr_lower for keyword in keywords):
+                        metrics.append(f"{attr.replace('_', ' ')} of {value}")
+                        break
+        except:
+            continue
     
-    elif product_type == 'fintech':
-        transaction_speed = getattr(profile, 'transaction_speed', None)
-        security_score = getattr(profile, 'security_score', None)
-        if transaction_speed:
-            metrics.append(f"transaction speed of {transaction_speed}")
-        if security_score:
-            metrics.append(f"security score of {security_score}")
-    
-    elif product_type == 'ai':
-        accuracy = getattr(profile, 'accuracy', None)
-        training_time = getattr(profile, 'training_time', None)
-        if accuracy:
-            metrics.append(f"accuracy of {accuracy}")
-        if training_time:
-            metrics.append(f"training time of {training_time}")
+    # If no metrics found, return generic ones based on product type
+    if not metrics:
+        if product_type == 'product':
+            metrics.append("product specifications and performance metrics")
+        else:
+            metrics.append(f"{product_type} specific metrics and KPIs")
     
     return metrics
 
@@ -659,7 +661,7 @@ def format_clean_financials_section(profile, current_date):
     if web_sources:
         lines.append("")
         lines.append("**🔗 Data Sources**")
-        for source in web_sources[:3]:  # Limit to 3 sources
+        for source in web_sources[:2]:  # Limit to 2 sources (reduced from 3)
             # Handle both markdown links [text](url) and plain URLs
             if source.startswith('http'):
                 lines.append(f"• {source}")
@@ -724,10 +726,10 @@ def format_financials_section_original(profile, current_date):
     # Check for web sources from financial analysis
     web_sources = []
     if hasattr(profile, 'web_sources') and profile.web_sources:
-        web_sources = profile.web_sources[:5]
+        web_sources = profile.web_sources[:2]  # Limit to 2 sources (reduced from 5)
     elif hasattr(profile, 'financial_summary') and profile.financial_summary:
         urls = re.findall(r'https?://[^\s]+', profile.financial_summary)
-        web_sources = urls[:3]
+        web_sources = urls[:2]  # Limit to 2 sources (reduced from 3)
     
     # Cap Table/Investors
     major_investors = getattr(profile, 'major_investors', None)
@@ -1493,110 +1495,129 @@ def save_memo_with_template(memo_text, profile, output_path):
     # Mermaid diagram rendering automation 
     mermaid_blocks = list(re.finditer(r'```mermaid\s*([\s\S]+?)```', memo_text))
     mermaid_images = {}
-    for idx, match in enumerate(mermaid_blocks):
-        code = match.group(1).strip()
-        rendered = False
-        
-        # Clean and validate Mermaid code
-        code = code.strip()
-        
-        # Fix common Mermaid syntax issues
-        code = code.replace('→', '-->')  # Replace arrow symbols with proper Mermaid syntax
-        code = code.replace('→', '-->')  # Replace other arrow variants
-        code = code.replace('–', '--')   # Replace en-dashes with double dashes
-        code = code.replace('—', '--')   # Replace em-dashes with double dashes
-        
-        # Ensure proper line endings
-        code = code.replace('\r\n', '\n').replace('\r', '\n')
-        
-        # Validate that the diagram has proper Mermaid syntax
-        if not code.startswith('graph') and not code.startswith('flowchart'):
-            code = f"graph TD;\n{code}"
-        
-        # Trying multiple Mermaid rendering services
-        services = [
-            ('https://kroki.io/mermaid/png', 'Kroki.io'),
-            ('https://mermaid.ink/img/', 'Mermaid.ink'),
-        ]
-        
-        for service_url, service_name in services:
-            if rendered:
-                break
-            try:
-                if service_name == 'Kroki.io':
-                    # Add proper headers for Kroki.io
-                    headers = {'Content-Type': 'text/plain'}
-                    resp = requests.post(service_url, data=code.encode('utf-8'), headers=headers, timeout=30)
-                elif service_name == 'Mermaid.ink':
-                    # Mermaid.ink uses GET with base64 encoded diagram
-                    import base64
-                    encoded = base64.b64encode(code.encode('utf-8')).decode('utf-8')
-                    resp = requests.get(f"{service_url}{encoded}", timeout=30)
-                
-                if resp.status_code == 200:
-                    img_path = os.path.join('extraction_cache', f'mermaid_{idx}.png')
-                    with open(img_path, 'wb') as f:
-                        f.write(resp.content)
-                    mermaid_images[f'<MERMAID_IMAGE_{idx}>'] = img_path
-                    print(f"[Mermaid] Rendered diagram {idx} using {service_name} to {img_path}")
-                    rendered = True
-                else:
-                    print(f"[Mermaid] {service_name} failed to render diagram {idx}: {resp.status_code}")
-                    if resp.status_code == 400:
-                        print(f"[Mermaid] Bad request - diagram syntax may be invalid")
-                        print(f"[Mermaid] Diagram code: {code[:200]}...")
-            except requests.exceptions.Timeout:
-                print(f"[Mermaid] {service_name} timeout for diagram {idx}")
-            except Exception as e:
-                print(f"[Mermaid] {service_name} exception rendering diagram {idx}: {e}")
-        
-        if not rendered:
-            print(f"[Mermaid] All services failed for diagram {idx}, trying simplified fallback")
+    
+    # Check if we should skip Mermaid rendering for faster processing
+    skip_mermaid = os.getenv('SKIP_MERMAID', 'false').lower() == 'true'
+    if skip_mermaid:
+        print("[Mermaid] Skipping diagram rendering for faster processing")
+        for idx, match in enumerate(mermaid_blocks):
+            mermaid_images[f'<MERMAID_IMAGE_{idx}>'] = f"MERMAID_TEXT_{idx}"
+    else:
+        for idx, match in enumerate(mermaid_blocks):
+            code = match.group(1).strip()
+            rendered = False
             
-            # Try to create a simplified version of the diagram
-            try:
-                # Extract company name from the diagram if possible
-                company_match = re.search(r'\[([^\]]+)\]', code)
-                company_name = company_match.group(1) if company_match else "Company"
-                
-                # Create a very simple fallback diagram
-                from custom_business_model_diagram import generate_simple_revenue_diagram
-                simple_diagram = generate_simple_revenue_diagram(
-                    company_name=company_name,
-                    revenue_streams=["Product_Sales", "Licensing", "Partnerships"],
-                    customer_segments=["Enterprise_Customers", "SMB_Customers", "Partners"]
-                )
-                
-                # Try to render the simplified diagram
-                for service_url, service_name in services:
-                    try:
-                        if service_name == 'Kroki.io':
-                            headers = {'Content-Type': 'text/plain'}
-                            resp = requests.post(service_url, data=simple_diagram.encode('utf-8'), headers=headers, timeout=30)
-                        elif service_name == 'Mermaid.ink':
-                            import base64
-                            encoded = base64.b64encode(simple_diagram.encode('utf-8')).decode('utf-8')
-                            resp = requests.get(f"{service_url}{encoded}", timeout=30)
-                        
-                        if resp.status_code == 200:
-                            img_path = os.path.join('extraction_cache', f'mermaid_{idx}_fallback.png')
-                            with open(img_path, 'wb') as f:
-                                f.write(resp.content)
-                            mermaid_images[f'<MERMAID_IMAGE_{idx}>'] = img_path
-                            print(f"[Mermaid] Rendered simplified fallback diagram {idx} using {service_name}")
-                            rendered = True
-                            break
-                    except Exception as e:
-                        print(f"[Mermaid] Fallback diagram also failed: {e}")
-                        continue
-                
-                if not rendered:
-                    print(f"[Mermaid] All fallback attempts failed for diagram {idx}, will show as text")
-                    mermaid_images[f'<MERMAID_IMAGE_{idx}>'] = f"MERMAID_TEXT_{idx}"
+            # Clean and validate Mermaid code
+            code = code.strip()
+            
+            # Simple cleaning - just fix the most common issues
+            code = code.replace('→', '-->')  # Replace arrow symbols with proper Mermaid syntax
+            code = code.replace('–', '--')   # Replace en-dashes with double dashes
+            code = code.replace('—', '--')   # Replace em-dashes with double dashes
+            
+            # Ensure proper line endings
+            code = code.replace('\r\n', '\n').replace('\r', '\n')
+            
+            # Validate that the diagram has proper Mermaid syntax
+            if not code.startswith('graph') and not code.startswith('flowchart'):
+                # Try to extract a valid graph from the code
+                graph_match = re.search(r'(graph\s+[A-Z]+[\s\S]+)', code)
+                if graph_match:
+                    code = graph_match.group(1)
+                else:
+                    # Create a basic graph wrapper
+                    code = f"graph TD\n{code}"
+            
+            # Minimal syntax fixes - only fix the most common issues
+            code = code.replace(';', '\n')  # Replace semicolons with newlines
+            
+            # Trying multiple Mermaid rendering services
+            services = [
+                ('https://kroki.io/mermaid/png', 'Kroki.io'),
+                ('https://mermaid.ink/img/', 'Mermaid.ink'),
+            ]
+            
+            for service_url, service_name in services:
+                if rendered:
+                    break
+                try:
+                    if service_name == 'Kroki.io':
+                        # Add proper headers for Kroki.io
+                        headers = {'Content-Type': 'text/plain'}
+                        resp = requests.post(service_url, data=code.encode('utf-8'), headers=headers, timeout=30)  # Increased from 5 to 30 seconds
+                    elif service_name == 'Mermaid.ink':
+                        # Mermaid.ink uses GET with base64 encoded diagram
+                        import base64
+                        encoded = base64.b64encode(code.encode('utf-8')).decode('utf-8')
+                        resp = requests.get(f"{service_url}{encoded}", timeout=30)  # Increased from 5 to 30 seconds
                     
-            except Exception as e:
-                print(f"[Mermaid] Error creating fallback diagram: {e}")
-                mermaid_images[f'<MERMAID_IMAGE_{idx}>'] = f"MERMAID_TEXT_{idx}"
+                    if resp.status_code == 200:
+                        img_path = os.path.join('extraction_cache', f'mermaid_{idx}.png')
+                        with open(img_path, 'wb') as f:
+                            f.write(resp.content)
+                        mermaid_images[f'<MERMAID_IMAGE_{idx}>'] = img_path
+                        print(f"[Mermaid] Rendered diagram {idx} using {service_name} to {img_path}")
+                        rendered = True
+                    else:
+                        print(f"[Mermaid] {service_name} failed to render diagram {idx}: {resp.status_code}")
+                        if resp.status_code == 400:
+                            print(f"[Mermaid] Bad request - diagram syntax may be invalid")
+                            print(f"[Mermaid] Diagram code: {code[:200]}...")
+                            # Try to get more details about the error
+                            try:
+                                error_details = resp.text[:500]
+                                print(f"[Mermaid] Error details: {error_details}")
+                            except:
+                                pass
+                except requests.exceptions.Timeout:
+                    print(f"[Mermaid] {service_name} timeout for diagram {idx}")
+                except Exception as e:
+                    print(f"[Mermaid] {service_name} exception rendering diagram {idx}: {e}")
+            
+            if not rendered:
+                print(f"[Mermaid] All services failed for diagram {idx}, trying simplified fallback")
+                
+                # Try to create a simplified version of the diagram
+                try:
+                    # Extract company name from the diagram if possible
+                    company_match = re.search(r'\[([^\]]+)\]', code)
+                    company_name = company_match.group(1) if company_match else "Company"
+                    
+                    # Create a very simple fallback diagram with proper Mermaid syntax
+                    # Pass the profile to extract actual revenue streams
+                    simple_diagram = generate_simple_mermaid_diagram(company_name, profile=profile)
+                    
+                    # Try to render the simplified diagram with shorter timeout
+                    for service_url, service_name in services:
+                        try:
+                            if service_name == 'Kroki.io':
+                                headers = {'Content-Type': 'text/plain'}
+                                resp = requests.post(service_url, data=simple_diagram.encode('utf-8'), headers=headers, timeout=15)  # Increased from 3 to 15 seconds
+                            elif service_name == 'Mermaid.ink':
+                                import base64
+                                encoded = base64.b64encode(simple_diagram.encode('utf-8')).decode('utf-8')
+                                resp = requests.get(f"{service_url}{encoded}", timeout=15)  # Increased from 3 to 15 seconds
+                            
+                            if resp.status_code == 200:
+                                img_path = os.path.join('extraction_cache', f'mermaid_{idx}_fallback.png')
+                                with open(img_path, 'wb') as f:
+                                    f.write(resp.content)
+                                mermaid_images[f'<MERMAID_IMAGE_{idx}>'] = img_path
+                                print(f"[Mermaid] Rendered simplified fallback diagram {idx} using {service_name}")
+                                rendered = True
+                                break
+                        except Exception as e:
+                            print(f"[Mermaid] Fallback diagram also failed: {e}")
+                            continue
+                    
+                    if not rendered:
+                        print(f"[Mermaid] All fallback attempts failed for diagram {idx}, using local text fallback")
+                        # Create a local text-based diagram instead of waiting for external services
+                        mermaid_images[f'<MERMAID_IMAGE_{idx}>'] = f"MERMAID_TEXT_{idx}"
+                        
+                except Exception as e:
+                    print(f"[Mermaid] Error creating fallback diagram: {e}")
+                    mermaid_images[f'<MERMAID_IMAGE_{idx}>'] = f"MERMAID_TEXT_{idx}"
 
     # Replacing {{COVER_TEXT}} in-place, always center-aligned 
     cover_found = False
@@ -1955,8 +1976,13 @@ def main():
                 'funding': 'funding_amount', 
                 'patents': 'patent_count',
                 'employees': 'employees_count',
-                'energy_density': 'energy_density_wh_kg',
-                'cycle_life': 'cycle_life_count'
+                # Dynamic technical field mapping based on actual data
+                'performance_value': 'performance_metric',
+                'capacity_value': 'capacity_metric',
+                'efficiency_value': 'efficiency_metric',
+                'accuracy_value': 'accuracy_metric',
+                'reliability_value': 'reliability_metric',
+                'speed_value': 'speed_metric'
             }
             
             for source_key, profile_key in field_mapping.items():
@@ -2120,6 +2146,125 @@ def format_enhanced_technical_section(profile):
             # Fallback to basic technical formatting
             return "Technical Due Diligence information requires additional research."
 
+def generate_simple_mermaid_diagram(company_name: str, profile=None, sector: str = None) -> str:
+    """Generate a simple, valid Mermaid diagram for any company based on their actual data."""
+    
+    # Clean company name for Mermaid
+    clean_name = re.sub(r'[^\w\s]', '', company_name).strip()
+    if not clean_name:
+        clean_name = "Company"
+    
+    # Extract actual revenue streams from profile if available
+    revenue_streams = []
+    customer_segments = []
+    
+    if profile:
+        # Try to extract revenue streams from various profile fields
+        revenue_fields = [
+            getattr(profile, 'revenue_streams', ''),
+            getattr(profile, 'business_model', ''),
+            getattr(profile, 'product_description', ''),
+            getattr(profile, 'go_to_market', '')
+        ]
+        
+        # Extract revenue streams from text
+        for field in revenue_fields:
+            if field and isinstance(field, str):
+                # Look for common revenue stream patterns
+                revenue_patterns = [
+                    r'(subscription|subscriptions)',
+                    r'(licensing|license)',
+                    r'(sales|selling)',
+                    r'(advertising|ads)',
+                    r'(marketplace|marketplaces)',
+                    r'(commission|commissions)',
+                    r'(freemium|freemium model)',
+                    r'(saas|software as a service)',
+                    r'(hardware|equipment)',
+                    r'(consulting|services)',
+                    r'(data|analytics)',
+                    r'(api|apis)',
+                    r'(partnership|partnerships)',
+                    r'(franchise|franchising)',
+                    r'(transaction|transactions)'
+                ]
+                
+                for pattern in revenue_patterns:
+                    matches = re.findall(pattern, field.lower())
+                    for match in matches:
+                        if match not in revenue_streams and len(revenue_streams) < 3:
+                            revenue_streams.append(match.title())
+        
+        # Extract customer segments
+        customer_fields = [
+            getattr(profile, 'customer_segments', ''),
+            getattr(profile, 'target_market', ''),
+            getattr(profile, 'go_to_market', '')
+        ]
+        
+        for field in customer_fields:
+            if field and isinstance(field, str):
+                # Look for common customer segment patterns
+                segment_patterns = [
+                    r'(enterprise|enterprises)',
+                    r'(sme|small business|small businesses)',
+                    r'(consumer|consumers)',
+                    r'(b2b|business to business)',
+                    r'(b2c|business to consumer)',
+                    r'(government|gov)',
+                    r'(healthcare|health)',
+                    r'(education|educational)',
+                    r'(retail|retailers)',
+                    r'(manufacturing|manufacturers)',
+                    r'(financial|fintech)',
+                    r'(startup|startups)'
+                ]
+                
+                for pattern in segment_patterns:
+                    matches = re.findall(pattern, field.lower())
+                    for match in matches:
+                        if match not in customer_segments and len(customer_segments) < 3:
+                            customer_segments.append(match.title())
+    
+    # If no revenue streams found, use generic ones based on sector
+    if not revenue_streams:
+        if sector:
+            sector_lower = sector.lower()
+            if 'software' in sector_lower or 'saas' in sector_lower:
+                revenue_streams = ['Subscription', 'Licensing', 'Services']
+            elif 'hardware' in sector_lower or 'device' in sector_lower:
+                revenue_streams = ['Hardware_Sales', 'Services', 'Licensing']
+            elif 'marketplace' in sector_lower or 'platform' in sector_lower:
+                revenue_streams = ['Commission', 'Subscription', 'Advertising']
+            elif 'fintech' in sector_lower or 'financial' in sector_lower:
+                revenue_streams = ['Transaction_Fees', 'Subscription', 'Services']
+            else:
+                revenue_streams = ['Product_Sales', 'Services', 'Licensing']
+        else:
+            revenue_streams = ['Product_Sales', 'Services', 'Licensing']
+    
+    # If no customer segments found, use generic ones
+    if not customer_segments:
+        customer_segments = ['Enterprise_Customers', 'SMB_Customers', 'Partners']
+    
+    # Create the diagram
+    diagram_lines = [f"graph TD"]
+    diagram_lines.append(f"    {clean_name} --> {revenue_streams[0]}")
+    
+    # Add additional revenue streams (max 3)
+    for i, stream in enumerate(revenue_streams[1:3], 1):
+        diagram_lines.append(f"    {clean_name} --> {stream}")
+    
+    # Connect revenue streams to customer segments
+    for i, stream in enumerate(revenue_streams[:2]):  # Connect first 2 streams
+        if i < len(customer_segments):
+            diagram_lines.append(f"    {stream} --> {customer_segments[i]}")
+    
+    # If we have a third revenue stream, connect it to the third customer segment
+    if len(revenue_streams) > 2 and len(customer_segments) > 2:
+        diagram_lines.append(f"    {revenue_streams[2]} --> {customer_segments[2]}")
+    
+    return "\n".join(diagram_lines)
 
 if __name__ == "__main__":
     main()

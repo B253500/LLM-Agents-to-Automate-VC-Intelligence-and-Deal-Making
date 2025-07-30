@@ -143,7 +143,7 @@ You are a VC analyst writing the Business Model section for an investment memo.
 - Clearly describe potential revenue streams, customer segments, and go-to-market strategies
 - If possible, ALWAYS include a SIMPLE Mermaid diagram focusing on REVENUE STREAMS, using the format:
 ```mermaid
-graph TD;
+graph TD
 ...SIMPLE diagram focusing on revenue streams...
 ```
 - Create a SIMPLE diagram that shows:
@@ -178,7 +178,13 @@ Partners: {getattr(profile, 'partners', '')}
     mermaid_match = re.search(r'(```mermaid[\s\S]+?```)', raw)
     if mermaid_match:
         diagram = mermaid_match.group(1)
-        text = raw.replace(diagram, '').strip()
+        
+        # Fix malformed Mermaid syntax
+        diagram = diagram.replace(';', '\n')  # Replace semicolons with newlines
+        diagram = re.sub(r'graph TD;', 'graph TD', diagram)  # Fix graph declaration
+        diagram = re.sub(r'graph TD\s*;', 'graph TD', diagram)  # Fix with spaces
+        
+        text = raw.replace(mermaid_match.group(1), '').strip()
         # Remove any redundant 'Business Model Schema:' header in the text (not just at the start)
         text = re.sub(r'(?i)business model schema:\s*', '', text)
         # Also remove any standalone "Business Model Schema" lines that might be in the content

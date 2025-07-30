@@ -133,28 +133,22 @@ def test_financial_formatting():
     # Create test profiles with different scenarios
     test_cases = [
         {
-            "name": "Profile with wrong data",
+            "name": "Empty Profile",
+            "profile": StartupProfile()
+        },
+        {
+            "name": "Basic Financial Data",
             "profile": StartupProfile(
-                name="StoreDot",
-                revenue=2023.0,
-                cash_burn_12m=2023.0,
-                implied_valuation=2023.0
+                revenue=1000000,
+                cash_burn_12m=500000,
+                implied_valuation=50000000,
+                total_funding_raised=2000000
             )
         },
         {
-            "name": "Profile with valid data",
+            "name": "Sample Company Profile",
             "profile": StartupProfile(
-                name="StoreDot",
-                revenue=2378562,
-                cash_burn_12m=660242,
-                funding_amount="206000000",
-                implied_valuation=1500000000
-            )
-        },
-        {
-            "name": "Profile with no data",
-            "profile": StartupProfile(
-                name="StoreDot"
+                name="Sample Company"
             )
         }
     ]
@@ -182,26 +176,26 @@ def test_financial_formatting():
             traceback.print_exc()
 
 def test_with_real_data():
-    """Test with real extracted data from StoreDot"""
+    """Test with real extracted data from a sample company"""
     print("\n" + "=" * 60)
-    print("TESTING WITH REAL STOREDOT DATA")
+    print("TESTING WITH REAL SAMPLE COMPANY DATA")
     print("=" * 60)
     
-    # Try to load cached StoreDot data
-    cache_file = "extraction_cache/storedot.pdf_70f0efbe04165831c2d2b807ff7d3227ce6f59d2.json"
+    # Try to load cached sample company data
+    cache_file = "extraction_cache/sample_company.pdf_70f0efbe04165831c2d2b807ff7d3227ce6f59d2.json"
     
     if os.path.exists(cache_file):
         try:
             with open(cache_file, 'r') as f:
                 extracted_data = json.load(f)
             
-            print("✅ Loaded cached StoreDot data")
+            print("✅ Loaded cached sample company data")
             print(f"Text length: {len(extracted_data['text'])} characters")
             
             # Create profile with real data
             profile = StartupProfile()
-            profile.name = "StoreDot"
-            profile.sector = "Battery Technology"
+            profile.name = "Sample Company"
+            profile.sector = "Technology"
             
             # Add structured data if available
             if 'structured_data' in extracted_data:
@@ -232,7 +226,8 @@ def test_with_real_data():
             import traceback
             traceback.print_exc()
     else:
-        print("❌ No cached StoreDot data found")
+        print("❌ No cached sample company data found")
+        print("💡 To test with real data, place a sample company PDF in the extraction_cache directory")
 
 if __name__ == "__main__":
     print("🧪 Testing Financial Analysis Components")

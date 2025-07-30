@@ -14,11 +14,11 @@ def demo_business_model_diagram():
     print("=" * 60)
     
     print("📋 Sample Company Profile:")
-    print("   Company: StoreDot")
-    print("   Business Model: B2B battery technology licensing and manufacturing partnerships")
-    print("   Product: Fast-charging lithium-ion battery technology")
-    print("   Sector: Battery Technology")
-    print("   Website: https://storedot.com")
+    print("   Company: TechCorp")
+    print("   Business Model: B2B software licensing and SaaS subscriptions")
+    print("   Product: Enterprise AI platform for data analytics")
+    print("   Sector: Software Technology")
+    print("   Website: https://techcorp.example.com")
     
     print("\n" + "=" * 60)
     print("🔄 Expected Business Model Section with Shorter Diagram")
@@ -26,27 +26,27 @@ def demo_business_model_diagram():
     
     # Show expected output format
     expected_output = """**Business Model Overview**
-StoreDot appears to operate a B2B licensing and partnership model focused on battery technology commercialization.
+TechCorp appears to operate a B2B SaaS and licensing model focused on enterprise software commercialization.
 
 **Potential Revenue Streams**
-• Technology licensing fees from automotive OEMs
-• Manufacturing partnership revenue
-• IP licensing and patent royalties
+• Software licensing fees from enterprise customers
+• SaaS subscription revenue
+• Professional services and consulting
 
 **Customer Segments**
-• Automotive manufacturers (Volkswagen, Daimler)
-• Consumer electronics companies
-• Energy storage system providers
+• Enterprise companies (Fortune 500)
+• Mid-market businesses
+• Government agencies
 
 **Strategy**
-Strategic partnerships with automotive manufacturers for technology integration and commercialization.
+Strategic partnerships with system integrators for technology integration and commercialization.
 
 **Business Model Schema**
 ```mermaid
 graph TD;
-    A[Automotive OEMs] --> B[StoreDot Technology]
+    A[Enterprise Customers] --> B[TechCorp Platform]
     B --> C[Licensing Fees]
-    B --> D[Manufacturing Partnerships]
+    B --> D[SaaS Subscriptions]
     C --> E[Revenue Stream 1]
     D --> F[Revenue Stream 2]
 ```

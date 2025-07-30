@@ -96,19 +96,20 @@ def enrich_competitor_details(competitors):
     for comp in competitors:
         # Enrich website if missing
         if not comp.get('website') and comp.get('name'):
-            query = f"What is the official website for {comp['name']} (battery technology company)?"
-            website = search_perplexity(query)
-            if website and 'http' in website:
-                # Extract first URL from response
-                import re
-                match = re.search(r"https?://[\w./-]+", website)
-                if match:
-                    comp['website'] = match.group(0)
-        # Enrich product_offering if missing
-        if not comp.get('product_offering') and comp.get('name'):
-            query = f"What is the main product or technology offering of {comp['name']} in battery technology?"
-            product = search_perplexity(query)
-            if product:
-                comp['product_offering'] = product.strip()
+            # Generic competitive intelligence queries that work for any sector
+            query = f"What is the official website for {comp['name']} (technology company)?"
+            website_result = search_perplexity(query, num_results=1)
+            
+            if website_result:
+                # Extract website from the result
+                website_match = re.search(r'https?://[^\s\)\]]+', website_result)
+                if website_match:
+                    comp['website'] = website_match.group(0)
+            
+            # Get product/technology information
+            query = f"What is the main product or technology offering of {comp['name']}?"
+            product_result = search_perplexity(query, num_results=1)
+            if product_result:
+                comp['product_offering'] = product_result.strip()
         enriched.append(comp)
     return enriched

@@ -17,25 +17,23 @@ from agents.technical_dd_agent import build_technical_dd_agent
 def test_technical_context():
     """Test what context the technical DD agent receives"""
     
-    # Create a mock profile with some technical data
-    profile_data = {
-        "name": "StoreDot",
-        "sector": "Battery Technology",
-        "website": "https://storedot.com",
-        "TAM": 160.0,
-        "patent_count": 15,
-        "energy_density_wh_kg": 300,
-        "cycle_life_count": 1000,
-        "technical_maturity": "Early-stage prototype",
-        "moat_strength": "Moderate",
-        "complexity": "High",
-        "security": "Standard battery safety protocols",
-        "implementation": "Manufacturing partnerships with 15+ OEMs",
-        "regulatory": "EV battery safety standards compliance",
-        "testing": "Ongoing validation with automotive partners"
-    }
-    
-    profile = StartupProfile(**profile_data)
+    # Create a sample profile for testing
+    profile = StartupProfile(
+        name="Sample Tech Company",
+        sector="Software Technology",
+        website="https://sampletech.example.com",
+        tech_maturity="Production-ready",
+        moat_strength="Strong technical differentiation",
+        tech_stack="Python, React, AWS, Machine Learning",
+        product_specifications="High-performance analytics platform with 99.9% uptime",
+        product_roadmap="Q2 2024: AI features, Q3 2024: Enterprise integration",
+        patent_portfolio="15 granted patents, 8 pending applications",
+        complexity="Moderate complexity with scalable architecture",
+        security="SOC 2 compliant, end-to-end encryption",
+        implementation="Cloud-native deployment with CI/CD pipeline",
+        regulatory="GDPR compliant, industry-specific certifications",
+        testing="Comprehensive automated testing with 95% coverage"
+    )
     
     # Add some mock context data to simulate what the agent would receive
     mock_full_text = """
