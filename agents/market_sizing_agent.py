@@ -430,7 +430,7 @@ Sector: {sector}
                 lines.append(f"• **Regional Adoption**: US ({bev_data['us_adoption']}), EU ({bev_data['eu_adoption']}), China ({bev_data['china_adoption']})")
             if bev_data.get('market_size'):
                 lines.append(f"• **Market Size**: {bev_data['market_size']}")
-            lines.append("• **Source**: StoreDot Pitch Deck")
+            lines.append("• **Source**: Company Pitch Deck")
         
         if sector_sources:
             lines.append("")
@@ -476,7 +476,7 @@ Sector: {sector}
             lines.append(f"• **Regional Adoption**: US ({bev_data['us_adoption']}), EU ({bev_data['eu_adoption']}), China ({bev_data['china_adoption']})")
         if bev_data.get('market_size'):
             lines.append(f"• **Market Size**: {bev_data['market_size']}")
-        lines.append("• **Source**: StoreDot Pitch Deck")
+        lines.append("• **Source**: Company Pitch Deck")
         lines.append("")
     
     # 5. Market Research Sources (Perplexity search results)

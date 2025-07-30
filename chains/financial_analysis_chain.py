@@ -55,7 +55,7 @@ def web_search_financial_context(company_name):
                         r'(The user wants me to|The user wants to know|The user is looking for).*?(?=\n|$)',
                         r'(I should look|I need to look|Let me look).*?(?=\n|$)',
                         r'(Based on the provided|Based on the search|From the search).*?(?=\n|$)',
-                        r'(Financial Research Summary for|StoreDot:).*?(?=\n|$)',
+                        r'(Financial Research Summary for|Company:).*?(?=\n|$)',
                     ]
                     
                     for pattern in thinking_patterns:
@@ -524,7 +524,13 @@ Crunchbase Funding Data:
     web_search_data = ""
     web_sources = []
     company_name = getattr(profile, 'name', '')
-    if company_name and company_name.strip():
+    
+    # Skip web search if web sources already exist (to prevent overwriting)
+    existing_web_sources = getattr(profile, 'web_sources', [])
+    if existing_web_sources:
+        print(f"[Financial Analysis] Web sources already exist ({len(existing_web_sources)} sources), skipping web search")
+        web_sources = existing_web_sources
+    elif company_name and company_name.strip():
         print(f"[Financial Analysis] Searching web for financial data on {company_name}")
         web_search_data = web_search_financial_context(company_name)
         if web_search_data:
@@ -551,7 +557,7 @@ Crunchbase Funding Data:
                     r'(The user wants me to|The user wants to know|The user is looking for).*?(?=\n|$)',
                     r'(I should look|I need to look|Let me look).*?(?=\n|$)',
                     r'(Based on the provided|Based on the search|From the search).*?(?=\n|$)',
-                    r'(Financial Research Summary for|StoreDot:).*?(?=\n|$)',
+                    r'(Financial Research Summary for|Company:).*?(?=\n|$)',
                     r'(Okay, I need to find|I need to find|Let me find).*?(?=\n|$)',
                     r'(The search result|The search results|From the search).*?(?=\n|$)',
                     r'(Revenue is|Revenue was|The revenue).*?(?=\n|$)',
@@ -608,7 +614,7 @@ Crunchbase Funding Data:
                     r'(The user wants me to|The user wants to know|The user is looking for).*?(?=\n|$)',
                     r'(I should look|I need to look|Let me look).*?(?=\n|$)',
                     r'(Based on the provided|Based on the search|From the search).*?(?=\n|$)',
-                    r'(Financial Research Summary for|StoreDot:).*?(?=\n|$)',
+                    r'(Financial Research Summary for|Company:).*?(?=\n|$)',
                     r'(Wait, but|Wait, the|Wait, that\'s|Wait, no).*?(?=\n|$)',
                     r'(Hmm,|Hmm.|Hmm, but|Hmm, that\'s).*?(?=\n|$)',
                     r'(So, putting this together|Putting this together).*?(?=\n|$)',
@@ -694,7 +700,7 @@ Crunchbase Funding Data:
         r'(The user wants me to|The user wants to know|The user is looking for).*?(?=\n|$)',
         r'(I should look|I need to look|Let me look).*?(?=\n|$)',
         r'(Based on the provided|Based on the search|From the search).*?(?=\n|$)',
-        r'(Financial Research Summary for|StoreDot:).*?(?=\n|$)',
+        r'(Financial Research Summary for|Company:).*?(?=\n|$)',
     ]
     
     for pattern in thinking_patterns:
@@ -814,14 +820,15 @@ Crunchbase Funding Data:
         if data.get("web_sources"):
             profile.web_sources = data.get("web_sources")
             print(f"[Financial Analysis] Stored {len(data.get('web_sources'))} web sources from LLM")
+            print(f"[Financial Analysis] Web sources content: {data.get('web_sources')}")
         elif web_sources:
             profile.web_sources = web_sources
             print(f"[Financial Analysis] Stored {len(web_sources)} web sources from search")
+            print(f"[Financial Analysis] Web sources content: {web_sources}")
         
-        # Store web sources for clickable links
-        if web_sources:
-            profile.web_sources = web_sources
-            print(f"[Financial Analysis] Stored {len(web_sources)} web sources")
+        # Debug: Check what's actually stored
+        print(f"[Financial Analysis] Final profile.web_sources: {profile.web_sources}")
+        print(f"[Financial Analysis] Final profile.web_sources type: {type(profile.web_sources)}")
         
         if data.get("summary"):
             profile.financial_summary = data.get("summary")

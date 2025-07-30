@@ -161,7 +161,10 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
             if source_key in structured_data and hasattr(profile, profile_key):
                 value = structured_data[source_key]
                 setattr(profile, profile_key, value)
-                setattr(profile, f"{profile_key}_source", "enhanced_extraction")
+                # Only set source field if it exists in the schema
+                source_field = f"{profile_key}_source"
+                if hasattr(profile, source_field):
+                    setattr(profile, source_field, "enhanced_extraction")
                 print(f"[Enhanced Data] Set {profile_key} = {value}")
         
         # Store the full structured data for context generation

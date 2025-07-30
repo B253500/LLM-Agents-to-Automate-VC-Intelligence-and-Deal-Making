@@ -135,7 +135,6 @@ def add_hyperlink(paragraph, text, url):
 
 def process_text_with_hyperlinks(paragraph, text):
     """Process text and convert markdown links to DOCX hyperlinks."""
-    import re
     
     # Pattern to match markdown links: [text](url)
     link_pattern = r'\[([^\]]+)\]\(([^)]+)\)'
@@ -666,7 +665,6 @@ def format_clean_financials_section(profile, current_date):
                 lines.append(f"• {source}")
             elif '[' in source and '](' in source and ')' in source:
                 # Extract URL from markdown link [text](url)
-                import re
                 url_match = re.search(r'\[([^\]]+)\]\(([^)]+)\)', source)
                 if url_match:
                     text = url_match.group(1)
@@ -728,7 +726,6 @@ def format_financials_section_original(profile, current_date):
     if hasattr(profile, 'web_sources') and profile.web_sources:
         web_sources = profile.web_sources[:5]
     elif hasattr(profile, 'financial_summary') and profile.financial_summary:
-        import re
         urls = re.findall(r'https?://[^\s]+', profile.financial_summary)
         web_sources = urls[:3]
     
@@ -1301,8 +1298,6 @@ def clean_think_tags_and_debugging(text):
     if not isinstance(text, str):
         return text
     
-    import re
-    
     # Remove <think> tags and their content (handle nested tags)
     # First, remove all <think> and </think> tags completely
     text = re.sub(r'<think>', '', text)
@@ -1318,7 +1313,7 @@ def clean_think_tags_and_debugging(text):
         r'(The user wants me to|The user wants to know|The user is looking for).*?(?=\n|$)',
         r'(I should look|I need to look|Let me look).*?(?=\n|$)',
         r'(Based on the provided|Based on the search|From the search).*?(?=\n|$)',
-        r'(Financial Research Summary for|StoreDot:).*?(?=\n|$)',
+        r'(Financial Research Summary for|Company:).*?(?=\n|$)',
         r'(First, looking at|Looking at result|Result mentions|First, result).*?(?=\n|$)',
         r'(Wait, but|Wait, the|Wait, that\'s|Wait, no).*?(?=\n|$)',
         r'(Hmm,|Hmm.|Hmm, but|Hmm, that\'s).*?(?=\n|$)',
@@ -1502,6 +1497,22 @@ def save_memo_with_template(memo_text, profile, output_path):
         code = match.group(1).strip()
         rendered = False
         
+        # Clean and validate Mermaid code
+        code = code.strip()
+        
+        # Fix common Mermaid syntax issues
+        code = code.replace('→', '-->')  # Replace arrow symbols with proper Mermaid syntax
+        code = code.replace('→', '-->')  # Replace other arrow variants
+        code = code.replace('–', '--')   # Replace en-dashes with double dashes
+        code = code.replace('—', '--')   # Replace em-dashes with double dashes
+        
+        # Ensure proper line endings
+        code = code.replace('\r\n', '\n').replace('\r', '\n')
+        
+        # Validate that the diagram has proper Mermaid syntax
+        if not code.startswith('graph') and not code.startswith('flowchart'):
+            code = f"graph TD;\n{code}"
+        
         # Trying multiple Mermaid rendering services
         services = [
             ('https://kroki.io/mermaid/png', 'Kroki.io'),
@@ -1513,7 +1524,9 @@ def save_memo_with_template(memo_text, profile, output_path):
                 break
             try:
                 if service_name == 'Kroki.io':
-                    resp = requests.post(service_url, data=code.encode('utf-8'), timeout=30)
+                    # Add proper headers for Kroki.io
+                    headers = {'Content-Type': 'text/plain'}
+                    resp = requests.post(service_url, data=code.encode('utf-8'), headers=headers, timeout=30)
                 elif service_name == 'Mermaid.ink':
                     # Mermaid.ink uses GET with base64 encoded diagram
                     import base64
@@ -1529,15 +1542,61 @@ def save_memo_with_template(memo_text, profile, output_path):
                     rendered = True
                 else:
                     print(f"[Mermaid] {service_name} failed to render diagram {idx}: {resp.status_code}")
+                    if resp.status_code == 400:
+                        print(f"[Mermaid] Bad request - diagram syntax may be invalid")
+                        print(f"[Mermaid] Diagram code: {code[:200]}...")
             except requests.exceptions.Timeout:
                 print(f"[Mermaid] {service_name} timeout for diagram {idx}")
             except Exception as e:
                 print(f"[Mermaid] {service_name} exception rendering diagram {idx}: {e}")
         
         if not rendered:
-            print(f"[Mermaid] All services failed for diagram {idx}, will show as text")
-            # Store the Mermaid code as text for fallback
-            mermaid_images[f'<MERMAID_IMAGE_{idx}>'] = f"MERMAID_TEXT_{idx}"
+            print(f"[Mermaid] All services failed for diagram {idx}, trying simplified fallback")
+            
+            # Try to create a simplified version of the diagram
+            try:
+                # Extract company name from the diagram if possible
+                company_match = re.search(r'\[([^\]]+)\]', code)
+                company_name = company_match.group(1) if company_match else "Company"
+                
+                # Create a very simple fallback diagram
+                from custom_business_model_diagram import generate_simple_revenue_diagram
+                simple_diagram = generate_simple_revenue_diagram(
+                    company_name=company_name,
+                    revenue_streams=["Product_Sales", "Licensing", "Partnerships"],
+                    customer_segments=["Enterprise_Customers", "SMB_Customers", "Partners"]
+                )
+                
+                # Try to render the simplified diagram
+                for service_url, service_name in services:
+                    try:
+                        if service_name == 'Kroki.io':
+                            headers = {'Content-Type': 'text/plain'}
+                            resp = requests.post(service_url, data=simple_diagram.encode('utf-8'), headers=headers, timeout=30)
+                        elif service_name == 'Mermaid.ink':
+                            import base64
+                            encoded = base64.b64encode(simple_diagram.encode('utf-8')).decode('utf-8')
+                            resp = requests.get(f"{service_url}{encoded}", timeout=30)
+                        
+                        if resp.status_code == 200:
+                            img_path = os.path.join('extraction_cache', f'mermaid_{idx}_fallback.png')
+                            with open(img_path, 'wb') as f:
+                                f.write(resp.content)
+                            mermaid_images[f'<MERMAID_IMAGE_{idx}>'] = img_path
+                            print(f"[Mermaid] Rendered simplified fallback diagram {idx} using {service_name}")
+                            rendered = True
+                            break
+                    except Exception as e:
+                        print(f"[Mermaid] Fallback diagram also failed: {e}")
+                        continue
+                
+                if not rendered:
+                    print(f"[Mermaid] All fallback attempts failed for diagram {idx}, will show as text")
+                    mermaid_images[f'<MERMAID_IMAGE_{idx}>'] = f"MERMAID_TEXT_{idx}"
+                    
+            except Exception as e:
+                print(f"[Mermaid] Error creating fallback diagram: {e}")
+                mermaid_images[f'<MERMAID_IMAGE_{idx}>'] = f"MERMAID_TEXT_{idx}"
 
     # Replacing {{COVER_TEXT}} in-place, always center-aligned 
     cover_found = False
@@ -1904,7 +1963,10 @@ def main():
                 if source_key in structured_data and hasattr(profile, profile_key):
                     value = structured_data[source_key]
                     setattr(profile, profile_key, value)
-                    setattr(profile, f"{profile_key}_source", "enhanced_extraction")
+                    # Only set source field if it exists in the schema
+                    source_field = f"{profile_key}_source"
+                    if hasattr(profile, source_field):
+                        setattr(profile, source_field, "enhanced_extraction")
                     print(f"[Structured Data] Set {profile_key} = {value}")
         
         # Initialising evaluation tracker with real-time tracking

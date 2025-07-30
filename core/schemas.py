@@ -212,3 +212,6 @@ class StartupProfile(BaseModel):
     
     # --- Comprehensive extracted data context for agents ---
     extracted_data_context: Optional[str] = None
+    
+    # --- Structured data from enhanced extraction ---
+    structured_data: Optional[dict] = None
