@@ -144,15 +144,19 @@ You are a VC analyst writing the Business Model section for an investment memo.
 - If possible, ALWAYS include a SIMPLE Mermaid diagram focusing on REVENUE STREAMS, using the format:
 ```mermaid
 graph TD
-...SIMPLE diagram focusing on revenue streams...
+    Company[Company Name] --> Revenue1[Revenue Stream 1]
+    Company --> Revenue2[Revenue Stream 2]
+    Revenue1 --> Customer1[Customer Segment 1]
+    Revenue2 --> Customer2[Customer Segment 2]
 ```
 - Create a SIMPLE diagram that shows:
-  * Company/Product (1 node)
-  * Revenue Streams (2-3 main streams)
-  * Customer Segments (2-3 main segments)
+  * Company/Product (1 node with proper brackets)
+  * Revenue Streams (2-3 main streams with proper brackets)
+  * Customer Segments (2-3 main segments with proper brackets)
 - Use 5-7 nodes maximum for clarity
 - Focus on revenue streams as the central element
-- Use simple connections like "→" 
+- Use simple connections like "-->"
+- ALWAYS use proper Mermaid syntax with complete node definitions
 - Keep it simple and readable for VC memos
 - If a Mermaid diagram is not possible, provide only the description.
 - DO NOT include "Business Model Schema:" header in your response - it will be added automatically.
@@ -184,6 +188,20 @@ Partners: {getattr(profile, 'partners', '')}
         diagram = re.sub(r'graph TD;', 'graph TD', diagram)  # Fix graph declaration
         diagram = re.sub(r'graph TD\s*;', 'graph TD', diagram)  # Fix with spaces
         
+        # Fix incomplete node definitions (nodes with missing closing brackets)
+        diagram = re.sub(r'(\w+)\[\s*$', r'\1[Node]', diagram, flags=re.MULTILINE)  # Fix nodes with missing content
+        diagram = re.sub(r'(\w+)\[\s*\n', r'\1[Node]\n', diagram, flags=re.MULTILINE)  # Fix nodes with missing content and newline
+        
+        # Fix nodes that start with [ but don't have proper content
+        diagram = re.sub(r'(\w+)\[\s*([^\]]*?)\s*$', r'\1[\2]', diagram, flags=re.MULTILINE)
+        
+        # Ensure all nodes have proper brackets (but don't break existing valid nodes)
+        # Only add brackets to nodes that don't already have them and are followed by whitespace or end of line
+        # This regex looks for nodes that are followed by whitespace or end of line and don't already have brackets
+        diagram = re.sub(r'(\w+)\s*-->\s*(\w+)(?=\s|$)(?!\[)', r'\1 --> \2[Node]', diagram)
+        # Don't modify nodes that already have proper brackets
+        # diagram = re.sub(r'(\w+)\s*-->\s*(\w+)\[([^\]]*)\]', r'\1 --> \2[\3]', diagram)
+        
         text = raw.replace(mermaid_match.group(1), '').strip()
         # Remove any redundant 'Business Model Schema:' header in the text (not just at the start)
         text = re.sub(r'(?i)business model schema:\s*', '', text)
@@ -194,6 +212,15 @@ Partners: {getattr(profile, 'partners', '')}
         text = re.sub(r'^###\s*\*\*(.*?)\*\*', r'**\1**', text, flags=re.MULTILINE)
         text = re.sub(r'^###\s*(.*?)$', r'**\1**', text, flags=re.MULTILINE)
         return f"**Business Model Schema:**\n{diagram}\n\n{text}"
+    else:
+        # No Mermaid diagram found, create a simple fallback diagram
+        company_name = getattr(profile, 'name', 'Company')
+        if company_name:
+            from core.document_generators import generate_simple_mermaid_diagram
+            fallback_diagram = generate_simple_mermaid_diagram(company_name, profile)
+            if fallback_diagram:
+                return f"**Business Model Schema:**\n```mermaid\n{fallback_diagram}\n```\n\n{raw}"
+    
     # Convert markdown headers to bold formatting for text without diagrams
     raw = re.sub(r'^###\s*\*\*(.*?)\*\*', r'**\1**', raw, flags=re.MULTILINE)
     raw = re.sub(r'^###\s*(.*?)$', r'**\1**', raw, flags=re.MULTILINE)

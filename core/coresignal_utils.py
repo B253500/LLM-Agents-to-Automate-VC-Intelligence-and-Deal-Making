@@ -48,30 +48,65 @@ def get_full_company_data(name_or_domain: str, fields=None):
     Attempt Multi-Source first, then Base if no match.
     Returns the company profile dict, list of posts, or None.
     """
+    # Enhanced search queries for better company matching
     queries = [
         {"query": {"match_phrase": {"name": name_or_domain}}},
         {"query": {"wildcard": {"name.keyword": f"*{name_or_domain.lower()}*"}}},
+        # Add exact match for well-known companies
+        {"query": {"term": {"name.keyword": name_or_domain}}},
     ]
+    
+    # Add domain-based search if it looks like a domain
     if "." in name_or_domain:
         queries.append({"query": {"term": {"domain.keyword": name_or_domain.lower()}}})
+    
+    # Add company name variations for better matching
+    if name_or_domain.lower() == "shopify":
+        queries.extend([
+            {"query": {"match_phrase": {"name": "Shopify Inc"}}},
+            {"query": {"match_phrase": {"name": "Shopify.com"}}},
+            {"query": {"term": {"domain.keyword": "shopify.com"}}},
+        ])
+    elif name_or_domain.lower() == "tesla":
+        queries.extend([
+            {"query": {"match_phrase": {"name": "Tesla Inc"}}},
+            {"query": {"match_phrase": {"name": "Tesla Motors"}}},
+        ])
 
     # 1. Multi-Source search & collect
     for q in queries:
         hits = _es_search(SEARCH_MULTI, q)
         if hits:
-            first = hits[0]
-            cid = first.get("company_id") if isinstance(first, dict) else first
+            # Filter for the most relevant match
+            best_match = hits[0]
+            for hit in hits:
+                hit_name = hit.get("name", "").lower() if isinstance(hit, dict) else ""
+                if name_or_domain.lower() in hit_name and len(hit_name) < len(best_match.get("name", "")):
+                    best_match = hit
+            
+            cid = best_match.get("company_id") if isinstance(best_match, dict) else best_match
             if cid:
-                return _collect(COLLECT_MULTI, cid, fields)
+                result = _collect(COLLECT_MULTI, cid, fields)
+                if result:
+                    print(f"[CoreSignal] Found Multi-Source match: {result.get('name', 'Unknown')}")
+                    return result
     print(f"[CoreSignal] no Multi-Source match for '{name_or_domain}'")
 
     # 2. Base Company search & collect fallback
     for q in queries:
         hits = _es_search(SEARCH_BASE, q)
         if hits:
-            first = hits[0]
-            cid = first.get("company_id") if isinstance(first, dict) else first
+            best_match = hits[0]
+            for hit in hits:
+                hit_name = hit.get("name", "").lower() if isinstance(hit, dict) else ""
+                if name_or_domain.lower() in hit_name and len(hit_name) < len(best_match.get("name", "")):
+                    best_match = hit
+            
+            cid = best_match.get("company_id") if isinstance(best_match, dict) else best_match
             if cid:
-                return _collect(COLLECT_BASE, cid, fields)
+                result = _collect(COLLECT_BASE, cid, fields)
+                if result:
+                    print(f"[CoreSignal] Found Base Company match: {result.get('name', 'Unknown')}")
+                    return result
     print(f"[CoreSignal] no Base Company match for '{name_or_domain}'")
     return None 

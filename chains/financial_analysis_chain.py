@@ -792,8 +792,35 @@ Crunchbase Funding Data:
         if data.get("latest_round_amount"):
             round_str = str(data.get("latest_round_amount")).strip()
             if round_str and round_str.lower() not in ['none', 'null', 'n/a', 'unknown']:
-                # Store the original string format for better readability
-                profile.latest_round_amount = round_str
+                # Consolidate with existing data - prefer larger/more recent amounts
+                existing_amount = getattr(profile, 'latest_round_amount', None)
+                if existing_amount:
+                    # Parse both amounts for comparison
+                    try:
+                        new_amount_parsed = parse_money_string(round_str)
+                        existing_amount_parsed = parse_money_string(existing_amount)
+                        
+                        if new_amount_parsed and existing_amount_parsed:
+                            # Prefer the larger amount (more recent/larger round)
+                            if new_amount_parsed > existing_amount_parsed:
+                                profile.latest_round_amount = round_str
+                                print(f"[Financial Analysis] Updated latest_round_amount: {existing_amount} -> {round_str}")
+                            else:
+                                print(f"[Financial Analysis] Keeping existing amount: {existing_amount} (larger than {round_str})")
+                                return profile
+                        else:
+                            # If parsing fails, prefer the one that looks more recent
+                            if 'million' in round_str.lower() or 'billion' in round_str.lower():
+                                profile.latest_round_amount = round_str
+                                print(f"[Financial Analysis] Updated to larger amount: {round_str}")
+                    except Exception:
+                        # If comparison fails, keep existing
+                        print(f"[Financial Analysis] Keeping existing amount due to parsing error")
+                        return profile
+                else:
+                    # No existing amount, store the new one
+                    profile.latest_round_amount = round_str
+                
                 # Also store parsed number for calculations if needed
                 try:
                     parsed_val = parse_money_string(round_str)

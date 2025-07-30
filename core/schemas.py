@@ -215,3 +215,13 @@ class StartupProfile(BaseModel):
     
     # --- Structured data from enhanced extraction ---
     structured_data: Optional[dict] = None
+    
+    # --- CoreSignal enhanced fields ---
+    founded_year: Optional[str] = None
+    estimated_revenue_range: Optional[str] = None
+    last_funding_round_name: Optional[str] = None
+    last_funding_round_amount_raised: Optional[str] = None
+    last_funding_round_announced_date: Optional[str] = None
+    news_counts: Optional[str] = None
+    news_features: Optional[str] = None
+    technographics: Optional[str] = None

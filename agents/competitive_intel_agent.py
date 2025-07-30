@@ -50,13 +50,7 @@ def generate_competitive_landscape(profile: StartupProfile) -> str:
           Product description: [2-3 sentences about their technology/product]
           Key differentiator: [What makes them unique]
         
-        Focus on real companies with actual websites. For battery technology companies, consider companies like:
-        - QuantumScape (quantumscape.com) - Solid-state battery technology
-        - Solid Power (solidpowerbattery.com) - Solid-state battery development
-        - SES AI Corporation (ses.ai) - AI-powered battery management
-        - CATL (catl.com) - Lithium-ion battery manufacturing
-        - Panasonic (panasonic.com) - Automotive battery solutions
-        
+        Focus on real companies with actual websites in the {getattr(profile, 'sector', 'technology')} sector. 
         Provide specific, factual information about each competitor's technology and market position.
         """
         competitors_text = llm.invoke(prompt).content.strip()

@@ -135,6 +135,73 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
             setattr(profile, f"{field_name}_source", "deck_text")
             print(f"[Market Size] Found {field_name}={field_value} in deck text")
     
+    # --- NEW: Detect sector from deck text and company data ---
+    if not getattr(profile, 'sector', None):
+        from config import Config
+        from langchain_openai import ChatOpenAI
+        
+        # Use AI to dynamically detect sector from content
+        llm = ChatOpenAI(model="gpt-4o", temperature=0.1)
+        
+        # Create a context snippet for sector detection
+        context_snippet = full_text[:3000]  # First 3000 chars should be enough
+        
+        sector_prompt = f"""
+        Based on the following company information, identify the most specific sector/industry this company operates in.
+        
+        Company name: {getattr(profile, 'name', '')}
+        Product description: {getattr(profile, 'product_description', '')}
+        
+        Company content:
+        {context_snippet}
+        
+        IMPORTANT: Do not rely solely on how the company describes itself in the document. 
+        Instead, analyze what the company actually does based on its name, products, and business model.
+        
+        Common sector mappings:
+        - Shopify, WooCommerce, BigCommerce → "ecommerce" (not design services)
+        - Stripe, Square, PayPal → "fintech" 
+        - Tesla, StoreDot, QuantumScape → "battery technology"
+        - Uber, DoorDash → "transportation technology"
+        - Airbnb, Booking.com → "travel technology"
+        - Slack, Zoom → "communication technology"
+        - OpenAI, Anthropic → "ai"
+        
+        Return ONLY the sector name (e.g., "ecommerce", "battery technology", "fintech", "healthtech", "ai", "software", "social media"). 
+        Be specific and accurate based on the company's actual business model, not just how it describes itself.
+        """
+        
+        try:
+            detected_sector = llm.invoke(sector_prompt).content.strip().lower()
+            # Clean up the response
+            detected_sector = detected_sector.replace('"', '').replace("'", "").strip()
+            
+            if detected_sector and detected_sector not in ['unknown', 'n/a', 'none']:
+                profile.sector = detected_sector
+                print(f"[Sector Detection] AI detected sector: {detected_sector}")
+            else:
+                print(f"[Sector Detection] AI could not determine sector, will try CoreSignal fallback")
+        except Exception as e:
+            print(f"[Sector Detection] AI detection failed: {e}, will try CoreSignal fallback")
+    
+    # --- NEW: Detect website from deck text and company data ---
+    if not getattr(profile, 'website', None):
+        from core.external_enrichment import find_company_website
+        company_name = getattr(profile, 'name', '')
+        founder_name = getattr(profile, 'founder_name', '')
+        sector = getattr(profile, 'sector', '')
+        
+        if company_name:
+            detected_website = find_company_website(company_name, founder_name, sector, full_text)
+            if detected_website:
+                profile.website = detected_website
+                print(f"[Website Detection] Detected website: {detected_website}")
+            else:
+                # Don't set to "unknown" yet - let CoreSignal try to find it
+                print(f"[Website Detection] Website not found locally, will try CoreSignal fallback")
+        else:
+            print(f"[Website Detection] No company name available")
+    
     # --- NEW: Handle enhanced extraction structured data ---
     # Check if we have structured data from enhanced extraction
     if hasattr(profile, 'structured_data') and profile.structured_data:
@@ -301,13 +368,226 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
                         v = deduplicate_office_locations(v)
                     setattr(profile, k, v)
                     print(f"[CoreSignal] Set profile.{k} = '{v}'")
+            
+            # --- FALLBACK: Use CoreSignal data for missing website and sector ---
+            # Website fallback with validation
+            if (not getattr(profile, 'website', None) or 
+                getattr(profile, 'website', '').lower() in ['unknown', 'n/a', '']) and cs_full_data.get('website'):
+                
+                # Validate that this is the correct company before setting the website
+                core_signal_website = cs_full_data.get('website')
+                core_signal_industry = cs_full_data.get('industry', '').lower()
+                detected_sector = getattr(profile, 'sector', '').lower()
+                
+                # Check if the CoreSignal data matches our detected sector
+                sector_mismatch = False
+                if detected_sector and core_signal_industry:
+                    # Define sector mappings for validation
+                    sector_mappings = {
+                        'restaurant technology': ['restaurant', 'food service', 'hospitality', 'dining'],
+                        'battery technology': ['battery', 'energy storage', 'electric vehicle', 'automotive'],
+                        'fintech': ['financial', 'payment', 'banking', 'fintech'],
+                        'healthtech': ['healthcare', 'medical', 'biotech', 'pharma'],
+                        'ai': ['artificial intelligence', 'machine learning', 'ai', 'software'],
+                        'ecommerce': ['retail', 'ecommerce', 'marketplace', 'consumer']
+                    }
+                    
+                    # Check if there's a sector mismatch
+                    if detected_sector in sector_mappings:
+                        expected_keywords = sector_mappings[detected_sector]
+                        if not any(keyword in core_signal_industry for keyword in expected_keywords):
+                            sector_mismatch = True
+                            print(f"[CoreSignal Validation] Sector mismatch: detected '{detected_sector}' but CoreSignal shows '{core_signal_industry}'")
+                
+                if not sector_mismatch:
+                    profile.website = core_signal_website
+                    print(f"[CoreSignal Fallback] Set website from CoreSignal: {profile.website}")
+                else:
+                    print(f"[CoreSignal Validation] Skipping website due to sector mismatch")
+            
+            # Sector fallback with validation - DON'T override AI detection unless it's clearly wrong
+            if (not getattr(profile, 'sector', None) or 
+                getattr(profile, 'sector', '').lower() in ['unknown', 'n/a', '']) and cs_full_data.get('industry'):
+                profile.sector = cs_full_data.get('industry')
+                print(f"[CoreSignal Fallback] Set sector from CoreSignal: {profile.sector}")
+            elif getattr(profile, 'sector', None) and cs_full_data.get('industry'):
+                # Enhanced validation: AI detection is usually more accurate and specific
+                ai_sector = getattr(profile, 'sector', '').lower()
+                cs_industry = cs_full_data.get('industry', '').lower()
+                
+                # Generic CoreSignal industries that should not override specific AI sectors
+                generic_core_signal_industries = [
+                    'technology', 'software', 'design services', 'retail', 'manufacturing',
+                    'services', 'business services', 'consulting', 'professional services',
+                    'industry', 'industrial', 'general', 'other'
+                ]
+                
+                # Specific AI sectors that should always be preserved
+                specific_ai_sectors = [
+                    'ecommerce', 'fintech', 'healthtech', 'edtech', 'proptech', 'insurtech',
+                    'battery technology', 'electric vehicles', 'renewable energy', 'ai/ml',
+                    'cybersecurity', 'biotech', 'medtech', 'agtech', 'cleantech'
+                ]
+                
+                # Check if AI detected something specific vs CoreSignal being generic
+                ai_is_specific = (len(ai_sector.split()) > 1 or 
+                                ai_sector not in generic_core_signal_industries or
+                                ai_sector in specific_ai_sectors)
+                cs_is_generic = cs_industry in generic_core_signal_industries
+                
+                if ai_is_specific and cs_is_generic:
+                    print(f"[CoreSignal Validation] Keeping AI-detected sector '{ai_sector}' over generic CoreSignal '{cs_industry}'")
+                elif ai_sector in specific_ai_sectors:
+                    print(f"[CoreSignal Validation] Preserving specific AI sector '{ai_sector}' over CoreSignal '{cs_industry}'")
+                else:
+                    profile.sector = cs_full_data.get('industry')
+                    print(f"[CoreSignal Fallback] Overriding AI sector with CoreSignal: {profile.sector}")
+            
+            # --- ENHANCED: Additional CoreSignal data for better memo quality ---
+            # Company basics
+            current_founded_year = getattr(profile, 'founded_year', None)
+            if (not current_founded_year or 
+                (isinstance(current_founded_year, str) and current_founded_year.lower() in ['unknown', 'n/a', ''])) and cs_full_data.get('founded'):
+                profile.founded_year = cs_full_data.get('founded')
+                print(f"[CoreSignal Enhanced] Set founded_year from CoreSignal: {profile.founded_year}")
+            
+            if (not getattr(profile, 'status', None) or 
+                getattr(profile, 'status', '').lower() in ['unknown', 'n/a', '']) and cs_full_data.get('type'):
+                profile.status = cs_full_data.get('type')
+                print(f"[CoreSignal Enhanced] Set status from CoreSignal: {profile.status}")
+            
+            # Financial data
+            current_revenue_range = getattr(profile, 'estimated_revenue_range', None)
+            if (not current_revenue_range or 
+                (isinstance(current_revenue_range, str) and current_revenue_range.lower() in ['unknown', 'n/a', ''])) and cs_full_data.get('estimated_revenue_range'):
+                profile.estimated_revenue_range = cs_full_data.get('estimated_revenue_range')
+                print(f"[CoreSignal Enhanced] Set estimated_revenue_range from CoreSignal: {profile.estimated_revenue_range}")
+            
+            current_funding_amount = getattr(profile, 'last_funding_round_amount_raised', None)
+            if (not current_funding_amount or 
+                (isinstance(current_funding_amount, str) and current_funding_amount.lower() in ['unknown', 'n/a', ''])) and cs_full_data.get('last_funding_round_amount_raised'):
+                profile.last_funding_round_amount_raised = cs_full_data.get('last_funding_round_amount_raised')
+                print(f"[CoreSignal Enhanced] Set last_funding_round_amount_raised from CoreSignal: {profile.last_funding_round_amount_raised}")
+            
+            current_funding_date = getattr(profile, 'last_funding_round_announced_date', None)
+            if (not current_funding_date or 
+                (isinstance(current_funding_date, str) and current_funding_date.lower() in ['unknown', 'n/a', ''])) and cs_full_data.get('last_funding_round_announced_date'):
+                profile.last_funding_round_announced_date = cs_full_data.get('last_funding_round_announced_date')
+                print(f"[CoreSignal Enhanced] Set last_funding_round_announced_date from CoreSignal: {profile.last_funding_round_announced_date}")
+            
+            # Location data
+            current_hq_city = getattr(profile, 'hq_city', None)
+            if (not current_hq_city or 
+                (isinstance(current_hq_city, str) and current_hq_city.lower() in ['unknown', 'n/a', ''])) and cs_full_data.get('headquarters_city'):
+                profile.hq_city = cs_full_data.get('headquarters_city')
+                print(f"[CoreSignal Enhanced] Set hq_city from CoreSignal: {profile.hq_city}")
+            
+            # Social media data
+            current_linkedin_followers = getattr(profile, 'linkedin_followers', None)
+            if (not current_linkedin_followers or 
+                (isinstance(current_linkedin_followers, str) and current_linkedin_followers.lower() in ['unknown', 'n/a', ''])) and cs_full_data.get('followers'):
+                profile.linkedin_followers = cs_full_data.get('followers')
+                print(f"[CoreSignal Enhanced] Set linkedin_followers from CoreSignal: {profile.linkedin_followers}")
+            
+            current_x_followers = getattr(profile, 'x_followers', None)
+            if (not current_x_followers or 
+                (isinstance(current_x_followers, str) and current_x_followers.lower() in ['unknown', 'n/a', ''])) and cs_full_data.get('x_followers'):
+                profile.x_followers = cs_full_data.get('x_followers')
+                print(f"[CoreSignal Enhanced] Set x_followers from CoreSignal: {profile.x_followers}")
+            
+            current_website_traffic = getattr(profile, 'website_traffic', None)
+            if (not current_website_traffic or 
+                (isinstance(current_website_traffic, str) and current_website_traffic.lower() in ['unknown', 'n/a', ''])) and cs_full_data.get('website_traffic'):
+                profile.website_traffic = cs_full_data.get('website_traffic')
+                print(f"[CoreSignal Enhanced] Set website_traffic from CoreSignal: {profile.website_traffic}")
+            
+            current_news_counts = getattr(profile, 'news_counts', None)
+            if (not current_news_counts or 
+                (isinstance(current_news_counts, str) and current_news_counts.lower() in ['unknown', 'n/a', ''])) and cs_full_data.get('news_counts'):
+                profile.news_counts = cs_full_data.get('news_counts')
+                print(f"[CoreSignal Enhanced] Set news_counts from CoreSignal: {profile.news_counts}")
+            
+            # Technical and contact data
+            current_technographics = getattr(profile, 'technographics', None)
+            if (not current_technographics or 
+                (isinstance(current_technographics, str) and current_technographics.lower() in ['unknown', 'n/a', ''])) and cs_full_data.get('technographics'):
+                profile.technographics = cs_full_data.get('technographics')
+                print(f"[CoreSignal Enhanced] Set technographics from CoreSignal: {profile.technographics}")
+            
+            current_emails = getattr(profile, 'emails', None)
+            if (not current_emails or 
+                (isinstance(current_emails, str) and current_emails.lower() in ['unknown', 'n/a', ''])) and cs_full_data.get('emails'):
+                profile.emails = cs_full_data.get('emails')
+                print(f"[CoreSignal Enhanced] Set emails from CoreSignal: {profile.emails}")
+            
+            current_phones = getattr(profile, 'phones', None)
+            if (not current_phones or 
+                (isinstance(current_phones, str) and current_phones.lower() in ['unknown', 'n/a', ''])) and cs_full_data.get('phones'):
+                profile.phones = cs_full_data.get('phones')
+                print(f"[CoreSignal Enhanced] Set phones from CoreSignal: {profile.phones}")
+            
+            current_linkedin = getattr(profile, 'linkedin', None)
+            if (not current_linkedin or 
+                (isinstance(current_linkedin, str) and current_linkedin.lower() in ['unknown', 'n/a', ''])) and cs_full_data.get('linkedin'):
+                profile.linkedin = cs_full_data.get('linkedin')
+                print(f"[CoreSignal Enhanced] Set linkedin from CoreSignal: {profile.linkedin}")
+            
+            current_twitter = getattr(profile, 'twitter', None)
+            if (not current_twitter or 
+                (isinstance(current_twitter, str) and current_twitter.lower() in ['unknown', 'n/a', ''])) and cs_full_data.get('twitter'):
+                profile.twitter = cs_full_data.get('twitter')
+                print(f"[CoreSignal Enhanced] Set twitter from CoreSignal: {profile.twitter}")
+            
+            current_facebook = getattr(profile, 'facebook', None)
+            if (not current_facebook or 
+                (isinstance(current_facebook, str) and current_facebook.lower() in ['unknown', 'n/a', ''])) and cs_full_data.get('facebook'):
+                profile.facebook = cs_full_data.get('facebook')
+                print(f"[CoreSignal Enhanced] Set facebook from CoreSignal: {profile.facebook}")
+            
+            # Set defaults if still missing after CoreSignal
+            if not getattr(profile, 'website', None) or getattr(profile, 'website', '').lower() in ['unknown', 'n/a', '']:
+                profile.website = "unknown"
+                print(f"[CoreSignal Fallback] Website still missing, using 'unknown'")
+            
+            # Only set fallback sector if it's truly missing or invalid
+            current_sector = getattr(profile, 'sector', None)
+            if not current_sector or (isinstance(current_sector, str) and current_sector.lower() in ['unknown', 'n/a', '']):
+                profile.sector = "Technology"  # Default fallback
+                print(f"[CoreSignal Fallback] Sector still missing, using 'Technology'")
+            else:
+                print(f"[CoreSignal Fallback] Sector already set to '{current_sector}', keeping AI detection")
         else:
             print(f"[CoreSignal] No enrichment data available for {profile.name}.")
+            # Set defaults if CoreSignal has no data
+            if not getattr(profile, 'website', None) or getattr(profile, 'website', '').lower() in ['unknown', 'n/a', '']:
+                profile.website = "unknown"
+                print(f"[CoreSignal Fallback] No CoreSignal data, website set to 'unknown'")
+            
+            # Only set fallback sector if it's truly missing or invalid
+            current_sector = getattr(profile, 'sector', None)
+            if not current_sector or (isinstance(current_sector, str) and current_sector.lower() in ['unknown', 'n/a', '']):
+                profile.sector = "Technology"  # Default fallback
+                print(f"[CoreSignal Fallback] No CoreSignal data, sector set to 'Technology'")
+            else:
+                print(f"[CoreSignal Fallback] No CoreSignal data, but sector already set to '{current_sector}', keeping AI detection")
     else:
         print(f"[CoreSignal] Skipping enrichment for {profile.name} (name not available or invalid).")
+        # Set defaults if CoreSignal is skipped
+        if not getattr(profile, 'website', None) or getattr(profile, 'website', '').lower() in ['unknown', 'n/a', '']:
+            profile.website = "unknown"
+            print(f"[CoreSignal Fallback] CoreSignal skipped, website set to 'unknown'")
+        
+        # Only set fallback sector if it's truly missing or invalid
+        current_sector = getattr(profile, 'sector', None)
+        if not current_sector or (isinstance(current_sector, str) and current_sector.lower() in ['unknown', 'n/a', '']):
+            profile.sector = "Technology"  # Default fallback
+            print(f"[CoreSignal Fallback] CoreSignal skipped, sector set to 'Technology'")
+        else:
+            print(f"[CoreSignal Fallback] CoreSignal skipped, but sector already set to '{current_sector}', keeping AI detection")
 
     # --- Website enrichment if missing ---
-    if not profile.website or profile.website.lower() in ['unknown', 'n/a', '']:
+    current_website = getattr(profile, 'website', None)
+    if not current_website or current_website.lower() in ['unknown', 'n/a', '']:
         try:
             from core.external_enrichment import find_company_website
             website = find_company_website(
@@ -323,6 +603,8 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
                 print("[Website Enrichment] No website found.")
         except Exception as e:
             print(f"[Website Enrichment] Error: {e}")
+    else:
+        print(f"[Website Enrichment] Website already set to '{current_website}', keeping AI detection")
 
     # Technical Due Diligence (agent only)
     # Store full text in profile for technical DD agent to use
