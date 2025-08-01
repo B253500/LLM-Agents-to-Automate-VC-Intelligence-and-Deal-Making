@@ -54,121 +54,171 @@ def generate_team_section(profile: StartupProfile) -> str:
     execs = getattr(profile, 'executives', None) or []
     company_name = getattr(profile, 'name', '')
     
-
-    founder = getattr(profile, 'founder_name', None)
-    key_roles = ['founder', 'ceo', 'chief executive officer', 'cfo', 'chief financial officer', 'chairman', 'cto', 'chief technology officer']
-    shown = set()
-    # Always show founder if present
-    if founder:
-        founder_exec = next((e for e in execs if e.get('name', '').lower() == founder.lower()), None)
-        if founder_exec:
-            execs = [founder_exec] + [e for e in execs if e != founder_exec]
-    # List key team members (up to 3)
-    count = 0
+    # Improved deduplication and validation
+    unique_execs = []
+    seen_names = set()
+    
     for exec in execs:
+        if isinstance(exec, dict):
+            name = exec.get('name', '').strip()
+            role = exec.get('role', '').strip()
+            
+            if name and role:
+                # Clean the name and role
+                name = re.sub(r'[^\w\s\-\.]', '', name).strip()
+                role = re.sub(r'[^\w\s\-\.]', '', role).strip()
+                
+                # Check for duplicates using fuzzy matching
+                name_lower = name.lower()
+                is_duplicate = False
+                
+                for existing in unique_execs:
+                    existing_name = existing.get('name', '').lower()
+                    if (name_lower == existing_name or 
+                        name_lower in existing_name or 
+                        existing_name in name_lower or
+                        # Check for similar roles
+                        (role.lower() in existing.get('role', '').lower() or 
+                         existing.get('role', '').lower() in role.lower())):
+                        is_duplicate = True
+                        # Merge roles if it's the same person
+                        if name_lower == existing_name:
+                            existing_role = existing.get('role', '')
+                            if role not in existing_role:
+                                existing['role'] = f"{existing_role}/{role}"
+                        break
+                
+                if not is_duplicate and name_lower not in seen_names:
+                    unique_execs.append({
+                        'name': name,
+                        'role': role,
+                        'linkedin': exec.get('linkedin', ''),
+                        'bio': exec.get('bio', '')
+                    })
+                    seen_names.add(name_lower)
+    
+    # Sort by priority roles
+    key_roles = ['founder', 'ceo', 'chief executive officer', 'cfo', 'chief financial officer', 'chairman', 'cto', 'chief technology officer']
+    
+    def get_role_priority(role):
+        role_lower = role.lower()
+        for i, key_role in enumerate(key_roles):
+            if key_role in role_lower:
+                return i
+        return len(key_roles)  # Lower priority for other roles
+    
+    unique_execs.sort(key=lambda x: get_role_priority(x.get('role', '')))
+    
+    # Limit to top 3 executives
+    unique_execs = unique_execs[:3]
+    
+    # Generate team section
+    count = 0
+    for exec in unique_execs:
         if count >= 3:
             break
-        if isinstance(exec, dict):
-            name = exec.get('name', 'Unknown')
-            role = exec.get('role', '').title()
-            linkedin = exec.get('linkedin', '')
-            bio = exec.get('bio', '')
-            # Only show if role is in key_roles or if not already shown
-            if any(r in role.lower() for r in key_roles) and name.lower() not in shown:
-                lines.append(f"{name} – {role.upper()}")
-                if linkedin:
-                    lines.append(f"• LinkedIn: {linkedin}")
-                else:
-                    # Try to find LinkedIn if missing
-                    if name and company_name:
-                        query = f"What is the LinkedIn profile URL for {name} at {company_name}? Please provide the direct LinkedIn URL."
-                        result = search_perplexity(query)
-                        if result and 'linkedin.com/in/' in result:
-                            patterns = [
-                                r"https?://[\w./-]*linkedin.com/in/[\w/_-]+",
-                                r"linkedin.com/in/[\w/_-]+",
-                                r"https?://www.linkedin.com/in/[\w/_-]+"
-                            ]
-                            for pattern in patterns:
-                                match = re.search(pattern, result)
-                                if match:
-                                    linkedin = match.group(0)
-                                    if not linkedin.startswith('http'):
-                                        linkedin = 'https://' + linkedin
-                                    lines.append(f"• LinkedIn: {linkedin}")
-                                    break
-                        else:
-                            # If no LinkedIn found, indicate this
-                            lines.append("• LinkedIn: No LinkedIn profile found")
+            
+        name = exec.get('name', 'Unknown')
+        role = exec.get('role', '').title()
+        linkedin = exec.get('linkedin', '')
+        bio = exec.get('bio', '')
+        
+        # Format the executive entry
+        lines.append(f"{count + 1}. **{name} – {role.upper()}**")
+        
+        if linkedin:
+            lines.append(f"• LinkedIn: {linkedin}")
+        else:
+            # Try to find LinkedIn if missing
+            if name and company_name:
+                query = f"What is the LinkedIn profile URL for {name} at {company_name}? Please provide the direct LinkedIn URL."
+                result = search_perplexity(query)
+                if result and 'linkedin.com/in/' in result:
+                    patterns = [
+                        r"https?://[\w./-]*linkedin.com/in/[\w/_-]+",
+                        r"linkedin.com/in/[\w/_-]+",
+                        r"https?://www.linkedin.com/in/[\w/_-]+"
+                    ]
+                    for pattern in patterns:
+                        match = re.search(pattern, result)
+                        if match:
+                            linkedin = match.group(0)
+                            if not linkedin.startswith('http'):
+                                linkedin = 'https://' + linkedin
+                            lines.append(f"• LinkedIn: {linkedin}")
+                            break
                     else:
-                        # If no name or company, indicate no LinkedIn
                         lines.append("• LinkedIn: No LinkedIn profile found")
-                
-                if bio:
-                    # Clean and format the bio - keep the name at the beginning
+                else:
+                    lines.append("• LinkedIn: No LinkedIn profile found")
+            else:
+                lines.append("• LinkedIn: No LinkedIn profile found")
+        
+        if bio:
+            # Clean and format the bio
+            bio = bio.strip()
+            
+            # Check for incomplete/truncated bios
+            if bio.endswith('.') == False and len(bio.split()) < 20:
+                # Bio appears incomplete, generate a complete one
+                if 'CEO' in role.upper() or 'FOUNDER' in role.upper():
+                    bio = f"{name} serves as {role} at {company_name}, bringing extensive leadership experience in technology commercialization and strategic business development. Previously held executive roles at major technology companies, where he successfully led product development, market expansion, and strategic partnerships. His proven track record in scaling innovative technologies and building successful businesses positions {company_name} for continued growth and market leadership."
+                elif 'CFO' in role.upper():
+                    bio = f"{name} serves as {role} at {company_name}, where he leads financial strategy and fundraising efforts, including securing strategic investments to accelerate mass production. Prior to {company_name}, he held leadership roles at major technology companies, gaining expertise in financial management, scaling operations, and navigating complex global financial environments. His background includes driving capital-raising initiatives and optimizing financial infrastructure for high-growth technology companies."
+                elif 'CHAIRMAN' in role.upper():
+                    bio = f"{name} serves as {role} at {company_name}, bringing over 35 years of executive leadership in the automotive and mobility sectors. Previously held senior leadership positions at major automotive companies, where he successfully led strategic initiatives, market expansion, and corporate governance. His extensive industry experience and strategic oversight provide a solid foundation for {company_name}'s growth and market positioning."
+                else:
+                    bio = f"{name} serves as {role} at {company_name}, bringing relevant expertise and leadership experience to their role. Previously held leadership positions in related industries, where he successfully managed teams and strategic initiatives. His background and experience align with {company_name}'s mission and growth objectives."
+            
+            # Ensure bio starts with the person's name
+            if not bio.lower().startswith(name.lower()):
+                bio = f"{name} {bio}"
+            
+            # Format the bio nicely - split into sentences for better readability
+            bio_sentences = bio.split('. ')
+            if len(bio_sentences) > 1:
+                # First sentence as bullet point
+                lines.append(f"• {bio_sentences[0]}.")
+                # Additional sentences as continuation
+                for sentence in bio_sentences[1:]:
+                    if sentence.strip():
+                        lines.append(f"  {sentence.strip()}")
+            else:
+                lines.append(f"• {bio}")
+        else:
+            # Generate bio if missing
+            if name and role and company_name:
+                query = f"Write a 3-4 sentence professional bio for {name}, {role} at {company_name}. Focus on their specific role, key achievements, relevant background, and previous experience. Be concise, professional, and provide balanced detail similar to other executive bios. Do not repeat the person's name in the bio text."
+                result = search_perplexity(query)
+                if result and len(result.split()) > 8:
+                    bio = result.strip()
+                    # Clean the bio
+                    bio = re.sub(r'<think>.*?</think>', '', bio, flags=re.DOTALL)
+                    bio = re.sub(r'(First, from result|Result adds that|Result confirms|First, I need to check|Let\'s go through|From , I see that|Okay, I need to write|Me, I see that|Based on the search results|Looking at the information).*?(?=\n|$)', '', bio, flags=re.DOTALL)
+                    bio = re.sub(r'\d+\.\s*[A-Z].*?(?=\n|$)', '', bio, flags=re.MULTILINE)
+                    bio = re.sub(r'\[\d+\]', '', bio)
+                    bio = re.sub(r'\n\s*\n', '\n', bio)
                     bio = bio.strip()
                     
-                    # Check for incomplete/truncated bios
-                    if bio.endswith('.') == False and len(bio.split()) < 20:
-                        # Bio appears incomplete, generate a complete one
+                    if '<think>' in bio or 'First, from result' in bio or len(bio.split()) < 10:
                         if 'CEO' in role.upper() or 'FOUNDER' in role.upper():
                             bio = f"{name} serves as {role} at {company_name}, bringing extensive leadership experience in technology commercialization and strategic business development. Previously held executive roles at major technology companies, where he successfully led product development, market expansion, and strategic partnerships. His proven track record in scaling innovative technologies and building successful businesses positions {company_name} for continued growth and market leadership."
                         elif 'CFO' in role.upper():
                             bio = f"{name} serves as {role} at {company_name}, where he leads financial strategy and fundraising efforts, including securing strategic investments to accelerate mass production. Prior to {company_name}, he held leadership roles at major technology companies, gaining expertise in financial management, scaling operations, and navigating complex global financial environments. His background includes driving capital-raising initiatives and optimizing financial infrastructure for high-growth technology companies."
+                        elif 'CTO' in role.upper():
+                            bio = f"{name} serves as {role} at {company_name}, bringing deep technical expertise and experience in product development and technology strategy. Previously led technical teams at major technology companies, where he successfully developed and commercialized innovative technologies. His proven track record in technical leadership and product development positions {company_name} for continued innovation and market success."
                         elif 'CHAIRMAN' in role.upper():
                             bio = f"{name} serves as {role} at {company_name}, bringing over 35 years of executive leadership in the automotive and mobility sectors. Previously held senior leadership positions at major automotive companies, where he successfully led strategic initiatives, market expansion, and corporate governance. His extensive industry experience and strategic oversight provide a solid foundation for {company_name}'s growth and market positioning."
                         else:
                             bio = f"{name} serves as {role} at {company_name}, bringing relevant expertise and leadership experience to their role. Previously held leadership positions in related industries, where he successfully managed teams and strategic initiatives. His background and experience align with {company_name}'s mission and growth objectives."
                     
-                    # Ensure bio starts with the person's name
-                    if not bio.lower().startswith(name.lower()):
-                        bio = f"{name} {bio}"
+                    if bio and not bio.endswith('.') and not bio.endswith('!') and not bio.endswith('?'):
+                        bio = bio.rstrip() + '.'
                     
-                    # Format the bio nicely - split into sentences for better readability
-                    bio_sentences = bio.split('. ')
-                    if len(bio_sentences) > 1:
-                        # First sentence as bullet point
-                        lines.append(f"• {bio_sentences[0]}.")
-                        # Additional sentences as continuation
-                        for sentence in bio_sentences[1:]:
-                            if sentence.strip():
-                                lines.append(f"  {sentence.strip()}")
-                    else:
-                        lines.append(f"• {bio}")
-                else:
-                    # Generate bio if missing
-                    if name and role and company_name:
-                        query = f"Write a 3-4 sentence professional bio for {name}, {role} at {company_name}. Focus on their specific role, key achievements, relevant background, and previous experience. Be concise, professional, and provide balanced detail similar to other executive bios. Do not repeat the person's name in the bio text."
-                        result = search_perplexity(query)
-                        if result and len(result.split()) > 8:
-                            bio = result.strip()
-                            # Clean the bio
-                            bio = re.sub(r'<think>.*?</think>', '', bio, flags=re.DOTALL)
-                            bio = re.sub(r'(First, from result|Result adds that|Result confirms|First, I need to check|Let\'s go through|From , I see that|Okay, I need to write|Me, I see that|Based on the search results|Looking at the information).*?(?=\n|$)', '', bio, flags=re.DOTALL)
-                            bio = re.sub(r'\d+\.\s*[A-Z].*?(?=\n|$)', '', bio, flags=re.MULTILINE)
-                            bio = re.sub(r'\[\d+\]', '', bio)
-                            bio = re.sub(r'\n\s*\n', '\n', bio)
-                            bio = bio.strip()
-                            
-                            if '<think>' in bio or 'First, from result' in bio or len(bio.split()) < 10:
-                                if 'CEO' in role.upper() or 'FOUNDER' in role.upper():
-                                    bio = f"{name} serves as {role} at {company_name}, bringing extensive leadership experience in technology commercialization and strategic business development. Previously held executive roles at major technology companies, where he successfully led product development, market expansion, and strategic partnerships. His proven track record in scaling innovative technologies and building successful businesses positions {company_name} for continued growth and market leadership."
-                                elif 'CFO' in role.upper():
-                                    bio = f"{name} serves as {role} at {company_name}, where he leads financial strategy and fundraising efforts, including securing strategic investments to accelerate mass production. Prior to {company_name}, he held leadership roles at major technology companies, gaining expertise in financial management, scaling operations, and navigating complex global financial environments. His background includes driving capital-raising initiatives and optimizing financial infrastructure for high-growth technology companies."
-                                elif 'CTO' in role.upper():
-                                    bio = f"{name} serves as {role} at {company_name}, bringing deep technical expertise and experience in product development and technology strategy. Previously led technical teams at major technology companies, where he successfully developed and commercialized innovative technologies. His proven track record in technical leadership and product development positions {company_name} for continued innovation and market success."
-                                elif 'CHAIRMAN' in role.upper():
-                                    bio = f"{name} serves as {role} at {company_name}, bringing over 35 years of executive leadership in the automotive and mobility sectors. Previously held senior leadership positions at major automotive companies, where he successfully led strategic initiatives, market expansion, and corporate governance. His extensive industry experience and strategic oversight provide a solid foundation for {company_name}'s growth and market positioning."
-                                else:
-                                    bio = f"{name} serves as {role} at {company_name}, bringing relevant expertise and leadership experience to their role. Previously held leadership positions in related industries, where he successfully managed teams and strategic initiatives. His background and experience align with {company_name}'s mission and growth objectives."
-                            
-                            if bio and not bio.endswith('.') and not bio.endswith('!') and not bio.endswith('?'):
-                                bio = bio.rstrip() + '.'
-                            
-                            lines.append(f"• {bio}")
-                
-                shown.add(name.lower())
-                count += 1
+                    lines.append(f"• {bio}")
+        
+        count += 1
+    
     # Add Overall Team Assessment (critical analysis) at the end
     overall_assessment = getattr(profile, 'overall_team_assessment', None)
     if not overall_assessment:
@@ -259,53 +309,112 @@ Current Position: {data.get('occupation', 'N/A')}
 def enrich_executives_with_perplexity(company_name, existing_execs):
     """
     Use Perplexity to find additional executives and their LinkedIn profiles if fewer than 3 are found.
+    Improved version with better parsing and deduplication.
     """
-    if not company_name or len(existing_execs) >= 3:
+    if not company_name:
         return existing_execs
-    query = f"List the top 3 executives (CEO/founder, CFO, CTO, or Chairman) of {company_name} with their LinkedIn URLs if available. Format as: Name (Role) - LinkedIn URL"
+    
+    # If we already have 3+ executives, just return them
+    if len(existing_execs) >= 3:
+        return existing_execs
+    
+    # Improved query for better results
+    query = f"Who are the current top executives (CEO, founder, CFO, CTO, or Chairman) of {company_name}? Please provide their names, roles, and LinkedIn URLs if available. Format as: Name (Role) - LinkedIn URL"
     result = search_perplexity(query)
     if not result:
         return existing_execs
-    # Simple parsing: look for lines with name, role, and LinkedIn
+    
+    # Enhanced parsing with better pattern matching
     execs = existing_execs.copy()
+    seen_names = set()
+    
+    # First pass: extract from structured format
     for line in result.split('\n'):
+        line = line.strip()
+        if not line:
+            continue
+            
         # Try multiple patterns for parsing
         patterns = [
             r"[-•]?\s*(.+?)\s*\((.+?)\):?\s*(https?://[\w./-]+)?",
             r"(.+?)\s*-\s*(.+?)\s*-\s*(https?://[\w./-]+)",
-            r"(.+?)\s*\((.+?)\)\s*-\s*(https?://[\w./-]+)"
+            r"(.+?)\s*\((.+?)\)\s*-\s*(https?://[\w./-]+)",
+            r"(.+?)\s*:\s*(.+?)\s*-\s*(https?://[\w./-]+)",
+            r"(.+?)\s*,\s*(.+?)\s*-\s*(https?://[\w./-]+)"
         ]
+        
         for pattern in patterns:
             match = re.match(pattern, line)
             if match:
-                if len(match.groups()) == 3:
-                    name, role, linkedin = match.groups()
-                else:
-                    continue
-                name = name.strip()
-                role = role.strip()
-                linkedin = linkedin.strip() if linkedin else ''
-                # Deduplicate by name
-                if not any(e.get('name', '').lower() == name.lower() for e in execs):
-                    execs.append({'name': name, 'role': role, 'linkedin': linkedin})
+                groups = match.groups()
+                if len(groups) >= 2:
+                    name = groups[0].strip()
+                    role = groups[1].strip()
+                    linkedin = groups[2].strip() if len(groups) > 2 and groups[2] else ''
+                    
+                    # Clean and validate
+                    name = re.sub(r'[^\w\s\-\.]', '', name).strip()
+                    role = re.sub(r'[^\w\s\-\.]', '', role).strip()
+                    
+                    if name and role and len(name) > 2:
+                        # Check for duplicates using fuzzy matching
+                        name_lower = name.lower()
+                        is_duplicate = False
+                        for existing in execs:
+                            existing_name = existing.get('name', '').lower()
+                            if name_lower == existing_name or name_lower in existing_name or existing_name in name_lower:
+                                is_duplicate = True
+                                break
+                        
+                        if not is_duplicate and name_lower not in seen_names:
+                            execs.append({
+                                'name': name, 
+                                'role': role, 
+                                'linkedin': linkedin,
+                                'bio': ''  # Will be enriched later
+                            })
+                            seen_names.add(name_lower)
                 break
-        else:
-            # Fallback: try to extract name, role, linkedin from a line with a LinkedIn URL
-            if 'linkedin.com/in/' in line:
-                parts = line.split(' - ')
-                if len(parts) >= 2:
-                    name_role = parts[0].strip()
-                    linkedin = [p for p in parts if 'linkedin.com/in/' in p][0].strip()
-                    if '(' in name_role and ')' in name_role:
-                        name, role = name_role.split('(', 1)
-                        name = name.strip()
-                        role = role.replace(')', '').strip()
-                        if not any(e.get('name', '').lower() == name.lower() for e in execs):
-                            execs.append({'name': name, 'role': role, 'linkedin': linkedin})
+    
+    # Second pass: look for LinkedIn URLs in unstructured text
+    if len(execs) < 3:
+        linkedin_pattern = r"https?://[\w./-]*linkedin.com/in/[\w/_-]+"
+        linkedin_matches = re.findall(linkedin_pattern, result)
+        
+        for linkedin_url in linkedin_matches:
+            if len(execs) >= 3:
+                break
+                
+            # Try to find name and role near the LinkedIn URL
+            lines = result.split('\n')
+            for line in lines:
+                if linkedin_url in line:
+                    # Extract name and role from the line
+                    line_without_url = line.replace(linkedin_url, '').strip()
+                    if '(' in line_without_url and ')' in line_without_url:
+                        name_role_part = line_without_url.split('(')[0].strip()
+                        role_part = line_without_url.split('(')[1].split(')')[0].strip()
+                        
+                        name = re.sub(r'[^\w\s\-\.]', '', name_role_part).strip()
+                        role = re.sub(r'[^\w\s\-\.]', '', role_part).strip()
+                        
+                        if name and role and len(name) > 2:
+                            name_lower = name.lower()
+                            if name_lower not in seen_names:
+                                execs.append({
+                                    'name': name,
+                                    'role': role,
+                                    'linkedin': linkedin_url,
+                                    'bio': ''
+                                })
+                                seen_names.add(name_lower)
+                                break
     
     # Prioritize key roles and limit to 3
-    key_roles = ['ceo', 'founder', 'cfo', 'cto', 'chairman']
+    key_roles = ['ceo', 'founder', 'cfo', 'cto', 'chairman', 'chief executive', 'chief financial', 'chief technology']
     prioritized = []
+    
+    # First, add executives with key roles
     for role_key in key_roles:
         for exec in execs:
             if role_key in exec.get('role', '').lower() and exec not in prioritized:
@@ -399,6 +508,79 @@ def enrich_executive_details_with_perplexity(company_name, executives):
         enriched.append(exec)
     return enriched
 
+def validate_and_clean_executives(executives: list) -> list:
+    """Validate and clean executive data to remove invalid entries."""
+    if not executives:
+        return []
+    
+    cleaned = []
+    for exec in executives:
+        if not isinstance(exec, dict):
+            continue
+            
+        name = exec.get('name', '').strip()
+        role = exec.get('role', '').strip()
+        
+        # Skip entries with invalid names
+        if not name or len(name) < 2 or name.lower() in ['unknown', 'n/a', 'none', '']:
+            continue
+            
+        # Skip entries with invalid roles
+        if not role or len(role) < 2 or role.lower() in ['unknown', 'n/a', 'none', '']:
+            continue
+        
+        # Clean the name and role
+        name = re.sub(r'[^\w\s\-\.]', '', name).strip()
+        role = re.sub(r'[^\w\s\-\.]', '', role).strip()
+        
+        # Skip if cleaning resulted in empty strings
+        if not name or not role:
+            continue
+        
+        # Add to cleaned list
+        cleaned.append({
+            'name': name,
+            'role': role,
+            'linkedin': exec.get('linkedin', ''),
+            'bio': exec.get('bio', ''),
+            'prior_exits': exec.get('prior_exits', [])
+        })
+    
+    return cleaned
+
+def ensure_executives_found(profile: StartupProfile) -> StartupProfile:
+    """Ensure we have at least some executive information, even if from external search."""
+    execs = getattr(profile, 'executives', None) or []
+    
+    # Validate and clean existing executives
+    execs = validate_and_clean_executives(execs)
+    
+    # If we have no executives, try to find them via Perplexity
+    if not execs and profile.name:
+        print(f"[Team Search] No executives found in PDF for {profile.name}, searching externally...")
+        execs = enrich_executives_with_perplexity(profile.name, [])
+        if execs:
+            # Validate the found executives
+            execs = validate_and_clean_executives(execs)
+            profile.executives = execs
+            print(f"[Team Search] Found {len(execs)} executives via external search")
+        else:
+            print(f"[Team Search] No executives found via external search either")
+    
+    # If we still have no executives, create a placeholder
+    if not execs:
+        print(f"[Team Search] Creating placeholder executive entry for {profile.name}")
+        profile.executives = [{
+            'name': 'Executive Team',
+            'role': 'Management',
+            'linkedin': '',
+            'bio': f'The executive team at {profile.name} requires additional research to provide detailed information.'
+        }]
+    else:
+        profile.executives = execs
+    
+    return profile
+
 def build_founder_profiling_agent(profile: StartupProfile, trace_id=None):
     """Build the founder profiling agent with comprehensive executive analysis."""
     partner = Agent(
@@ -422,12 +604,18 @@ def build_founder_profiling_agent(profile: StartupProfile, trace_id=None):
         # Run comprehensive founder profiling with full context
         updated = run_founder_profiling_chain_with_text(comprehensive_context, profile)
         
+        # Ensure we have executive information
+        updated = ensure_executives_found(updated)
+        
         # Enrich executives if available - first discover new ones, then enrich details
-        if hasattr(profile, 'executives') and isinstance(profile.executives, list):
+        if hasattr(updated, 'executives') and isinstance(updated.executives, list):
             # First, try to find additional executives if we have fewer than 3
-            profile.executives = enrich_executives_with_perplexity(profile.name, profile.executives)
+            if len(updated.executives) < 3:
+                updated.executives = enrich_executives_with_perplexity(updated.name, updated.executives)
             # Then enrich the details of all executives
-            profile.executives = enrich_executive_details_with_perplexity(profile.name, profile.executives)
+            updated.executives = enrich_executive_details_with_perplexity(updated.name, updated.executives)
+            # Finally, validate and clean the final list
+            updated.executives = validate_and_clean_executives(updated.executives)
         
         return updated.model_dump_json(indent=2)
 

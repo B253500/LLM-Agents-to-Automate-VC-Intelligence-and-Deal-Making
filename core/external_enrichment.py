@@ -82,6 +82,12 @@ def find_company_website(company_name, founder_name=None, sector=None, deck_text
             # Skip URLs that are clearly not company websites (e.g., store admin pages)
             if any(x in url for x in ["admin", "login", "dashboard", "myshopify.com", "shopify.com/admin"]):
                 continue
+            # Skip Shopify merchant URLs (they're not the main company website)
+            if "myshopify.com" in url:
+                continue
+            # Skip URLs that contain "admin" anywhere in the path
+            if "/admin" in url:
+                continue
             filtered_urls.append(url)
         
         for url in filtered_urls:

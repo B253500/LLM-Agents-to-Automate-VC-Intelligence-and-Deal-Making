@@ -27,6 +27,8 @@ You are a top-tier VC investment analyst. Extract the following fields as JSON:
 
 IMPORTANT: For executives, DO NOT duplicate the same person. If someone appears multiple times with different roles, combine them into one entry with all roles. For example, if "Drew Houston" appears as both "CEO" and "Founder", create one entry: {{"name": "Drew Houston", "role": "CEO/Founder"}}
 
+CRITICAL: If NO executive information is found in the text (no names, no roles mentioned), return an EMPTY executives array: "executives": []. Do NOT make up or infer executive information.
+
 For the 'name' field: 
 1. Look for the official company name that appears most frequently in the text
 2. Common patterns: "Company Name Inc", "Company Name Corp", "Company Name Technologies", "Company Name"
@@ -34,6 +36,11 @@ For the 'name' field:
 4. Do not return slogans, products, or generic terms like "Company" or "All"
 5. If the company name is clearly stated, use it exactly as written
 6. If not explicitly stated, return "unknown"
+
+For the 'founder_name' field:
+1. Look for founder names in the text
+2. If no founder is mentioned, return "unknown"
+3. Do NOT make up founder names
 
 For the 'sector' field: Be specific about the business sector (e.g., "ecommerce", "fintech", "battery technology", "healthtech")
 
@@ -63,7 +70,7 @@ def pdf_to_text(path: Path) -> str:
     return "\n".join(pages)
 
 
-def extract_company_name_with_ai(text: str) -> str:
+def extract_company_name_with_ai(text: str, evaluator=None) -> str:
     """Use AI to detect the company name from text"""
     try:
         ai_prompt = f"""
@@ -74,7 +81,11 @@ def extract_company_name_with_ai(text: str) -> str:
         2. Return ONLY the company name, not slogans or products
         3. For well-known companies, use their official name (e.g., "Shopify", "Tesla", "Uber")
         4. If multiple companies are mentioned, identify the main company this deck is for
-        5. If unclear, return "unknown"
+        5. Look for company names in headers, titles, and prominent positions
+        6. If unclear, return "unknown"
+        
+        IMPORTANT: This is a pitch deck, so the company name should be prominently featured.
+        Look for the company that is presenting or being analyzed.
         
         Text to analyze:
         {text[:3000]}
@@ -84,6 +95,12 @@ def extract_company_name_with_ai(text: str) -> str:
         
         response = llm.invoke(ai_prompt)
         company_name = response.content.strip().strip('"').strip("'")
+        
+        # Track token usage
+        if evaluator and hasattr(response, 'usage'):
+            input_tokens = getattr(response.usage, 'prompt_tokens', 0)
+            output_tokens = getattr(response.usage, 'completion_tokens', 0)
+            evaluator.log_agent_tokens("COMPANY NAME DETECTION", input_tokens, output_tokens, "gpt-4o")
         
         # Clean up the response
         if company_name.lower() in ['unknown', 'none', 'n/a', '']:
@@ -95,9 +112,55 @@ def extract_company_name_with_ai(text: str) -> str:
         return "unknown"
 
 
-def extract_website_with_ai(text: str, company_name: str = None) -> str:
+def extract_website_with_ai(text: str, company_name: str = None, evaluator=None) -> str:
     """Use AI to detect the company website from text"""
     try:
+        # Well-known company website mappings
+        known_companies = {
+            'snapchat': 'snapchat.com',
+            'shopify': 'shopify.com',
+            'tesla': 'tesla.com',
+            'airbnb': 'airbnb.com',
+            'uber': 'uber.com',
+            'dropbox': 'dropbox.com',
+            'linkedin': 'linkedin.com',
+            'twitter': 'twitter.com',
+            'facebook': 'facebook.com',
+            'instagram': 'instagram.com',
+            'tiktok': 'tiktok.com',
+            'netflix': 'netflix.com',
+            'spotify': 'spotify.com',
+            'zoom': 'zoom.us',
+            'slack': 'slack.com',
+            'discord': 'discord.com',
+            'github': 'github.com',
+            'stripe': 'stripe.com',
+            'square': 'square.com',
+            'coinbase': 'coinbase.com',
+            'robinhood': 'robinhood.com',
+            'peloton': 'onepeloton.com',
+            'doordash': 'doordash.com',
+            'lyft': 'lyft.com',
+            'pinterest': 'pinterest.com',
+            'reddit': 'reddit.com',
+            'twitch': 'twitch.tv',
+            'youtube': 'youtube.com',
+            'amazon': 'amazon.com',
+            'google': 'google.com',
+            'microsoft': 'microsoft.com',
+            'apple': 'apple.com',
+            'meta': 'meta.com',
+            'alphabet': 'alphabet.com'
+        }
+        
+        # Check if it's a well-known company first
+        if company_name:
+            company_lower = company_name.lower().replace(' ', '').replace('-', '').replace('_', '')
+            for known_name, known_website in known_companies.items():
+                if known_name in company_lower or company_lower in known_name:
+                    print(f"[AI Website Detection] Using known website for {company_name}: {known_website}")
+                    return f"https://{known_website}"
+        
         ai_prompt = f"""
         Analyze the following text and identify the official company website.
         
@@ -106,7 +169,8 @@ def extract_website_with_ai(text: str, company_name: str = None) -> str:
         2. Common patterns: www.companyname.com, companyname.com, https://companyname.com
         3. For well-known companies, use their official website (e.g., shopify.com, tesla.com)
         4. If multiple URLs are mentioned, identify the main company website
-        5. If unclear, return "unknown"
+        5. Avoid admin URLs, merchant URLs, or social media URLs
+        6. If unclear, return "unknown"
         
         Company name: {company_name or "unknown"}
         Text to analyze:
@@ -117,6 +181,12 @@ def extract_website_with_ai(text: str, company_name: str = None) -> str:
         
         response = llm.invoke(ai_prompt)
         website = response.content.strip().strip('"').strip("'")
+        
+        # Track token usage
+        if evaluator and hasattr(response, 'usage'):
+            input_tokens = getattr(response.usage, 'prompt_tokens', 0)
+            output_tokens = getattr(response.usage, 'completion_tokens', 0)
+            evaluator.log_agent_tokens("WEBSITE DETECTION", input_tokens, output_tokens, "gpt-4o")
         
         # Clean up the response
         if website.lower() in ['unknown', 'none', 'n/a', '']:
@@ -132,21 +202,74 @@ def extract_website_with_ai(text: str, company_name: str = None) -> str:
         return "unknown"
 
 
-def extract_financial_metrics_with_ai(text: str) -> dict:
+def extract_sector_with_ai(text: str, evaluator=None) -> str:
+    """Use AI to detect the business sector from text"""
+    try:
+        ai_prompt = f"""
+        Analyze the following text and identify the business sector/industry.
+        
+        Rules:
+        1. Look for the main business sector this company operates in
+        2. Be specific about the sector (e.g., "ecommerce", "fintech", "healthtech", "battery technology")
+        3. Avoid generic terms like "technology" or "software" unless that's the specific focus
+        4. Look for sector mentions in the pitch deck content
+        5. If unclear, return "unknown"
+        
+        Common sectors to look for:
+        - ecommerce, fintech, healthtech, edtech, proptech, insurtech
+        - battery technology, electric vehicles, renewable energy
+        - ai/ml, cybersecurity, biotech, medtech, agtech, cleantech
+        - retail, manufacturing, services, consulting
+        
+        Text to analyze:
+        {text[:3000]}
+        
+        Return ONLY the sector name:
+        """
+        
+        response = llm.invoke(ai_prompt)
+        sector = response.content.strip().strip('"').strip("'")
+        
+        # Track token usage
+        if evaluator and hasattr(response, 'usage'):
+            input_tokens = getattr(response.usage, 'prompt_tokens', 0)
+            output_tokens = getattr(response.usage, 'completion_tokens', 0)
+            evaluator.log_agent_tokens("SECTOR DETECTION", input_tokens, output_tokens, "gpt-4o")
+        
+        # Clean up the response
+        if sector.lower() in ['unknown', 'none', 'n/a', '']:
+            return "unknown"
+        
+        return sector
+    except Exception as e:
+        print(f"[AI Sector Detection] Error: {e}")
+        return "unknown"
+
+
+def extract_financial_metrics_with_ai(text: str, evaluator=None) -> dict:
     """Use AI to extract financial and business metrics from pitch deck text"""
     try:
         ai_prompt = f"""
         Analyze the following pitch deck text and extract key financial and business metrics.
         
-        Look for and extract:
+        Look for and extract EXACT values from the text:
         1. Total merchants/users (e.g., "200,000+ merchants")
-        2. Gross Merchandise Volume (GMV) (e.g., "$1.9B+ GMV")
-        3. Revenue figures (e.g., "$195M revenue")
-        4. Monthly Recurring Revenue (MRR) (e.g., "$9.8M MRR")
+        2. Gross Merchandise Volume (GMV) (e.g., "$4.9B", "$3.8B")
+        3. Revenue figures (e.g., "$195.0M", "$135.1M")
+        4. Monthly Recurring Revenue (MRR) (e.g., "$9.8M", "$1.1M")
         5. Employee count (e.g., "10,000+ employees")
-        6. Target market size (e.g., "$46B TAM")
-        7. Growth rates (e.g., "85% CAGR")
+        6. Target market size (e.g., "$46B TAM", "$10B TAM")
+        7. Growth rates (e.g., "85% CAGR", "+86%", "+93%")
         8. Business model details (e.g., "subscription fees", "transaction fees")
+        9. Funding amounts (e.g., "$187.3M Series I")
+        10. Valuation figures (e.g., "$1.2B valuation")
+        11. Gross Profit figures (e.g., "$75.8M", "$62.1M")
+        
+        CRITICAL: Extract the MOST RECENT and LARGEST values when multiple years are shown.
+        For example:
+        - If revenue shows "$195.0M" (2015) and "$135.1M" (2014), use "$195.0M"
+        - If GMV shows "$4.9B" (9 MO 2015) and "$3.8B" (2014), use "$4.9B"
+        - If MRR shows "$9.8M" (Q1 2015) and "$1.1M" (Q1 2012), use "$9.8M"
         
         Return ONLY a JSON object with these fields:
         {{
@@ -157,7 +280,10 @@ def extract_financial_metrics_with_ai(text: str) -> dict:
             "employees": "number or description",
             "target_market": "size or description",
             "growth_rate": "percentage or description",
-            "business_model": "description of revenue streams"
+            "business_model": "description of revenue streams",
+            "latest_funding": "amount and round if mentioned",
+            "valuation": "amount if mentioned",
+            "gross_profit": "amount or description"
         }}
         
         If a metric is not found, use "unknown". Be specific with numbers when available.
@@ -168,6 +294,12 @@ def extract_financial_metrics_with_ai(text: str) -> dict:
         
         response = llm.invoke(ai_prompt)
         result = response.content.strip()
+        
+        # Track token usage
+        if evaluator and hasattr(response, 'usage'):
+            input_tokens = getattr(response.usage, 'prompt_tokens', 0)
+            output_tokens = getattr(response.usage, 'completion_tokens', 0)
+            evaluator.log_agent_tokens("FINANCIAL METRICS EXTRACTION", input_tokens, output_tokens, "gpt-4o")
         
         # Extract JSON from response
         import json
@@ -192,56 +324,86 @@ def extract_financial_metrics_with_ai(text: str) -> dict:
 
 
 def deduplicate_executives(executives: list) -> list:
-    """Deduplicate executives by name, keeping the most complete entry for each person"""
+    """Deduplicate executives by name, merging roles for the same person."""
     if not executives:
         return []
     
-    # Group executives by normalized name
-    name_groups = {}
+    unique_execs = []
+    seen_names = set()
     
-    for exec_data in executives:
-        if not isinstance(exec_data, dict):
+    for exec in executives:
+        if not isinstance(exec, dict):
             continue
             
-        name = exec_data.get("name", "").strip()
-        if not name:
-            continue
-            
-        # Normalize name for comparison (remove extra spaces, lowercase)
-        normalized_name = " ".join(name.lower().split())
+        name = exec.get('name', '').strip()
+        role = exec.get('role', '').strip()
         
-        if normalized_name not in name_groups:
-            name_groups[normalized_name] = []
-        name_groups[normalized_name].append(exec_data)
+        if not name or not role:
+            continue
+        
+        # Clean the name
+        name = re.sub(r'[^\w\s\-\.]', '', name).strip()
+        name_lower = name.lower()
+        
+        # Check for duplicates using fuzzy matching
+        is_duplicate = False
+        for existing in unique_execs:
+            existing_name = existing.get('name', '').lower()
+            if (name_lower == existing_name or 
+                name_lower in existing_name or 
+                existing_name in name_lower):
+                is_duplicate = True
+                # Merge roles if it's the same person
+                existing_role = existing.get('role', '')
+                if role not in existing_role:
+                    existing['role'] = f"{existing_role}/{role}"
+                # Merge other fields
+                if not existing.get('linkedin') and exec.get('linkedin'):
+                    existing['linkedin'] = exec.get('linkedin')
+                if not existing.get('bio') and exec.get('bio'):
+                    existing['bio'] = exec.get('bio')
+                break
+        
+        if not is_duplicate and name_lower not in seen_names:
+            unique_execs.append({
+                'name': name,
+                'role': role,
+                'linkedin': exec.get('linkedin', ''),
+                'bio': exec.get('bio', ''),
+                'prior_exits': exec.get('prior_exits', [])
+            })
+            seen_names.add(name_lower)
     
-    # For each group, keep the most complete entry
-    deduplicated = []
-    for normalized_name, group in name_groups.items():
-        if len(group) == 1:
-            deduplicated.append(group[0])
-        else:
-            # Choose the most complete entry (most fields filled)
-            best_entry = max(group, key=lambda x: sum(1 for v in x.values() if v))
-            deduplicated.append(best_entry)
-            print(f"[Team Deduplication] Merged {len(group)} entries for '{best_entry.get('name', 'Unknown')}'")
+    # Sort by priority roles
+    key_roles = ['founder', 'ceo', 'chief executive officer', 'cfo', 'chief financial officer', 'chairman', 'cto', 'chief technology officer']
     
-    return deduplicated
+    def get_role_priority(role):
+        role_lower = role.lower()
+        for i, key_role in enumerate(key_roles):
+            if key_role in role_lower:
+                return i
+        return len(key_roles)  # Lower priority for other roles
+    
+    unique_execs.sort(key=lambda x: get_role_priority(x.get('role', '')))
+    
+    return unique_execs
 
 
-def extract_common_term(text: str, pdf_path: str) -> str:
-    """Enhanced company name extraction with AI fallback"""
+def extract_common_term(text: str, pdf_path: str, evaluator=None) -> str:
+    """Enhanced company name extraction with AI as primary method"""
     
-    # First try AI detection
-    ai_name = extract_company_name_with_ai(text)
+    # PRIMARY: AI detection first
+    ai_name = extract_company_name_with_ai(text, evaluator)
     if ai_name and ai_name.lower() != "unknown":
         print(f"[Company Detection] AI detected: {ai_name}")
         return ai_name
     
-    # Fallback to regex-based extraction
+    # SECONDARY: Enhanced regex-based extraction with better filtering
     company_patterns = [
-        r"\b([A-Z][a-z]+(?:\s[A-Z][a-z]+)*)\b",  # Standard capitalized words
         r"\b([A-Z][a-z]+(?:\s[A-Z][a-z]+)*\s+(?:Inc|Corp|LLC|Ltd|Company|Co|Technologies|Tech|Systems|Solutions))\b",  # With company suffixes
         r"\b([A-Z][a-z]+(?:\s[A-Z][a-z]+)*\s+(?:International|Global|Worldwide|Enterprises|Group|Partners))\b",  # With business suffixes
+        r"\b([A-Z][a-z]+(?:\s[A-Z][a-z]+){2,})\b",  # Multi-word names (2+ words)
+        r"\b([A-Z][a-z]{3,}(?:\s[A-Z][a-z]+)*)\b",  # Longer single words (4+ chars)
     ]
     
     all_matches = []
@@ -254,17 +416,27 @@ def extract_common_term(text: str, pdf_path: str) -> str:
         freq = {}
         for name in all_matches:
             name = name.strip()
-            if len(name) > 2:  # Avoid very short names
+            if len(name) > 3:  # Avoid very short names
                 freq[name] = freq.get(name, 0) + 1
         
-        # Filter out common/generic terms
+        # Enhanced filter out common/generic terms
         generic_terms = {
             "all", "company", "unknown", "the", "and", "for", "with", "from", "this", "that", 
             "have", "will", "been", "they", "their", "them", "were", "said", "each", "which",
             "there", "were", "been", "other", "about", "many", "then", "them", "these", "so",
             "some", "her", "would", "make", "like", "into", "him", "time", "two", "more", "go",
             "no", "way", "could", "my", "than", "first", "been", "call", "who", "its", "now",
-            "find", "long", "down", "day", "did", "get", "come", "made", "may", "part"
+            "find", "long", "down", "day", "did", "get", "come", "made", "may", "part",
+            # PDF-specific terms
+            "page", "dashboard", "report", "overview", "summary", "analysis", "chart", "graph",
+            "table", "figure", "section", "chapter", "slide", "presentation", "deck",
+            # Common UI terms
+            "menu", "button", "link", "search", "filter", "sort", "view", "edit", "delete",
+            "save", "cancel", "ok", "yes", "no", "back", "next", "previous", "home",
+            # Common business terms
+            "business", "market", "product", "service", "customer", "revenue", "profit",
+            "growth", "sales", "marketing", "finance", "investment", "strategy", "plan",
+            "goal", "target", "objective", "mission", "vision", "value", "benefit"
         }
         
         # Remove generic terms and sort by frequency
@@ -296,88 +468,193 @@ def extract_common_term(text: str, pdf_path: str) -> str:
 # ---------------------------------------------------------------------
 # Main chain function
 # ---------------------------------------------------------------------
-def run_pitch_deck_chain_with_text(deck_text: str, profile: StartupProfile = None, pdf_path: str = None) -> StartupProfile:
+def run_pitch_deck_chain_with_text(deck_text: str, profile: StartupProfile = None, pdf_path: str = None, evaluator=None) -> StartupProfile:
     """Run pitch deck analysis using extracted text directly"""
     if profile is None:
         profile = StartupProfile()
     
     truncated_text = deck_text[:5000]
 
-    prompt = PROMPT.format(deck=truncated_text)
-    response = llm.invoke(prompt)
-    txt = response.content.strip()
+    # Safe string checking function
+    def is_valid_string(value, invalid_values=["unknown", "all", "company", "n/a", ""]):
+        if not value:
+            return False
+        if isinstance(value, list):
+            return False
+        if not isinstance(value, str):
+            return False
+        return value.lower() not in invalid_values
 
-    # Extract JSON from LLM output
-    first, last = txt.find("{"), txt.rfind("}")
-    if first == -1 or last == -1 or last < first:
-        print("[Warning] No JSON object found, falling back to extraction")
-        fallback_name = extract_common_term(truncated_text, pdf_path or "unknown.pdf")
-        profile.name = fallback_name
-    else:
-        try:
-            json_str = txt[first : last + 1]
-            raw = json.loads(json_str)
-
-            if not raw.get("name") or raw.get("name").lower() in ["unknown", "all", "company"]:
-                fallback_name = extract_common_term(truncated_text, pdf_path or "unknown.pdf")
-                raw["name"] = fallback_name
-
-            if (
-                not raw.get("founder_name")
-                or raw.get("founder_name").lower() == "unknown"
-            ):
-                raw["founder_name"] = "unknown"
-
-            # Update profile with extracted data
-            for key, value in raw.items():
-                if hasattr(profile, key) and value:
-                    setattr(profile, key, value)
+    # PRIMARY: Try AI company name detection first (only if not already detected)
+    if not profile.name or not is_valid_string(profile.name):
+        print("[Company Detection] Starting AI detection...")
+        ai_company_name = extract_company_name_with_ai(truncated_text, evaluator)
+        
+        if ai_company_name and ai_company_name.lower() != "unknown":
+            print(f"[Company Detection] AI successfully detected: {ai_company_name}")
+            profile.name = ai_company_name
             
-            # Extract additional metrics using AI
-            additional_metrics = extract_financial_metrics_with_ai(truncated_text)
-            for key, value in additional_metrics.items():
-                if hasattr(profile, key) and value:
+            # Skip JSON extraction since we have a good company name
+            print("[Company Detection] Skipping JSON extraction - using AI result")
+        else:
+            print("[Company Detection] AI detection failed, trying JSON extraction...")
+            
+            # FALLBACK: JSON extraction when AI fails
+            prompt = PROMPT.format(deck=truncated_text)
+            response = llm.invoke(prompt)
+            txt = response.content.strip()
+            
+            # Track token usage for main pitch deck extraction
+            if evaluator and hasattr(response, 'usage'):
+                input_tokens = getattr(response.usage, 'prompt_tokens', 0)
+                output_tokens = getattr(response.usage, 'completion_tokens', 0)
+                evaluator.log_agent_tokens("PITCH DECK MAIN EXTRACTION", input_tokens, output_tokens, "gpt-4o")
+
+            # Extract JSON from LLM output
+            first, last = txt.find("{"), txt.rfind("}")
+            if first == -1 or last == -1 or last < first:
+                print("[Warning] No JSON object found, falling back to extraction")
+                fallback_name = extract_common_term(truncated_text, pdf_path or "unknown.pdf", evaluator)
+                profile.name = fallback_name
+            else:
+                try:
+                    json_str = txt[first : last + 1]
+                    raw = json.loads(json_str)
+
+                    if not raw.get("name") or not is_valid_string(raw.get("name")):
+                        fallback_name = extract_common_term(truncated_text, pdf_path or "unknown.pdf", evaluator)
+                        raw["name"] = fallback_name
+
+                    if not raw.get("founder_name") or not is_valid_string(raw.get("founder_name")):
+                        raw["founder_name"] = "unknown"
+
+                    # Update profile with extracted data
+                    for key, value in raw.items():
+                        if hasattr(profile, key) and value:
+                            setattr(profile, key, value)
+                    
+                    # Extract additional metrics using AI
+                    additional_metrics = extract_financial_metrics_with_ai(truncated_text, evaluator)
+                    for key, value in additional_metrics.items():
+                        if hasattr(profile, key) and value and is_valid_string(value):
+                            # Consolidate with existing data - prefer more specific/recent values
+                            existing_value = getattr(profile, key, None)
+                            if existing_value and is_valid_string(existing_value):
+                                # Keep the more specific value
+                                if len(str(value)) > len(str(existing_value)) or "million" in str(value).lower() or "billion" in str(value).lower():
+                                    setattr(profile, key, value)
+                                    print(f"[AI Metrics] Updated {key} from '{existing_value}' to '{value}'")
+                                else:
+                                    print(f"[AI Metrics] Keeping existing {key}: '{existing_value}' (more specific than '{value}')")
+                            else:
+                                setattr(profile, key, value)
+                                print(f"[AI Metrics] Set {key} = {value}")
+                        elif key == "total_merchants" and hasattr(profile, "merchants_count") and value and is_valid_string(value):
+                            profile.merchants_count = value
+                            print(f"[AI Metrics] Set merchants_count = {value}")
+                        elif key == "total_gmv" and hasattr(profile, "gmv") and value and is_valid_string(value):
+                            profile.gmv = value
+                            print(f"[AI Metrics] Set gmv = {value}")
+                        elif key == "target_market" and hasattr(profile, "TAM") and value and is_valid_string(value):
+                            profile.TAM = value
+                            print(f"[AI Metrics] Set TAM = {value}")
+                        elif key == "growth_rate" and hasattr(profile, "growth_rate") and value and is_valid_string(value):
+                            profile.growth_rate = value
+                            print(f"[AI Metrics] Set growth_rate = {value}")
+                        elif key == "latest_funding" and hasattr(profile, "latest_round_amount") and value and is_valid_string(value):
+                            profile.latest_round_amount = value
+                            print(f"[AI Metrics] Set latest_round_amount = {value}")
+                        elif key == "valuation" and hasattr(profile, "valuation") and value and is_valid_string(value):
+                            profile.valuation = value
+                            print(f"[AI Metrics] Set valuation = {value}")
+                        elif key == "gross_profit" and hasattr(profile, "gross_profit") and value and is_valid_string(value):
+                            profile.gross_profit = value
+                            print(f"[AI Metrics] Set gross_profit = {value}")
+                    
+                    # Explicitly handle executives if present
+                    if "executives" in raw and raw["executives"]:
+                        # Deduplicate executives by name
+                        deduplicated_executives = deduplicate_executives(raw["executives"])
+                        profile.executives = deduplicated_executives
+                        print(f"[Team Extraction] Found {len(deduplicated_executives)} unique executives")
+                        
+                        # Collect all prior exits from executives
+                        prior_exit_details = []
+                        for exec in deduplicated_executives:
+                            if isinstance(exec, dict) and exec.get("prior_exits"):
+                                for ex in exec["prior_exits"]:
+                                    prior_exit_details.append(ex)
+                        if prior_exit_details:
+                            profile.prior_exit_details = prior_exit_details
+                except Exception as e:
+                    print(f"[Error] Failed to parse LLM output: {e}")
+                    fallback_name = extract_common_term(truncated_text, pdf_path or "unknown.pdf", evaluator)
+                    profile.name = fallback_name
+    else:
+        print(f"[Company Detection] Skipping - company name already detected: {profile.name}")
+        
+        # Still run other AI extractions for additional data
+        # Extract additional metrics using AI
+        additional_metrics = extract_financial_metrics_with_ai(truncated_text, evaluator)
+        for key, value in additional_metrics.items():
+            if hasattr(profile, key) and value and is_valid_string(value):
+                # Consolidate with existing data - prefer more specific/recent values
+                existing_value = getattr(profile, key, None)
+                if existing_value and is_valid_string(existing_value):
+                    # Keep the more specific value
+                    if len(str(value)) > len(str(existing_value)) or "million" in str(value).lower() or "billion" in str(value).lower():
+                        setattr(profile, key, value)
+                        print(f"[AI Metrics] Updated {key} from '{existing_value}' to '{value}'")
+                    else:
+                        print(f"[AI Metrics] Keeping existing {key}: '{existing_value}' (more specific than '{value}')")
+                else:
                     setattr(profile, key, value)
                     print(f"[AI Metrics] Set {key} = {value}")
-            
-            # Explicitly handle executives if present
-            if "executives" in raw and raw["executives"]:
-                # Deduplicate executives by name
-                deduplicated_executives = deduplicate_executives(raw["executives"])
-                profile.executives = deduplicated_executives
-                print(f"[Team Extraction] Found {len(deduplicated_executives)} unique executives")
-                
-                # Collect all prior exits from executives
-                prior_exit_details = []
-                for exec in deduplicated_executives:
-                    if isinstance(exec, dict) and exec.get("prior_exits"):
-                        for ex in exec["prior_exits"]:
-                            prior_exit_details.append(ex)
-                if prior_exit_details:
-                    profile.prior_exit_details = prior_exit_details
-        except Exception as e:
-            print(f"[Error] Failed to parse LLM output: {e}")
-            fallback_name = extract_common_term(truncated_text, pdf_path or "unknown.pdf")
-            profile.name = fallback_name
+            elif key == "total_merchants" and hasattr(profile, "merchants_count") and value and is_valid_string(value):
+                profile.merchants_count = value
+                print(f"[AI Metrics] Set merchants_count = {value}")
+            elif key == "total_gmv" and hasattr(profile, "gmv") and value and is_valid_string(value):
+                profile.gmv = value
+                print(f"[AI Metrics] Set gmv = {value}")
+            elif key == "target_market" and hasattr(profile, "TAM") and value and is_valid_string(value):
+                profile.TAM = value
+                print(f"[AI Metrics] Set TAM = {value}")
+            elif key == "growth_rate" and hasattr(profile, "growth_rate") and value and is_valid_string(value):
+                profile.growth_rate = value
+                print(f"[AI Metrics] Set growth_rate = {value}")
+            elif key == "latest_funding" and hasattr(profile, "latest_round_amount") and value and is_valid_string(value):
+                profile.latest_round_amount = value
+                print(f"[AI Metrics] Set latest_round_amount = {value}")
+            elif key == "valuation" and hasattr(profile, "valuation") and value and is_valid_string(value):
+                profile.valuation = value
+                print(f"[AI Metrics] Set valuation = {value}")
+            elif key == "gross_profit" and hasattr(profile, "gross_profit") and value and is_valid_string(value):
+                profile.gross_profit = value
+                print(f"[AI Metrics] Set gross_profit = {value}")
 
     # Fallback if still missing
-    if not profile.name or profile.name.lower() in ["unknown", "all", "company"]:
-        fallback_name = extract_common_term(truncated_text, pdf_path or "unknown.pdf")
+    if not profile.name or not is_valid_string(profile.name):
+        fallback_name = extract_common_term(truncated_text, pdf_path or "unknown.pdf", evaluator)
         profile.name = fallback_name
 
+    # AI Sector Detection
+    if not profile.sector or not is_valid_string(profile.sector):
+        ai_sector = extract_sector_with_ai(truncated_text, evaluator)
+        if ai_sector and is_valid_string(ai_sector):
+            profile.sector = ai_sector
+            print(f"[Sector Detection] AI detected: {profile.sector}")
+    
     # AI Website Detection
-    if not profile.website or profile.website.lower() in ["unknown", "n/a", ""]:
-        ai_website = extract_website_with_ai(truncated_text, profile.name)
-        if ai_website and ai_website.lower() != "unknown":
+    if not profile.website or not is_valid_string(profile.website):
+        ai_website = extract_website_with_ai(truncated_text, profile.name, evaluator)
+        if ai_website and is_valid_string(ai_website):
             profile.website = ai_website
+            profile._ai_detected_website = ai_website  # Track AI detection
             print(f"[Website Detection] AI detected: {profile.website}")
 
     # Assign deterministic ID
     profile.startup_id = sha1(profile.name.encode()).hexdigest()[:10]
-
-    # Store the full deck in Chroma
-    add_doc(profile.startup_id, deck_text)
-
+    
     return profile
 
 def extract_common_term_from_text(text: str, pdf_path: str) -> str:

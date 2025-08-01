@@ -13,8 +13,8 @@ llm = ChatOpenAI(model="gpt-4o", temperature=0.2)
 def build_financial_analysis_agent(profile: StartupProfile, full_text: str = "", tables_text: str = "", figures_ocr: str = "", trace_id=None):
     fa = Agent(
         role="Financial analyst",
-        goal="Estimate burn, runway, implied valuation, and analyze financial health of the startup.",
-        backstory="Ex-investment-banker who crunches numbers for VC deals. Expert in financial modeling, cash flow analysis, and startup valuation.",
+        goal="Extract comprehensive financial metrics including revenue, profitability, growth, business model, and operational data using both regex patterns and AI-powered detection.",
+        backstory="Ex-investment-banker who crunches numbers for VC deals. Expert in financial modeling, cash flow analysis, startup valuation, and comprehensive financial data extraction.",
         llm=llm,
         verbose=True,
         allow_delegation=True,
@@ -25,9 +25,10 @@ def build_financial_analysis_agent(profile: StartupProfile, full_text: str = "",
     def _callback(*_):
         # Use comprehensive extracted data context with financial focus
         from core.hybrid_context import get_hybrid_context
+        from core.download_utils import extract_financials_from_text
         
         # Get comprehensive context including all extracted data with financial focus
-        comprehensive_context = get_hybrid_context(profile, "financial analysis OR revenue OR funding OR valuation OR burn rate OR runway OR cash flow OR financial metrics", use_reports=False)
+        comprehensive_context = get_hybrid_context(profile, "financial analysis OR revenue OR funding OR valuation OR burn rate OR runway OR cash flow OR financial metrics OR profitability OR growth OR business model", use_reports=False)
         
         # Also include any additional financial-specific data
         financial_context = comprehensive_context
@@ -39,14 +40,32 @@ def build_financial_analysis_agent(profile: StartupProfile, full_text: str = "",
             # Add full text as backup
             financial_context += "\n\nFULL TEXT:\n" + full_text[:3000]
         
+        # NEW: Use comprehensive financial extraction
+        print("[Financial Analysis] Running comprehensive financial extraction...")
+        extracted_financials = extract_financials_from_text(full_text)
+        
+        # Update profile with extracted financial data
+        for key, value in extracted_financials.items():
+            if value and value != "null":
+                # Convert field names to match profile attributes
+                field_name = key.replace('_', '')  # Remove underscores for compatibility
+                if hasattr(profile, field_name):
+                    setattr(profile, field_name, value)
+                    print(f"[Financial Analysis] Updated {field_name}={value}")
+                else:
+                    # Store as custom field
+                    custom_field = f"financial_{key}"
+                    setattr(profile, custom_field, value)
+                    print(f"[Financial Analysis] Stored {custom_field}={value}")
+        
         # Call the chain with the comprehensive context
         updated = run_financial_analysis_chain(profile, financial_context=financial_context)
         return updated.model_dump_json(indent=2)
 
     task = Task(
-        description="Compute cash burn, runway, implied valuation, and provide a financial health summary.",
+        description="Extract comprehensive financial metrics including revenue, profitability, growth rates, business model details, operational metrics, and efficiency ratios using both regex patterns and AI-powered detection.",
         agent=fa,
-        expected_output="A detailed financial analysis report including cash burn, runway, valuation, and key financial metrics.",
+        expected_output="A detailed financial analysis report including comprehensive financial metrics, business model analysis, and operational data.",
         callback=_callback,
     )
     return fa, task

@@ -287,7 +287,11 @@ def main():
         else:
             print("[DEBUG] Profile has no structured_data")
         
-        profile = run_all_sequential_with_text(text, profile, file_path)
+        # Add timing for each major step
+        evaluator.log_section_start("PITCH DECK EXTRACTION")
+        profile = run_all_sequential_with_text(text, profile, file_path, evaluator)
+        evaluator.log_section_end("PITCH DECK EXTRACTION", tokens_used=0, model="local")
+        
         pipeline_time = time.time() - start_time
         
         # Estimating tokens based on text length and processing time
@@ -330,6 +334,9 @@ def main():
         evaluator.log_section_end("MEMO GENERATION", tokens_used=memo_tokens, model="gpt-4o")
         
         print(memo_text)
+        
+        # Print token usage summary
+        evaluator.print_token_summary()
         
         print("\n" + "="*80)
         print("EVALUATION METRICS")

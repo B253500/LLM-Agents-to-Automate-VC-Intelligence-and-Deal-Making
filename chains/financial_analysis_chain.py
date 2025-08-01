@@ -470,6 +470,22 @@ def run_financial_analysis_chain(profile: StartupProfile, financial_context: str
         if getattr(profile, 'cash_on_hand', None):
             financial_fields.append(f"Cash on Hand: {profile.cash_on_hand}")
         
+        # AI-extracted financial metrics
+        if getattr(profile, 'gmv', None):
+            financial_fields.append(f"GMV: {profile.gmv}")
+        if getattr(profile, 'TAM', None):
+            financial_fields.append(f"TAM: {profile.TAM}")
+        if getattr(profile, 'business_model', None):
+            financial_fields.append(f"Business Model: {profile.business_model}")
+        if getattr(profile, 'merchants_count', None):
+            financial_fields.append(f"Merchants: {profile.merchants_count}")
+        if getattr(profile, 'growth_rate', None):
+            financial_fields.append(f"Growth Rate: {profile.growth_rate}")
+        if getattr(profile, 'valuation', None):
+            financial_fields.append(f"Valuation: {profile.valuation}")
+        if getattr(profile, 'gross_profit', None):
+            financial_fields.append(f"Gross Profit: {profile.gross_profit}")
+        
         # Company info
         if getattr(profile, 'sector', None):
             financial_fields.append(f"Sector: {profile.sector}")

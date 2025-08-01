@@ -100,7 +100,7 @@ def normalize_address(address):
     return normalized.strip()
 
 
-def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_path: str) -> StartupProfile:
+def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_path: str, evaluator=None) -> StartupProfile:
     """
     Orchestrate the entire analysis pipeline using both chains and agents.
     This is the main orchestration function that runs all analysis steps.
@@ -297,11 +297,22 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
     profile.extracted_data_context = extracted_context
 
     # Deck extraction (chain + agent)    
-    profile = run_pitch_deck_chain_with_text(full_text, profile, pdf_path=file_path)
+    if evaluator:
+        evaluator.log_section_start("PITCH DECK EXTRACTION")
+    profile = run_pitch_deck_chain_with_text(full_text, profile, pdf_path=file_path, evaluator=evaluator)
+    if evaluator:
+        evaluator.log_section_end("PITCH DECK EXTRACTION", tokens_used=0, model="gpt-4o")
+    
+    if evaluator:
+        evaluator.log_section_start("DECK AGENT")
     deck_agent, deck_task = build_deck_agent(file_path)
     deck_agent_output = deck_task.callback()
+    if evaluator:
+        evaluator.log_section_end("DECK AGENT", tokens_used=0, model="gpt-4o")
 
     # --- CoreSignal full enrichment ---
+    if evaluator:
+        evaluator.log_section_start("CORESIGNAL ENRICHMENT")
     if profile.name and profile.name.lower() not in ['unknown', 'n/a', 'not available', 'none']:
         cs_full_data = get_full_company_data(profile.name)
         # Handle both list and dict results
@@ -399,49 +410,26 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
                             sector_mismatch = True
                             print(f"[CoreSignal Validation] Sector mismatch: detected '{detected_sector}' but CoreSignal shows '{core_signal_industry}'")
                 
-                if not sector_mismatch:
+                # Only set CoreSignal website if AI hasn't already detected a valid website
+                current_website = getattr(profile, 'website', None)
+                if (not current_website or 
+                    (isinstance(current_website, str) and current_website.lower() in ['unknown', 'n/a', ''])) and not sector_mismatch:
                     profile.website = core_signal_website
                     print(f"[CoreSignal Fallback] Set website from CoreSignal: {profile.website}")
+                elif current_website and is_valid_company_website(current_website):
+                    print(f"[CoreSignal Fallback] Skipping website - AI already detected valid website: {current_website}")
                 else:
                     print(f"[CoreSignal Validation] Skipping website due to sector mismatch")
             
-            # Sector fallback with validation - DON'T override AI detection unless it's clearly wrong
-            if (not getattr(profile, 'sector', None) or 
-                getattr(profile, 'sector', '').lower() in ['unknown', 'n/a', '']) and cs_full_data.get('industry'):
+            # Sector fallback - ONLY set if AI hasn't already set a valid sector
+            current_sector = getattr(profile, 'sector', None)
+            if (not current_sector or 
+                (isinstance(current_sector, str) and current_sector.lower() in ['unknown', 'n/a', ''])) and cs_full_data.get('industry'):
                 profile.sector = cs_full_data.get('industry')
                 print(f"[CoreSignal Fallback] Set sector from CoreSignal: {profile.sector}")
-            elif getattr(profile, 'sector', None) and cs_full_data.get('industry'):
-                # Enhanced validation: AI detection is usually more accurate and specific
-                ai_sector = getattr(profile, 'sector', '').lower()
-                cs_industry = cs_full_data.get('industry', '').lower()
-                
-                # Generic CoreSignal industries that should not override specific AI sectors
-                generic_core_signal_industries = [
-                    'technology', 'software', 'design services', 'retail', 'manufacturing',
-                    'services', 'business services', 'consulting', 'professional services',
-                    'industry', 'industrial', 'general', 'other'
-                ]
-                
-                # Specific AI sectors that should always be preserved
-                specific_ai_sectors = [
-                    'ecommerce', 'fintech', 'healthtech', 'edtech', 'proptech', 'insurtech',
-                    'battery technology', 'electric vehicles', 'renewable energy', 'ai/ml',
-                    'cybersecurity', 'biotech', 'medtech', 'agtech', 'cleantech'
-                ]
-                
-                # Check if AI detected something specific vs CoreSignal being generic
-                ai_is_specific = (len(ai_sector.split()) > 1 or 
-                                ai_sector not in generic_core_signal_industries or
-                                ai_sector in specific_ai_sectors)
-                cs_is_generic = cs_industry in generic_core_signal_industries
-                
-                if ai_is_specific and cs_is_generic:
-                    print(f"[CoreSignal Validation] Keeping AI-detected sector '{ai_sector}' over generic CoreSignal '{cs_industry}'")
-                elif ai_sector in specific_ai_sectors:
-                    print(f"[CoreSignal Validation] Preserving specific AI sector '{ai_sector}' over CoreSignal '{cs_industry}'")
-                else:
-                    profile.sector = cs_full_data.get('industry')
-                    print(f"[CoreSignal Fallback] Overriding AI sector with CoreSignal: {profile.sector}")
+            elif current_sector and cs_full_data.get('industry'):
+                # AI has already set a sector, so skip CoreSignal sector allocation
+                print(f"[CoreSignal Fallback] Skipping sector allocation - AI already set sector to '{current_sector}'")
             
             # --- ENHANCED: Additional CoreSignal data for better memo quality ---
             # Company basics
@@ -584,10 +572,57 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
             print(f"[CoreSignal Fallback] CoreSignal skipped, sector set to 'Technology'")
         else:
             print(f"[CoreSignal Fallback] CoreSignal skipped, but sector already set to '{current_sector}', keeping AI detection")
-
-    # --- Website enrichment if missing ---
+    
+    if evaluator:
+        evaluator.log_section_end("CORESIGNAL ENRICHMENT", tokens_used=0, model="local")
+    
+    # --- Website enrichment if missing or invalid ---
+    if evaluator:
+        evaluator.log_section_start("WEBSITE ENRICHMENT")
     current_website = getattr(profile, 'website', None)
-    if not current_website or current_website.lower() in ['unknown', 'n/a', '']:
+    
+    # Check if current website is valid (not admin URLs, merchant URLs, etc.)
+    def is_valid_company_website(website):
+        if not website or website.lower() in ['unknown', 'n/a', '']:
+            return False
+        
+        # Skip admin URLs, merchant URLs, and other non-company websites
+        invalid_patterns = [
+            '/admin', '/login', '/dashboard', 'myshopify.com', 
+            'shopify.com/admin', 'facebook.com', 'twitter.com',
+            'linkedin.com', 'crunchbase.com', 'bnidigital.com',
+            'wikipedia.org', 'youtube.com', 'instagram.com',
+            'tiktok.com', 'reddit.com', 'pinterest.com',
+            'snapchat.com/bitmoji', 'snapchat.com/lenses',
+            'shopify.com/partners', 'shopify.com/developers',
+            'shopify.com/help', 'shopify.com/blog',
+            'amazon.com/seller', 'amazon.com/aws',
+            'google.com/maps', 'google.com/analytics',
+            'microsoft.com/azure', 'microsoft.com/office'
+        ]
+        
+        # Check for invalid patterns
+        if any(pattern in website.lower() for pattern in invalid_patterns):
+            return False
+        
+        # Check for suspicious URLs (likely not official company websites)
+        suspicious_patterns = [
+            '?snapchat', '?shopify', '?facebook', '?twitter',
+            'bit.ly', 'tinyurl.com', 'goo.gl', 't.co',
+            'utm_source', 'utm_medium', 'utm_campaign',
+            'ref=', 'source=', 'campaign='
+        ]
+        
+        if any(pattern in website.lower() for pattern in suspicious_patterns):
+            return False
+        
+        return True
+    
+    # Check if AI already detected a valid website
+    ai_detected_website = getattr(profile, '_ai_detected_website', None)
+    if ai_detected_website and is_valid_company_website(ai_detected_website):
+        print(f"[Website Enrichment] AI already detected valid website '{ai_detected_website}', skipping enrichment")
+    elif not is_valid_company_website(current_website):
         try:
             from core.external_enrichment import find_company_website
             website = find_company_website(
@@ -596,17 +631,22 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
                 sector=profile.sector,
                 deck_text=full_text
             )
-            if website:
+            if website and is_valid_company_website(website):
                 profile.website = website
-                print(f"[Website Enrichment] Found website: {website}")
+                print(f"[Website Enrichment] Found valid website: {website}")
             else:
-                print("[Website Enrichment] No website found.")
+                print("[Website Enrichment] No valid website found.")
         except Exception as e:
             print(f"[Website Enrichment] Error: {e}")
     else:
-        print(f"[Website Enrichment] Website already set to '{current_website}', keeping AI detection")
+        print(f"[Website Enrichment] Valid website already set to '{current_website}', skipping enrichment")
+    
+    if evaluator:
+        evaluator.log_section_end("WEBSITE ENRICHMENT", tokens_used=0, model="local")
 
     # Technical Due Diligence (agent only)
+    if evaluator:
+        evaluator.log_section_start("TECHNICAL DD")
     # Store full text in profile for technical DD agent to use
     if full_text:
         profile._full_text = full_text
@@ -620,7 +660,9 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
     except Exception as e:
         print(f"[Tech DD] Error parsing agent output: {e}")
     print(f"🔧 After technical DD: Maturity={profile.tech_maturity}, Stack={profile.tech_stack}")
-
+    if evaluator:
+        evaluator.log_section_end("TECHNICAL DD", tokens_used=0, model="gpt-4o")
+    
     # --- NEW: Perplexity enrichment for technical details ---
     if not getattr(profile, 'tech_stack', None) or getattr(profile, 'tech_stack', '').lower() in ['n/a', 'not available', 'unknown']:
         try:

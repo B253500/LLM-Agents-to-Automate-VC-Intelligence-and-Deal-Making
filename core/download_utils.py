@@ -669,6 +669,147 @@ def save_to_cache(file_path, data):
     with open(cache_path, 'w', encoding='utf-8') as f:
         json.dump(data, f) 
 
+def ai_extract_market_data(text):
+    """AI-powered extraction of any market-related data from text"""
+    try:
+        from config import Config
+        from langchain_openai import ChatOpenAI
+        
+        llm = ChatOpenAI(model="gpt-4o", temperature=0.1)
+        
+        prompt = f"""
+You are a market research analyst extracting market-related data from a company pitch deck.
+
+Extract ALL market-related information from this text and return it as a JSON object with the following structure:
+
+{{
+    "market_size": {{
+        "TAM": "value and unit (e.g., $46B)",
+        "SAM": "value and unit (e.g., $10B)", 
+        "SOM": "value and unit (e.g., $1B)",
+        "market_size": "any other market size metrics"
+    }},
+    "market_metrics": {{
+        "total_customers": "number of customers/users",
+        "active_customers": "number of active customers",
+        "target_customers": "number of target customers",
+        "market_penetration": "penetration percentage",
+        "revenue_per_customer": "revenue per customer",
+        "customer_growth_rate": "customer growth rate"
+    }},
+    "geographic_data": {{
+        "global_market": "global market size or scope",
+        "core_geographies": "core geographic markets",
+        "international_presence": "international market presence",
+        "regional_breakdown": "regional market breakdown"
+    }},
+    "market_definition": {{
+        "target_segment": "target market segment definition",
+        "customer_type": "type of customers targeted",
+        "market_criteria": "criteria for market inclusion"
+    }},
+    "growth_metrics": {{
+        "CAGR": "compound annual growth rate",
+        "growth_rate": "market growth rate",
+        "growth_drivers": "key growth drivers"
+    }},
+    "competitive_data": {{
+        "market_share": "market share information",
+        "competitors": "competitor information",
+        "competitive_advantage": "competitive advantages"
+    }},
+    "source_attribution": {{
+        "data_source": "source of market data",
+        "research_firm": "research firm or analyst",
+        "date": "date of market data"
+    }}
+}}
+
+IMPORTANT:
+- Extract ANY market-related data, not just predefined fields
+- If a field is not found, use null
+- For numbers, include units (e.g., "$46B", "200,000+", "46M")
+- For text fields, extract the exact wording from the text
+- Be comprehensive - extract everything that could be market-related
+
+Text to analyze:
+{text[:8000]}  # First 8000 chars should be enough for market data
+"""
+        
+        response = llm.invoke(prompt).content.strip()
+        
+        # Parse the JSON response
+        import json
+        import re
+        
+        # Clean up the response to extract JSON
+        json_match = re.search(r'\{.*\}', response, re.DOTALL)
+        if json_match:
+            market_data = json.loads(json_match.group())
+            print(f"[AI Market Extraction] Extracted {len(market_data)} market data categories")
+            return market_data
+        else:
+            print(f"[AI Market Extraction] Could not parse JSON from response")
+            return {}
+            
+    except Exception as e:
+        print(f"[AI Market Extraction] Error: {e}")
+        return {}
+
+def ai_detect_any_market_data(text):
+    """AI-powered open-ended detection of ANY market-related data"""
+    try:
+        from config import Config
+        from langchain_openai import ChatOpenAI
+        
+        llm = ChatOpenAI(model="gpt-4o", temperature=0.1)
+        
+        prompt = f"""
+You are a market research analyst analyzing a company pitch deck for investment purposes.
+
+Find ANY information that could be relevant for market analysis, investment decisions, or understanding the company's market position. Don't limit yourself to predefined categories - extract anything that seems market-related.
+
+Look for:
+- Market sizes, TAM, SAM, SOM
+- Customer/user numbers and growth
+- Geographic markets and expansion
+- Competitive positioning and advantages
+- Growth rates, CAGR, growth drivers
+- Market penetration and share
+- Revenue per customer metrics
+- Target market definitions
+- Data sources and research firms
+- Industry trends and drivers
+- Brand positioning and recognition
+- Market validation signals
+- Any other market-related insights
+
+Return your findings as a JSON object with descriptive keys. Be comprehensive and creative in what you extract.
+
+Text to analyze:
+{text[:8000]}
+"""
+        
+        response = llm.invoke(prompt).content.strip()
+        
+        # Parse the JSON response
+        import json
+        import re
+        
+        # Clean up the response to extract JSON
+        json_match = re.search(r'\{.*\}', response, re.DOTALL)
+        if json_match:
+            market_data = json.loads(json_match.group())
+            print(f"[Open AI Market Detection] Found {len(market_data)} market insights")
+            return market_data
+        else:
+            print(f"[Open AI Market Detection] Could not parse JSON from response")
+            return {}
+            
+    except Exception as e:
+        print(f"[Open AI Market Detection] Error: {e}")
+        return {}
+
 def extract_market_size_from_text(text):
     """Extract market size values with better error handling and logging"""
     results = {}
@@ -689,12 +830,18 @@ def extract_market_size_from_text(text):
                 r'(\$?\d+[,.]?\d*)\s*[Bb]illion.*[Mm]arket',
                 r'[Mm]arket.*(\$?\d+[,.]?\d*)\s*[Bb]illion',
                 r'(\$?\d+[,.]?\d*)\s*[Bb]illion.*[Gg]lobal',
-                r'[Gg]lobal.*[Mm]arket.*(\$?\d+[,.]?\d*)\s*[Bb]illion'
+                r'[Gg]lobal.*[Mm]arket.*(\$?\d+[,.]?\d*)\s*[Bb]illion',
+                # Shopify-specific patterns
+                r'(\$?\d+[,.]?\d*)\s*[Bb]illion.*[Gg]lobal.*TAM',
+                r'[Gg]lobal.*TAM.*(\$?\d+[,.]?\d*)\s*[Bb]illion'
             ],
             "SAM": [
                 r'(Serviceable Available Market|SAM)[^\d$]{0,20}(\$?\d+[,.]?\d*)\s*[BbMmKk]?',
                 r'(\$?\d+[,.]?\d*)\s*[BbMmKk]?.*[Ss]erviceable.*[Aa]vailable.*[Mm]arket',
-                r'[Ss]erviceable.*[Aa]vailable.*[Mm]arket.*(\$?\d+[,.]?\d*)\s*[BbMmKk]?'
+                r'[Ss]erviceable.*[Aa]vailable.*[Mm]arket.*(\$?\d+[,.]?\d*)\s*[BbMmKk]?',
+                # Shopify-specific patterns
+                r'(\$?\d+[,.]?\d*)\s*[Bb]illion.*[Cc]ore.*[Gg]eographies',
+                r'[Cc]ore.*[Gg]eographies.*(\$?\d+[,.]?\d*)\s*[Bb]illion'
             ],
             "SOM": [
                 r'(Serviceable Obtainable Market|SOM)[^\d$]{0,20}(\$?\d+[,.]?\d*)\s*[BbMmKk]?',
@@ -723,6 +870,64 @@ def extract_market_size_from_text(text):
                 r'(\d+[,.]?\d*)\s*[Gg][Ww][Hh].*[Bb]attery.*[Dd]emand',
                 r'[Bb]attery.*[Dd]emand.*(\d+[,.]?\d*)\s*[Gg][Ww][Hh]',
                 r'(\d+[,.]?\d*)\s*[Gg][Ww][Hh].*2030'
+            ],
+            # NEW: Shopify-specific market data patterns
+            "total_merchants": [
+                r'(\d+[,.]?\d*)\+?\s*[Aa]ctive.*[Mm]erchants',
+                r'(\d+[,.]?\d*)\+?\s*[Mm]erchants',
+                r'[Aa]ctive.*[Mm]erchants.*(\d+[,.]?\d*)\+?',
+                r'(\d+[,.]?\d*)\+?\s*[Ss]hopify.*[Mm]erchants'
+            ],
+            "global_merchants": [
+                r'(\d+[Mm])\s*[Gg]lobal',
+                r'[Gg]lobal.*(\d+[Mm])',
+                r'(\d+[Mm])\s*[Mm]erchants.*[Gg]lobal',
+                r'[Gg]lobal.*[Mm]erchants.*(\d+[Mm])',
+                # Shopify-specific pattern
+                r'(\d+[Mm])\s*[Gg]lobal.*TAM',
+                r'[Gg]lobal.*TAM.*(\d+[Mm])'
+            ],
+            "core_geography_merchants": [
+                r'(\d+[Mm])\s*[Cc]ore.*[Gg]eographies',
+                r'[Cc]ore.*[Gg]eographies.*(\d+[Mm])',
+                r'(\d+[Mm])\s*[Cc]urrent.*[Cc]ore',
+                r'[Cc]urrent.*[Cc]ore.*(\d+[Mm])',
+                # Shopify-specific pattern
+                r'(\d+[Mm])\s*[Cc]urrent.*[Cc]ore.*[Gg]eographies',
+                r'[Cc]urrent.*[Cc]ore.*[Gg]eographies.*(\d+[Mm])'
+            ],
+            "revenue_per_merchant": [
+                r'(\$?\d+[,.]?\d*)\s*[Aa]nnualized.*[Rr]evenue.*[Pp]er.*[Mm]erchant',
+                r'[Rr]evenue.*[Pp]er.*[Mm]erchant.*(\$?\d+[,.]?\d*)',
+                r'(\$?\d+[,.]?\d*)\s*[Pp]er.*[Mm]erchant.*[Aa]nnually',
+                r'[Aa]nnualized.*[Rr]evenue.*(\$?\d+[,.]?\d*)\s*[Pp]er.*[Mm]erchant',
+                # Shopify-specific pattern
+                r'(\$?\d+[,.]?\d*)\s*[Aa]nnualized.*[Rr]evenue.*[Pp]er.*[Mm]erchant.*[Aa]pproximately',
+                r'[Aa]pproximately.*(\$?\d+[,.]?\d*)\s*[Pp]er.*[Mm]erchant'
+            ],
+            "market_definition": [
+                r'[Mm]erchants.*defined.*as.*([^.]{10,100})',
+                r'[Rr]etailers.*with.*less.*than.*(\d+)\s*[Ee]mployees',
+                r'([^.]{10,100}).*[Mm]erchants.*defined',
+                # Shopify-specific pattern
+                r'[Mm]erchants.*defined.*as.*[Rr]etailers.*with.*less.*than.*(\d+)\s*[Ee]mployees',
+                r'[Rr]etailers.*with.*less.*than.*(\d+)\s*[Ee]mployees.*[Ii]ncludes'
+            ],
+            "geographic_focus": [
+                r'[Kk]ey.*[Gg]eographies.*include.*([^.]{10,100})',
+                r'[Gg]eographies.*include.*([^.]{10,100})',
+                r'([^.]{10,100}).*[Kk]ey.*[Gg]eographies',
+                # Shopify-specific pattern
+                r'[Kk]ey.*[Gg]eographies.*include.*([^.]{10,100}).*[Uu]\.?[Ss]\.?.*[Cc]anada'
+            ],
+            "market_source": [
+                r'[Ss]ource.*([^.]{5,50})',
+                r'([^.]{5,50}).*[Ss]ource',
+                r'[Ss]ource.*[Aa]MI.*[Pp]artners',
+                r'[Aa]MI.*[Pp]artners',
+                # Shopify-specific pattern
+                r'[Ss]ource.*[Aa]MI.*[Pp]artners',
+                r'[Aa]MI.*[Pp]artners'
             ]
         }
         
@@ -731,17 +936,23 @@ def extract_market_size_from_text(text):
                 match = re.search(pattern, text, re.IGNORECASE)
                 if match:
                     val = match.group(2) if len(match.groups()) > 1 else match.group(1)
-                    # For non-currency values (like millions of cars), don't parse as money
-                    if market_type in ['addressable_cars', 'bev_sales']:
+                    
+                    # Handle different data types
+                    if market_type in ['addressable_cars', 'bev_sales', 'total_merchants']:
                         try:
                             parsed_value = float(val.replace(',', ''))
-                            if 'million' in pattern.lower():
+                            if 'million' in pattern.lower() or 'M' in val:
                                 parsed_value *= 1_000_000
                             results[market_type] = parsed_value
                             print(f"[Market Size] Found {market_type}={parsed_value}")
                             break
                         except:
                             continue
+                    elif market_type in ['market_definition', 'geographic_focus', 'market_source']:
+                        # Store text as-is for these fields
+                        results[market_type] = val.strip()
+                        print(f"[Market Size] Found {market_type}={val}")
+                        break
                     else:
                         # Check if the pattern contains "billion" to ensure proper parsing
                         is_billion = 'billion' in pattern.lower() or 'b' in pattern.lower()
@@ -763,6 +974,34 @@ def extract_market_size_from_text(text):
                 print(f"[Market Size] Found CAGR={results['cagr']}%")
             except Exception as e:
                 print(f"[Market Size] Error parsing CAGR: {e}")
+        
+        # NEW: Open-ended AI detection for comprehensive market data
+        print("[Market Size] Running open-ended AI market data detection...")
+        open_ai_market_data = ai_detect_any_market_data(text)
+        
+        # Merge open-ended AI data with regex results
+        for key, value in open_ai_market_data.items():
+            if value and value != "null":
+                # Use the AI's descriptive keys directly
+                results[f"ai_detected_{key}"] = value
+                print(f"[Open AI Market] Found {key}={value}")
+        
+        # NEW: AI-powered extraction for comprehensive market data
+        print("[Market Size] Running AI-powered market data extraction...")
+        ai_market_data = ai_extract_market_data(text)
+        
+        # Merge AI-extracted data with regex results
+        for category, data in ai_market_data.items():
+            if isinstance(data, dict):
+                for key, value in data.items():
+                    if value and value != "null":
+                        # Convert AI field names to our format
+                        field_name = f"{category}_{key}".lower()
+                        results[field_name] = value
+                        print(f"[AI Market] Found {field_name}={value}")
+            elif data and data != "null":
+                results[category] = data
+                print(f"[AI Market] Found {category}={data}")
                 
     except Exception as e:
         print(f"[Market Size] Error extracting market sizes: {e}")
@@ -806,3 +1045,236 @@ def log_market_size_changes(profile):
         else:
             print(f"  {key}: Not found")
     print() 
+
+def ai_extract_financial_data(text):
+    """AI-powered extraction of ANY financial data from text"""
+    try:
+        from config import Config
+        from langchain_openai import ChatOpenAI
+        
+        llm = ChatOpenAI(model="gpt-4o", temperature=0.1)
+        
+        prompt = f"""
+You are a financial analyst extracting ALL financial-related data from a company pitch deck.
+
+Extract ANY financial information from this text and return it as a JSON object with the following structure:
+
+{{
+    "revenue_metrics": {{
+        "revenue": "annual revenue amount",
+        "mrr": "monthly recurring revenue",
+        "arr": "annual recurring revenue",
+        "gmv": "gross merchandise value",
+        "revenue_growth_rate": "revenue growth percentage",
+        "revenue_per_customer": "revenue per customer amount"
+    }},
+    "profitability_metrics": {{
+        "gross_profit": "gross profit amount",
+        "gross_margin": "gross margin percentage",
+        "operating_margin": "operating margin percentage",
+        "ebitda": "EBITDA amount",
+        "net_income": "net income amount",
+        "profit_margin": "profit margin percentage"
+    }},
+    "growth_metrics": {{
+        "cagr": "compound annual growth rate",
+        "growth_rate": "overall growth rate",
+        "customer_growth": "customer growth rate",
+        "revenue_growth": "revenue growth rate",
+        "merchant_growth": "merchant growth rate"
+    }},
+    "business_model": {{
+        "subscription_pricing": "subscription pricing tiers",
+        "revenue_streams": "different revenue streams",
+        "pricing_model": "pricing model description",
+        "customer_segments": "target customer segments"
+    }},
+    "operational_metrics": {{
+        "cash_burn": "cash burn rate",
+        "runway_months": "runway in months",
+        "cash_on_hand": "cash on hand amount",
+        "working_capital": "working capital amount",
+        "debt": "debt amount",
+        "equity": "equity amount"
+    }},
+    "efficiency_metrics": {{
+        "cac": "customer acquisition cost",
+        "ltv": "lifetime value",
+        "payback_period": "payback period in months",
+        "churn_rate": "customer churn rate",
+        "retention_rate": "customer retention rate"
+    }},
+    "valuation_metrics": {{
+        "valuation": "company valuation",
+        "market_cap": "market capitalization",
+        "enterprise_value": "enterprise value",
+        "pe_ratio": "P/E ratio",
+        "ev_ebitda": "EV/EBITDA ratio"
+    }},
+    "historical_data": {{
+        "revenue_by_year": "revenue data by year",
+        "growth_by_year": "growth data by year",
+        "profit_by_year": "profit data by year"
+    }},
+    "operating_expenses": {{
+        "sales_marketing": "sales and marketing expense percentage",
+        "research_development": "R&D expense percentage",
+        "general_administrative": "G&A expense percentage"
+    }}
+}}
+
+IMPORTANT:
+- Extract ANY financial-related data, not just predefined fields
+- If a field is not found, use null
+- For numbers, include units (e.g., "$46B", "85%", "12 months")
+- For text fields, extract the exact wording from the text
+- Be comprehensive - extract everything that could be financial-related
+- Include historical data if available (year-over-year comparisons)
+- Extract business model details (pricing, revenue streams)
+- Capture efficiency metrics and ratios
+
+Text to analyze:
+{text[:8000]}  # First 8000 chars should be enough for financial data
+"""
+        
+        response = llm.invoke(prompt).content.strip()
+        
+        # Parse the JSON response
+        import json
+        import re
+        
+        # Clean up the response to extract JSON
+        json_match = re.search(r'\{.*\}', response, re.DOTALL)
+        if json_match:
+            financial_data = json.loads(json_match.group())
+            print(f"[AI Financial Extraction] Extracted {len(financial_data)} financial data categories")
+            return financial_data
+        else:
+            print(f"[AI Financial Extraction] Could not parse JSON from response")
+            return {}
+            
+    except Exception as e:
+        print(f"[AI Financial Extraction] Error: {e}")
+        return {}
+
+def extract_financials_from_text(text):
+    """Extract financial data using both regex patterns and AI-powered extraction"""
+    results = {}
+    
+    try:
+        # Enhanced regex patterns for financial extraction
+        patterns = {
+            "revenue": [
+                r'(\$[\d,\.]+[KMB]?)\s*(?:revenue|sales|income)',
+                r'revenue[^\d$]*(\$[\d,\.]+[KMB]?)',
+                r'(\$[\d,\.]+[KMB]?)\s*revenue'
+            ],
+            "mrr": [
+                r'(\$[\d,\.]+[KMB]?)\s*MRR',
+                r'MRR[^\d$]*(\$[\d,\.]+[KMB]?)',
+                r'(\$[\d,\.]+[KMB]?)\s*monthly\s*recurring'
+            ],
+            "gmv": [
+                r'(\$[\d,\.]+[KMB]?)\s*GMV',
+                r'GMV[^\d$]*(\$[\d,\.]+[KMB]?)',
+                r'(\$[\d,\.]+[KMB]?)\s*gross\s*merchandise'
+            ],
+            "gross_profit": [
+                r'(\$[\d,\.]+[KMB]?)\s*(?:gross\s+)?profit',
+                r'gross\s+profit[^\d$]*(\$[\d,\.]+[KMB]?)',
+                r'(\$[\d,\.]+[KMB]?)\s*profit'
+            ],
+            "cagr": [
+                r'(\d+\.?\d*)\s*%\s*CAGR',
+                r'CAGR[^\d]*(\d+\.?\d*)%',
+                r'(\d+\.?\d*)\s*CAGR'
+            ],
+            "growth_rate": [
+                r'\+(\d+\.?\d*)\s*%',
+                r'(\d+\.?\d*)%\s*growth',
+                r'growth[^\d]*(\d+\.?\d*)%'
+            ],
+            "cash_burn": [
+                r'(\$[\d,\.]+[KMB]?)\s*(?:burn|burn\s+rate)',
+                r'cash\s+burn[^\d$]*(\$[\d,\.]+[KMB]?)',
+                r'burn\s+rate[^\d$]*(\$[\d,\.]+[KMB]?)'
+            ],
+            "runway_months": [
+                r'(\d+\.?\d*)\s*(?:months|mo)\s*(?:runway)',
+                r'runway[^\d]*(\d+\.?\d*)\s*(?:months|mo)',
+                r'(\d+\.?\d*)\s*months?\s*runway'
+            ],
+            "valuation": [
+                r'(\$[\d,\.]+[KMB]?)\s*(?:valuation|market\s+cap)',
+                r'valuation[^\d$]*(\$[\d,\.]+[KMB]?)',
+                r'(\$[\d,\.]+[KMB]?)\s*market\s+cap'
+            ],
+            "merchants": [
+                r'(\d+[,.]?\d*)\+?\s*(?:merchants|customers|users)',
+                r'(\d+[,.]?\d*)\s*active\s*(?:merchants|customers)',
+                r'(\d+[,.]?\d*)\s*merchants'
+            ],
+            "revenue_per_merchant": [
+                r'(\$[\d,\.]+[KMB]?)\s*(?:per\s+)?(?:merchant|customer)',
+                r'revenue\s+per\s+merchant[^\d$]*(\$[\d,\.]+[KMB]?)',
+                r'(\$[\d,\.]+[KMB]?)\s*per\s+merchant'
+            ],
+            "subscription_pricing": [
+                r'(\$[\d,\.]+[KMB]?)\s*(?:subscription|monthly|annual)',
+                r'(\$[\d,\.]+[KMB]?)\s*(?:basic|professional|enterprise)',
+                r'(\$[\d,\.]+[KMB]?)\s*per\s*month'
+            ],
+            "operating_expenses": [
+                r'(\d+\.?\d*)%\s*(?:S&M|sales\s+and\s+marketing)',
+                r'(\d+\.?\d*)%\s*(?:R&D|research\s+and\s+development)',
+                r'(\d+\.?\d*)%\s*(?:G&A|general\s+and\s+administrative)'
+            ],
+            "margins": [
+                r'(\d+\.?\d*)%\s*(?:gross\s+)?margin',
+                r'(\d+\.?\d*)%\s*operating\s+margin',
+                r'(\d+\.?\d*)%\s*profit\s+margin'
+            ]
+        }
+        
+        for financial_type, pattern_list in patterns.items():
+            for pattern in pattern_list:
+                match = re.search(pattern, text, re.IGNORECASE)
+                if match:
+                    val = match.group(1)
+                    
+                    # Parse the value appropriately
+                    if financial_type in ['cagr', 'growth_rate', 'runway_months', 'operating_expenses', 'margins']:
+                        try:
+                            parsed_value = float(val.replace(',', ''))
+                            results[financial_type] = parsed_value
+                            print(f"[Financial Extraction] Found {financial_type}={parsed_value}")
+                            break
+                        except:
+                            continue
+                    else:
+                        # For dollar amounts, store as string for readability
+                        results[financial_type] = val.strip()
+                        print(f"[Financial Extraction] Found {financial_type}={val}")
+                        break
+        
+        # NEW: AI-powered extraction for comprehensive financial data
+        print("[Financial Extraction] Running AI-powered financial data extraction...")
+        ai_financial_data = ai_extract_financial_data(text)
+        
+        # Merge AI-extracted data with regex results
+        for category, data in ai_financial_data.items():
+            if isinstance(data, dict):
+                for key, value in data.items():
+                    if value and value != "null":
+                        # Convert AI field names to our format
+                        field_name = f"{category}_{key}".lower()
+                        results[field_name] = value
+                        print(f"[AI Financial] Found {field_name}={value}")
+            elif data and data != "null":
+                results[category] = data
+                print(f"[AI Financial] Found {category}={data}")
+                
+    except Exception as e:
+        print(f"[Financial Extraction] Error extracting financial data: {e}")
+    
+    return results 

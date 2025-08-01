@@ -108,6 +108,37 @@ def generate_market_size_section(profile: StartupProfile) -> str:
     growth_rate_source = getattr(profile, 'market_growth_rate_source', None)
     sector = getattr(profile, 'sector', None)
     
+    # NEW: Extract additional market data fields
+    total_merchants = getattr(profile, 'total_merchants', None)
+    global_merchants = getattr(profile, 'global_merchants', None)
+    core_geography_merchants = getattr(profile, 'core_geography_merchants', None)
+    revenue_per_merchant = getattr(profile, 'revenue_per_merchant', None)
+    market_definition = getattr(profile, 'market_definition', None)
+    geographic_focus = getattr(profile, 'geographic_focus', None)
+    market_source = getattr(profile, 'market_source', None)
+    
+    # NEW: AI-extracted market data fields
+    ai_market_metrics = {}
+    ai_geographic_data = {}
+    ai_growth_metrics = {}
+    ai_competitive_data = {}
+    ai_source_attribution = {}
+    
+    # Collect all AI-extracted fields
+    for field_name in dir(profile):
+        if not field_name.startswith('_') and not callable(getattr(profile, field_name)):
+            value = getattr(profile, field_name)
+            if value and field_name.startswith('market_metrics_'):
+                ai_market_metrics[field_name.replace('market_metrics_', '')] = value
+            elif value and field_name.startswith('geographic_data_'):
+                ai_geographic_data[field_name.replace('geographic_data_', '')] = value
+            elif value and field_name.startswith('growth_metrics_'):
+                ai_growth_metrics[field_name.replace('growth_metrics_', '')] = value
+            elif value and field_name.startswith('competitive_data_'):
+                ai_competitive_data[field_name.replace('competitive_data_', '')] = value
+            elif value and field_name.startswith('source_attribution_'):
+                ai_source_attribution[field_name.replace('source_attribution_', '')] = value
+    
     # Extract BEV data from deck text if available
     bev_data = {}
     if hasattr(profile, 'extracted_data_context') and profile.extracted_data_context:
@@ -126,6 +157,16 @@ def generate_market_size_section(profile: StartupProfile) -> str:
             print(f"[Market Size Validation] SOM ({SOM}) is larger than SAM ({SAM}). Correcting SOM to SAM * 0.1")
             SOM = SAM * 0.1
             SOM_source = "calculated_from_sam"
+    
+    # NEW: Calculate market penetration if we have merchant data
+    market_penetration = None
+    if total_merchants and global_merchants:
+        try:
+            penetration_rate = (total_merchants / global_merchants) * 100
+            market_penetration = f"{penetration_rate:.2f}%"
+            print(f"[Market Analysis] Calculated penetration: {market_penetration}")
+        except:
+            pass
     
     def clean_perplexity_response(response):
         """Clean Perplexity response by removing think tags and internal reasoning."""
@@ -317,6 +358,22 @@ SOM: {SOM}
 CAGR: {CAGR}%
 Growth Rate: {growth_rate}
 Sector: {sector}
+
+Additional Market Data:
+Total Merchants: {total_merchants}
+Global Merchants: {global_merchants}
+Core Geography Merchants: {core_geography_merchants}
+Revenue per Merchant: {revenue_per_merchant}
+Market Penetration: {market_penetration}
+Market Definition: {market_definition}
+Geographic Focus: {geographic_focus}
+Market Source: {market_source}
+
+AI-Detected Market Metrics: {ai_market_metrics}
+AI-Detected Geographic Data: {ai_geographic_data}
+AI-Detected Growth Metrics: {ai_growth_metrics}
+AI-Detected Competitive Data: {ai_competitive_data}
+AI-Detected Source Attribution: {ai_source_attribution}
 """
     market_discussion = llm.invoke(prompt).content.strip()
     
@@ -416,6 +473,89 @@ Sector: {sector}
         lines.append("**📈 Growth Metrics**")
         lines.append(" • ".join(growth_metrics))
         lines.append("")
+    
+    # NEW: Enhanced Market Data Section
+    enhanced_market_data = []
+    
+    # Market Penetration Analysis
+    if market_penetration:
+        enhanced_market_data.append(f"**Market Penetration**: {market_penetration}")
+    
+    # Merchant Data
+    if total_merchants:
+        enhanced_market_data.append(f"**Active Merchants**: {format_market_size(total_merchants)}")
+    
+    if global_merchants:
+        enhanced_market_data.append(f"**Global Addressable Merchants**: {format_market_size(global_merchants)}")
+    
+    if core_geography_merchants:
+        enhanced_market_data.append(f"**Core Geography Merchants**: {format_market_size(core_geography_merchants)}")
+    
+    # Revenue per Merchant
+    if revenue_per_merchant:
+        enhanced_market_data.append(f"**Revenue per Merchant**: {format_market_size(revenue_per_merchant)}")
+    
+    # Market Definition
+    if market_definition:
+        enhanced_market_data.append(f"**Market Definition**: {market_definition}")
+    
+    # Geographic Focus
+    if geographic_focus:
+        enhanced_market_data.append(f"**Geographic Focus**: {geographic_focus}")
+    
+    # Market Source Attribution
+    if market_source:
+        enhanced_market_data.append(f"**Market Data Source**: {market_source}")
+    
+    if enhanced_market_data:
+        lines.append("**🎯 Enhanced Market Analysis**")
+        lines.append("")
+        for data_point in enhanced_market_data:
+            lines.append(f"• {data_point}")
+        lines.append("")
+    
+    # NEW: AI-Detected Market Data Section
+    ai_sections = []
+    
+    # AI Market Metrics
+    if ai_market_metrics:
+        ai_sections.append("**📊 AI-Detected Market Metrics**")
+        for key, value in ai_market_metrics.items():
+            ai_sections.append(f"• **{key.replace('_', ' ').title()}**: {value}")
+        ai_sections.append("")
+    
+    # AI Geographic Data
+    if ai_geographic_data:
+        ai_sections.append("**🌍 AI-Detected Geographic Data**")
+        for key, value in ai_geographic_data.items():
+            ai_sections.append(f"• **{key.replace('_', ' ').title()}**: {value}")
+        ai_sections.append("")
+    
+    # AI Growth Metrics
+    if ai_growth_metrics:
+        ai_sections.append("**📈 AI-Detected Growth Metrics**")
+        for key, value in ai_growth_metrics.items():
+            ai_sections.append(f"• **{key.replace('_', ' ').title()}**: {value}")
+        ai_sections.append("")
+    
+    # AI Competitive Data
+    if ai_competitive_data:
+        ai_sections.append("**🏆 AI-Detected Competitive Data**")
+        for key, value in ai_competitive_data.items():
+            ai_sections.append(f"• **{key.replace('_', ' ').title()}**: {value}")
+        ai_sections.append("")
+    
+    # AI Source Attribution
+    if ai_source_attribution:
+        ai_sections.append("**📚 AI-Detected Source Attribution**")
+        for key, value in ai_source_attribution.items():
+            ai_sections.append(f"• **{key.replace('_', ' ').title()}**: {value}")
+        ai_sections.append("")
+    
+    if ai_sections:
+        lines.append("**🤖 AI-Enhanced Market Intelligence**")
+        lines.append("")
+        lines.extend(ai_sections)
     
     # 4. Sector Analysis with source links
     if sector_analysis:

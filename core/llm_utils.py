@@ -21,6 +21,9 @@ def invoke_with_fallback(
     temperature=0.2,
     retries=2,
     backoff=2,
+    section_name="unknown",  # Add section name for tracking
+    agent_name="unknown",    # Add agent name for tracking
+    evaluator=None,  # Add evaluator for token tracking
 ) -> Any:
     """
     Try primary_model, retry with exponential backoff on RateLimitError,
@@ -31,7 +34,20 @@ def invoke_with_fallback(
     for i in range(retries):
         try:
             llm = ChatOpenAI(model=primary_model, temperature=temperature)
-            return llm.invoke(prompt)
+            response = llm.invoke(prompt)
+            
+            # Track token usage if evaluator is provided
+            if evaluator and hasattr(response, 'usage'):
+                input_tokens = getattr(response.usage, 'prompt_tokens', 0)
+                output_tokens = getattr(response.usage, 'completion_tokens', 0)
+                
+                # Track both section and agent tokens
+                if section_name != "unknown":
+                    evaluator.log_section_tokens(section_name, input_tokens, output_tokens, primary_model)
+                if agent_name != "unknown":
+                    evaluator.log_agent_tokens(agent_name, input_tokens, output_tokens, primary_model)
+            
+            return response
         except RateLimitError:
             wait = backoff**i
             print(f"[Rate-limit on {primary_model}, retrying in {wait}s…]")
@@ -48,4 +64,17 @@ def invoke_with_fallback(
     # Final fallback attempt
     print(f"[Falling back to {fallback_model}]")
     llm = ChatOpenAI(model=fallback_model, temperature=temperature)
-    return llm.invoke(prompt)
+    response = llm.invoke(prompt)
+    
+    # Track token usage for fallback too
+    if evaluator and hasattr(response, 'usage'):
+        input_tokens = getattr(response.usage, 'prompt_tokens', 0)
+        output_tokens = getattr(response.usage, 'completion_tokens', 0)
+        
+        # Track both section and agent tokens
+        if section_name != "unknown":
+            evaluator.log_section_tokens(section_name, input_tokens, output_tokens, fallback_model)
+        if agent_name != "unknown":
+            evaluator.log_agent_tokens(agent_name, input_tokens, output_tokens, fallback_model)
+    
+    return response

@@ -136,6 +136,8 @@ class MemoEvaluator:
         self.start_time = None
         self.section_timings = {}
         self.token_usage = {}
+        self.section_token_usage = {}  # Track tokens per section
+        self.agent_token_usage = {}    # Track tokens per agent
         self.api_costs = {
             "gpt-4": 0.03,  # per 1K tokens
             "gpt-4o": 0.005,  # per 1K tokens
@@ -180,6 +182,119 @@ class MemoEvaluator:
         if model not in self.token_usage:
             self.token_usage[model] = 0
         self.token_usage[model] += tokens
+    
+    def log_section_tokens(self, section_name: str, input_tokens: int, output_tokens: int, model: str):
+        """Log token usage for a specific section"""
+        if section_name not in self.section_token_usage:
+            self.section_token_usage[section_name] = {
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "total_tokens": 0,
+                "cost_usd": 0.0,
+                "model": model
+            }
+        
+        self.section_token_usage[section_name]["input_tokens"] += input_tokens
+        self.section_token_usage[section_name]["output_tokens"] += output_tokens
+        self.section_token_usage[section_name]["total_tokens"] += input_tokens + output_tokens
+        self.section_token_usage[section_name]["model"] = model
+        
+        # Calculate cost
+        cost_per_1k = self.api_costs.get(model, 0.01)
+        cost = ((input_tokens + output_tokens) / 1000) * cost_per_1k
+        self.section_token_usage[section_name]["cost_usd"] += cost
+        
+        # Also log to general token usage
+        self.log_token_usage(model, input_tokens + output_tokens)
+        
+        print(f"[Token Tracking] {section_name}: +{input_tokens + output_tokens} tokens ({input_tokens} input, {output_tokens} output)")
+    
+    def log_agent_tokens(self, agent_name: str, input_tokens: int, output_tokens: int, model: str):
+        """Log token usage for a specific agent"""
+        if agent_name not in self.agent_token_usage:
+            self.agent_token_usage[agent_name] = {
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "total_tokens": 0,
+                "cost_usd": 0.0,
+                "model": model
+            }
+        
+        self.agent_token_usage[agent_name]["input_tokens"] += input_tokens
+        self.agent_token_usage[agent_name]["output_tokens"] += output_tokens
+        self.agent_token_usage[agent_name]["total_tokens"] += input_tokens + output_tokens
+        self.agent_token_usage[agent_name]["model"] = model
+        
+        # Calculate cost
+        cost_per_1k = self.api_costs.get(model, 0.01)
+        cost = ((input_tokens + output_tokens) / 1000) * cost_per_1k
+        self.agent_token_usage[agent_name]["cost_usd"] += cost
+        
+        # Also log to general token usage
+        self.log_token_usage(model, input_tokens + output_tokens)
+        
+        print(f"[Agent Tracking] {agent_name}: +{input_tokens + output_tokens} tokens ({input_tokens} input, {output_tokens} output)")
+    
+    def get_section_token_summary(self) -> Dict[str, Any]:
+        """Get a summary of token usage per section"""
+        return {
+            "sections": self.section_token_usage,
+            "total_tokens": sum(section["total_tokens"] for section in self.section_token_usage.values()),
+            "total_cost": sum(section["cost_usd"] for section in self.section_token_usage.values())
+        }
+    
+    def get_agent_token_summary(self) -> Dict[str, Any]:
+        """Get a summary of token usage per agent"""
+        return {
+            "agents": self.agent_token_usage,
+            "total_tokens": sum(agent["total_tokens"] for agent in self.agent_token_usage.values()),
+            "total_cost": sum(agent["cost_usd"] for agent in self.agent_token_usage.values())
+        }
+    
+    def print_token_summary(self):
+        """Print a detailed token usage summary"""
+        if not self.section_token_usage and not self.agent_token_usage:
+            return
+        
+        print("\n" + "="*80)
+        print("TOKEN USAGE SUMMARY")
+        print("="*80)
+        
+        # Print section summary
+        if self.section_token_usage:
+            print("SECTION-LEVEL TOKEN USAGE:")
+            print("-" * 60)
+            for section_name, data in self.section_token_usage.items():
+                print(f"{section_name:30} | {data['total_tokens']:6} tokens | ${data['cost_usd']:6.4f} | {data['model']}")
+            
+            section_total_tokens = sum(section["total_tokens"] for section in self.section_token_usage.values())
+            section_total_cost = sum(section["cost_usd"] for section in self.section_token_usage.values())
+            print("-" * 60)
+            print(f"{'SECTION TOTAL':30} | {section_total_tokens:6} tokens | ${section_total_cost:6.4f}")
+            print()
+        
+        # Print agent summary
+        if self.agent_token_usage:
+            print("AGENT-LEVEL TOKEN USAGE:")
+            print("-" * 60)
+            for agent_name, data in self.agent_token_usage.items():
+                print(f"{agent_name:30} | {data['total_tokens']:6} tokens | ${data['cost_usd']:6.4f} | {data['model']}")
+            
+            agent_total_tokens = sum(agent["total_tokens"] for agent in self.agent_token_usage.values())
+            agent_total_cost = sum(agent["cost_usd"] for agent in self.agent_token_usage.values())
+            print("-" * 60)
+            print(f"{'AGENT TOTAL':30} | {agent_total_tokens:6} tokens | ${agent_total_cost:6.4f}")
+            print()
+        
+        # Print overall total
+        total_tokens = (sum(section["total_tokens"] for section in self.section_token_usage.values()) + 
+                       sum(agent["total_tokens"] for agent in self.agent_token_usage.values()))
+        total_cost = (sum(section["cost_usd"] for section in self.section_token_usage.values()) + 
+                     sum(agent["cost_usd"] for agent in self.agent_token_usage.values()))
+        
+        print("=" * 60)
+        print(f"{'OVERALL TOTAL':30} | {total_tokens:6} tokens | ${total_cost:6.4f}")
+        print("="*80)
     
     def evaluate_memo(self, memo_text: str, memo_html: str = None, 
                      ground_truth: Dict = None) -> MemoEvaluationMetrics:

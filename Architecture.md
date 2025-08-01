@@ -4,7 +4,7 @@
 
 This project consists of **3 distinct workflows** for venture capital analysis and automation:
 
-1. **📊 Investment Memo Generation** (main.py) - Core AI-powered memo creation
+1. **📊 Investment Memo Generation** (main.py) - Core AI-powered memo creation with enhanced data extraction
 2. **🌐 Web Scraping** (web_scraping/) - Automated report discovery and download
 3. **📧 Email Assistant** (email_assistant/ + n8n/) - Intelligent email automation
 
@@ -17,36 +17,50 @@ new-vc-agents/
 │   ├── agents/                    # AI agents for analysis
 │   │   ├── market_sizing_agent.py
 │   │   ├── competitive_intel_agent.py
-│   │   ├── financial_analysis_agent.py
+│   │   ├── financial_analysis_agent.py    # NEW: Enhanced financial analysis
 │   │   ├── founder_profiling_agent.py
 │   │   ├── risk_assessment_agent.py
 │   │   ├── technical_dd_agent.py
+│   │   ├── deck_agent.py
+│   │   ├── crewai_agents.py
 │   │   └── vc_report_agent.py
 │   ├── chains/                    # LangChain processing chains
 │   │   ├── business_model_chain.py
 │   │   ├── competitive_intel_chain.py
-│   │   ├── financial_analysis_chain.py
+│   │   ├── financial_analysis_chain.py    # NEW: Comprehensive financial analysis
 │   │   ├── market_sizing_chain.py
 │   │   ├── memo_synthesis_chain.py
 │   │   ├── pitch_deck_chain.py
-│   │   └── risk_assessment_chain.py
+│   │   ├── risk_assessment_chain.py
+│   │   ├── technical_dd_chain.py
+│   │   ├── follow_up_chain.py
+│   │   ├── esg_chain.py
+│   │   ├── exit_strategy_chain.py
+│   │   └── product_description_chain.py
 │   ├── core/                      # Core utilities and functions
-│   │   ├── download_utils.py      # PDF processing and OCR
+│   │   ├── download_utils.py      # Enhanced PDF processing with AI extraction
 │   │   ├── external_enrichment.py # Web search and data enrichment
 │   │   ├── hybrid_context.py      # Context management
 │   │   ├── llm_utils.py          # LLM integration
 │   │   ├── orchestration.py       # Workflow orchestration
 │   │   ├── perplexity_utils.py    # Perplexity API integration
 │   │   ├── report_loader.py       # Report loading utilities
-│   │   ├── schemas.py             # Data schemas
+│   │   ├── schemas.py             # Enhanced data schemas with dynamic fields
 │   │   ├── utils.py               # General utilities
 │   │   ├── vector_store.py        # Vector database operations
-│   │   └── visual_utils.py        # Image processing
+│   │   ├── visual_utils.py        # Image processing
+│   │   ├── financial_formatters.py # Enhanced financial formatting
+│   │   ├── memo_formatters.py     # Memo formatting utilities
+│   │   ├── document_generators.py # Document generation
+│   │   ├── text_cleaners.py       # Text cleaning utilities
+│   │   ├── coresignal_utils.py    # CoreSignal API integration
+│   │   └── evaluation_utils.py    # Evaluation utilities
 │   ├── data/                      # Data storage
 │   │   ├── vc_reports/            # Downloaded VC reports (284+ PDFs)
 │   │   └── *.pdf                  # Sample pitch decks
 │   ├── extraction_cache/           # Cached extracted data
 │   ├── out/                       # Generated memo outputs
+│   ├── evaluation_results/         # Evaluation metrics and results
 │   ├── template.docx              # Memo template
 │   ├── DejaVuSans.ttf            # Font for PDF generation
 │   └── cloud-credentials.json     # Google Cloud Vision API
@@ -87,7 +101,6 @@ new-vc-agents/
 │   ├── core/                      # Evaluation core components
 │   │   ├── evaluation_metrics.py  # Memo evaluation logic
 │   │   └── integrate_evaluation.py # Evaluation integration
-│   ├── results/                   # Evaluation results
 │   ├── config/                    # Evaluation configuration
 │   ├── utils/                     # Evaluation utilities
 │   └── templates/                 # Evaluation templates
@@ -100,6 +113,7 @@ new-vc-agents/
 │   └── test_technical_agent.py
 │
 ├── 🔧 Configuration Files
+│   ├── config.py                  # System configuration
 │   ├── .env                       # Environment variables
 │   ├── requirements.txt           # Python dependencies
 │   ├── .python-version            # Python version specification
@@ -109,6 +123,7 @@ new-vc-agents/
 │
 └── 💾 Cache and Storage
     ├── .chroma/                   # Vector database cache
+    ├── temp_images/               # Temporary extracted images
     └── venv/                      # Python virtual environment
 ```
 
@@ -117,18 +132,18 @@ new-vc-agents/
 ### 1. Investment Memo Generation (main.py)
 **Input**: Pitch deck PDF → **Output**: Investment memo (PDF/DOCX)
 
-**Process Flow**:
+**Enhanced Process Flow**:
 ```
-PDF Upload → Text Extraction → AI Analysis → Memo Generation → Output
-     ↓              ↓              ↓              ↓              ↓
-  OCR/PDF    →   Context    →   Agents    →   Synthesis   →   PDF/DOCX
-  Processing     Building      Analysis       Chain
+PDF Upload → Text Extraction → AI Data Extraction → Enhanced Analysis → Memo Generation → Output
+     ↓              ↓              ↓              ↓              ↓              ↓
+  OCR/PDF    →   Context    →   AI Agents   →   Multi-Agent  →   Synthesis   →   PDF/DOCX
+  Processing     Building      (Market/Fin)     Analysis        Chain
 ```
 
 **Key Components**:
 - **Agents**: Market sizing, competitive intelligence, financial analysis, founder profiling, risk assessment, technical due diligence
 - **Chains**: Business model, competitive intel, financial analysis, market sizing, memo synthesis, pitch deck, risk assessment
-- **Core**: PDF processing, web search, context management, LLM integration, vector storage
+- **Core**: Enhanced PDF processing, AI-powered data extraction, web search, context management, LLM integration, vector storage
 
 ### 2. Web Scraping Workflow
 **Input**: Website URLs → **Output**: Downloaded reports and analysis
@@ -162,23 +177,29 @@ Receive  →  Parse   →  Process  →  Generate   →  Send
 
 ## 🤖 AI Components
 
-### Agents (LangChain-based)
-- **Market Sizing Agent**: TAM/SAM/SOM analysis with web search
+### Enhanced Agents (LangChain-based)
+- **Market Sizing Agent**: TAM/SAM/SOM analysis with AI-powered market data extraction
 - **Competitive Intel Agent**: Competitor analysis and market positioning
-- **Financial Analysis Agent**: Financial metrics and projections
+- **Financial Analysis Agent**: Comprehensive financial metrics and AI-powered extraction
 - **Founder Profiling Agent**: Executive background and track record
 - **Risk Assessment Agent**: Risk identification and mitigation
 - **Technical DD Agent**: Technical due diligence and assessment
 - **VC Report Agent**: VC report analysis and insights
 
-### Chains (Processing Pipelines)
+### Enhanced Chains (Processing Pipelines)
 - **Business Model Chain**: Business model analysis and validation
 - **Competitive Intel Chain**: Competitive landscape analysis
-- **Financial Analysis Chain**: Financial metrics extraction and analysis
-- **Market Sizing Chain**: Market size calculation and validation
+- **Financial Analysis Chain**: Comprehensive financial metrics extraction and analysis
+- **Market Sizing Chain**: Market size calculation with AI-powered extraction
 - **Memo Synthesis Chain**: Final memo compilation and formatting
-- **Pitch Deck Chain**: Pitch deck analysis and insights
+- **Pitch Deck Chain**: Pitch deck analysis with enhanced data extraction
 - **Risk Assessment Chain**: Risk identification and assessment
+
+### NEW: AI-Powered Data Extraction
+- **Market Data Extraction**: `ai_extract_market_data()` - Comprehensive market data extraction
+- **Financial Data Extraction**: `ai_extract_financial_data()` - Comprehensive financial data extraction
+- **Dynamic Schema Handling**: `extra = "allow"` configuration for flexible field management
+- **Enhanced Website Detection**: AI-powered website detection with CoreSignal fallback
 
 ## 🔧 Technical Stack
 
@@ -215,7 +236,7 @@ Receive  →  Parse   →  Process  →  Generate   →  Send
 - **pre-commit**: Git hooks
 - **GitHub Actions**: CI/CD
 
-## 📊 Data Flow
+## 📊 Enhanced Data Flow
 
 ### Input Sources
 1. **Pitch Decks**: PDF uploads for memo generation
@@ -223,15 +244,16 @@ Receive  →  Parse   →  Process  →  Generate   →  Send
 3. **Emails**: Incoming emails for processing
 4. **Web Search**: Real-time data from Perplexity API
 
-### Processing Pipeline
-1. **Text Extraction**: OCR and PDF processing
-2. **Context Building**: Vector embeddings and similarity search
-3. **AI Analysis**: Multi-agent analysis with specialized agents
-4. **Synthesis**: Chain-based memo compilation
-5. **Output Generation**: PDF/DOCX memo creation
+### Enhanced Processing Pipeline
+1. **Text Extraction**: OCR and PDF processing with structured data extraction
+2. **AI Data Extraction**: AI-powered market and financial data extraction
+3. **Context Building**: Vector embeddings and similarity search
+4. **Multi-Agent Analysis**: Specialized agents with comprehensive data
+5. **Synthesis**: Chain-based memo compilation
+6. **Output Generation**: PDF/DOCX memo creation
 
 ### Output Formats
-1. **Investment Memos**: PDF and DOCX formats
+1. **Investment Memos**: PDF and DOCX formats with enhanced sections
 2. **Analysis Reports**: JSON and PDF formats
 3. **Email Responses**: Automated email responses
 4. **Evaluation Metrics**: Performance tracking and analysis
@@ -248,7 +270,7 @@ Receive  →  Parse   →  Process  →  Generate   →  Send
 - **OpenAI**: GPT-4 for analysis and generation
 - **Perplexity**: Web search and data retrieval
 - **Google Cloud Vision**: OCR and image processing
-- **CoreSignal**: Company data enrichment
+- **CoreSignal**: Company data enrichment (fallback only)
 
 ## 📈 Performance & Scalability
 
@@ -262,6 +284,7 @@ Receive  →  Parse   →  Process  →  Generate   →  Send
 - **Incremental Updates**: Only process new/changed content
 - **Smart Caching**: Intelligent cache invalidation
 - **Resource Management**: Efficient memory and CPU usage
+- **Dynamic Schema**: Flexible field management for AI-generated data
 
 ## 🚀 Deployment
 
@@ -295,9 +318,17 @@ cd n8n && docker-compose up -d
 - **Cost Tracking**: API usage and cost monitoring
 - **Quality Scoring**: Automated quality assessment
 
+### Recent Enhancements
+- **AI-Powered Data Extraction**: Comprehensive market and financial data extraction
+- **Dynamic Schema Management**: Flexible field handling for AI-generated data
+- **Enhanced Website Detection**: AI-powered detection with validation
+- **Improved Financial Analysis**: Comprehensive financial metrics and business model analysis
+- **Enhanced Market Analysis**: AI-powered market data extraction and analysis
+
 ### Future Enhancements
 - **Multi-language Support**: International market analysis
 - **Advanced Analytics**: Machine learning insights
 - **Real-time Updates**: Live market data integration
 - **Collaborative Features**: Team-based memo editing
+- **Enhanced AI Extraction**: More comprehensive data extraction capabilities
 

@@ -21,6 +21,9 @@ class Figure(BaseModel):
 
 class StartupProfile(BaseModel):
     founder_name: str | None = None
+    
+    class Config:
+        extra = "allow"  # Allow any extra fields from AI extraction
     # Filled in after parsing, so keep it optional during validation
     startup_id: str | None = Field(
         default=None, description="Deterministic slug/hash added later"
@@ -122,6 +125,12 @@ class StartupProfile(BaseModel):
     gmv: Optional[float] = None
     mrr: Optional[float] = None
     gross_profit: Optional[float] = None
+    cagr: Optional[float] = None
+    cagr_source: Optional[str] = None
+    growth_rate: Optional[float] = None
+    growth_rate_source: Optional[str] = None
+    financial_growth_rate: Optional[float] = None
+    financial_growth_rate_source: Optional[str] = None
 
     # --- Add missing fields for LLM outputs ---
     financial_summary: Optional[str] = None
@@ -166,6 +175,142 @@ class StartupProfile(BaseModel):
     market_reasoning: Optional[str] = None
     market_size: Optional[float] = None
     market_size_source: Optional[str] = None
+    total_merchants: Optional[float] = None
+    total_merchants_source: Optional[str] = None
+    global_merchants: Optional[float] = None
+    global_merchants_source: Optional[str] = None
+    core_geography_merchants: Optional[float] = None
+    core_geography_merchants_source: Optional[str] = None
+    revenue_per_merchant: Optional[float] = None
+    revenue_per_merchant_source: Optional[str] = None
+    subscription_pricing: Optional[str] = None
+    subscription_pricing_source: Optional[str] = None
+    merchants: Optional[float] = None
+    merchants_source: Optional[str] = None
+    market_definition: Optional[str] = None
+    market_definition_source: Optional[str] = None
+    geographic_focus: Optional[str] = None
+    geographic_focus_source: Optional[str] = None
+    market_source: Optional[str] = None
+    market_source_source: Optional[str] = None
+    
+    # --- AI-detected market fields ---
+    ai_detected_market_sizes: Optional[dict] = None
+    ai_detected_market_sizes_source: Optional[str] = None
+    ai_detected_customer_and_user_numbers: Optional[dict] = None
+    ai_detected_customer_and_user_numbers_source: Optional[str] = None
+    ai_detected_geographic_markets: Optional[dict] = None
+    ai_detected_geographic_markets_source: Optional[str] = None
+    ai_detected_competitive_positioning: Optional[dict] = None
+    ai_detected_competitive_positioning_source: Optional[str] = None
+    ai_detected_growth_rates_and_drivers: Optional[dict] = None
+    ai_detected_growth_rates_and_drivers_source: Optional[str] = None
+    ai_detected_target_market_definitions: Optional[dict] = None
+    ai_detected_target_market_definitions_source: Optional[str] = None
+    ai_detected_industry_trends_and_drivers: Optional[dict] = None
+    ai_detected_industry_trends_and_drivers_source: Optional[str] = None
+    ai_detected_market_validation_signals: Optional[dict] = None
+    ai_detected_market_validation_signals_source: Optional[str] = None
+    ai_detected_pricing_models: Optional[dict] = None
+    ai_detected_pricing_models_source: Optional[str] = None
+    ai_detected_data_sources: Optional[dict] = None
+    ai_detected_data_sources_source: Optional[str] = None
+    ai_detected_data_sources_and_research_firms: Optional[dict] = None
+    ai_detected_data_sources_and_research_firms_source: Optional[str] = None
+    ai_detected_customer_numbers_and_growth: Optional[dict] = None
+    ai_detected_customer_numbers_and_growth_source: Optional[str] = None
+    
+    # --- AI-detected financial fields ---
+    ai_detected_revenue_metrics: Optional[dict] = None
+    ai_detected_revenue_metrics_source: Optional[str] = None
+    ai_detected_profitability_metrics: Optional[dict] = None
+    ai_detected_profitability_metrics_source: Optional[str] = None
+    ai_detected_growth_metrics: Optional[dict] = None
+    ai_detected_growth_metrics_source: Optional[str] = None
+    ai_detected_business_model: Optional[dict] = None
+    ai_detected_business_model_source: Optional[str] = None
+    ai_detected_operational_metrics: Optional[dict] = None
+    ai_detected_operational_metrics_source: Optional[str] = None
+    ai_detected_efficiency_metrics: Optional[dict] = None
+    ai_detected_efficiency_metrics_source: Optional[str] = None
+    ai_detected_valuation_metrics: Optional[dict] = None
+    ai_detected_valuation_metrics_source: Optional[str] = None
+    ai_detected_historical_data: Optional[dict] = None
+    ai_detected_historical_data_source: Optional[str] = None
+    ai_detected_operating_expenses: Optional[dict] = None
+    ai_detected_operating_expenses_source: Optional[str] = None
+    
+    # --- AI-detected market fields (comprehensive list) ---
+    ai_detected_market_size: Optional[dict] = None
+    ai_detected_market_size_source: Optional[str] = None
+    ai_detected_target_market: Optional[dict] = None
+    ai_detected_target_market_source: Optional[str] = None
+    
+    # --- AI-extracted market data fields (from ai_extract_market_data) ---
+    market_size_tam: Optional[str] = None
+    market_size_tam_source: Optional[str] = None
+    market_size_sam: Optional[str] = None
+    market_size_sam_source: Optional[str] = None
+    market_size_som: Optional[str] = None
+    market_size_som_source: Optional[str] = None
+    market_size_market_size: Optional[str] = None
+    market_size_market_size_source: Optional[str] = None
+    
+    # --- Market metrics fields ---
+    market_metrics_total_customers: Optional[str] = None
+    market_metrics_total_customers_source: Optional[str] = None
+    market_metrics_active_customers: Optional[str] = None
+    market_metrics_active_customers_source: Optional[str] = None
+    market_metrics_target_customers: Optional[str] = None
+    market_metrics_target_customers_source: Optional[str] = None
+    market_metrics_market_penetration: Optional[str] = None
+    market_metrics_market_penetration_source: Optional[str] = None
+    market_metrics_revenue_per_customer: Optional[str] = None
+    market_metrics_revenue_per_customer_source: Optional[str] = None
+    market_metrics_customer_growth_rate: Optional[str] = None
+    market_metrics_customer_growth_rate_source: Optional[str] = None
+    
+    # --- Geographic data fields ---
+    geographic_data_global_market: Optional[str] = None
+    geographic_data_global_market_source: Optional[str] = None
+    geographic_data_core_geographies: Optional[str] = None
+    geographic_data_core_geographies_source: Optional[str] = None
+    geographic_data_international_presence: Optional[str] = None
+    geographic_data_international_presence_source: Optional[str] = None
+    geographic_data_regional_breakdown: Optional[str] = None
+    geographic_data_regional_breakdown_source: Optional[str] = None
+    
+    # --- Market definition fields ---
+    market_definition_target_segment: Optional[str] = None
+    market_definition_target_segment_source: Optional[str] = None
+    market_definition_customer_type: Optional[str] = None
+    market_definition_customer_type_source: Optional[str] = None
+    market_definition_market_criteria: Optional[str] = None
+    market_definition_market_criteria_source: Optional[str] = None
+    
+    # --- Growth metrics fields ---
+    growth_metrics_cagr: Optional[str] = None
+    growth_metrics_cagr_source: Optional[str] = None
+    growth_metrics_growth_rate: Optional[str] = None
+    growth_metrics_growth_rate_source: Optional[str] = None
+    growth_metrics_growth_drivers: Optional[str] = None
+    growth_metrics_growth_drivers_source: Optional[str] = None
+    
+    # --- Competitive data fields ---
+    competitive_data_market_share: Optional[str] = None
+    competitive_data_market_share_source: Optional[str] = None
+    competitive_data_competitors: Optional[str] = None
+    competitive_data_competitors_source: Optional[str] = None
+    competitive_data_competitive_advantage: Optional[str] = None
+    competitive_data_competitive_advantage_source: Optional[str] = None
+    
+    # --- Source attribution fields ---
+    source_attribution_data_source: Optional[str] = None
+    source_attribution_data_source_source: Optional[str] = None
+    source_attribution_research_firm: Optional[str] = None
+    source_attribution_research_firm_source: Optional[str] = None
+    source_attribution_date: Optional[str] = None
+    source_attribution_date_source: Optional[str] = None
     
     # --- Technical data fields ---
     energy_density_wh_kg: Optional[float] = None
@@ -225,3 +370,17 @@ class StartupProfile(BaseModel):
     news_counts: Optional[str] = None
     news_features: Optional[str] = None
     technographics: Optional[str] = None
+    ai_detected_brand_positioning_and_recognition: Optional[dict] = None
+    ai_detected_brand_positioning_and_recognition_source: Optional[str] = None
+    market_size_tam: Optional[str] = None
+    market_size_tam_source: Optional[str] = None
+    ai_detected_revenue_per_customer: Optional[dict] = None
+    ai_detected_revenue_per_customer_source: Optional[str] = None
+    ai_detected_customer_and_user_data: Optional[dict] = None
+    ai_detected_customer_and_user_data_source: Optional[str] = None
+    ai_detected_growth_and_trends: Optional[dict] = None
+    ai_detected_growth_and_trends_source: Optional[str] = None
+    ai_detected_revenue_per_customer_metrics: Optional[dict] = None
+    ai_detected_revenue_per_customer_metrics_source: Optional[str] = None
+    ai_detected_growth_and_market_penetration: Optional[dict] = None
+    ai_detected_growth_and_market_penetration_source: Optional[str] = None

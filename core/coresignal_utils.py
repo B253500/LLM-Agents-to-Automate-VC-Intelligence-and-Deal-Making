@@ -43,6 +43,31 @@ def _collect(url: str, company_id: int, fields=None):
         print(f"[CoreSignal] collect error: {e}")
         return None
 
+def is_valid_company_match(company_data, search_name):
+    """Validate if the company match is legitimate (not an agency/partner)"""
+    if not company_data or not isinstance(company_data, dict):
+        return False
+    
+    company_name = company_data.get('name', '').lower()
+    search_name_lower = search_name.lower()
+    
+    # Skip agencies, partners, and service providers
+    invalid_keywords = ['agency', 'agentur', 'partner', 'services', 'consulting', 'solutions']
+    if any(keyword in company_name for keyword in invalid_keywords):
+        return False
+    
+    # For well-known companies, be more strict
+    if search_name_lower in ['shopify', 'tesla', 'uber', 'airbnb']:
+        # Must contain the exact company name
+        if search_name_lower not in company_name:
+            return False
+        # Must not be an agency/partner
+        if any(keyword in company_name for keyword in invalid_keywords):
+            return False
+    
+    return True
+
+
 def get_full_company_data(name_or_domain: str, fields=None):
     """
     Attempt Multi-Source first, then Base if no match.
@@ -66,11 +91,25 @@ def get_full_company_data(name_or_domain: str, fields=None):
             {"query": {"match_phrase": {"name": "Shopify Inc"}}},
             {"query": {"match_phrase": {"name": "Shopify.com"}}},
             {"query": {"term": {"domain.keyword": "shopify.com"}}},
+            {"query": {"match_phrase": {"name": "Shopify"}}},
+            # Add more specific queries to avoid agencies/partners
+            {"query": {"bool": {"must": [{"match_phrase": {"name": "Shopify"}}, {"bool": {"must_not": [{"wildcard": {"name": "*Agency*"}}, {"wildcard": {"name": "*Agentur*"}}, {"wildcard": {"name": "*Partner*"}}]}}]}}},
         ])
     elif name_or_domain.lower() == "tesla":
         queries.extend([
             {"query": {"match_phrase": {"name": "Tesla Inc"}}},
             {"query": {"match_phrase": {"name": "Tesla Motors"}}},
+            {"query": {"match_phrase": {"name": "Tesla"}}},
+        ])
+    elif name_or_domain.lower() == "uber":
+        queries.extend([
+            {"query": {"match_phrase": {"name": "Uber Technologies"}}},
+            {"query": {"match_phrase": {"name": "Uber"}}},
+        ])
+    elif name_or_domain.lower() == "airbnb":
+        queries.extend([
+            {"query": {"match_phrase": {"name": "Airbnb Inc"}}},
+            {"query": {"match_phrase": {"name": "Airbnb"}}},
         ])
 
     # 1. Multi-Source search & collect
@@ -87,10 +126,12 @@ def get_full_company_data(name_or_domain: str, fields=None):
             cid = best_match.get("company_id") if isinstance(best_match, dict) else best_match
             if cid:
                 result = _collect(COLLECT_MULTI, cid, fields)
-                if result:
-                    print(f"[CoreSignal] Found Multi-Source match: {result.get('name', 'Unknown')}")
+                if result and is_valid_company_match(result, name_or_domain):
+                    print(f"[CoreSignal] Found valid Multi-Source match: {result.get('name', 'Unknown')}")
                     return result
-    print(f"[CoreSignal] no Multi-Source match for '{name_or_domain}'")
+                elif result:
+                    print(f"[CoreSignal] Skipping invalid Multi-Source match: {result.get('name', 'Unknown')}")
+    print(f"[CoreSignal] no valid Multi-Source match for '{name_or_domain}'")
 
     # 2. Base Company search & collect fallback
     for q in queries:
@@ -105,8 +146,10 @@ def get_full_company_data(name_or_domain: str, fields=None):
             cid = best_match.get("company_id") if isinstance(best_match, dict) else best_match
             if cid:
                 result = _collect(COLLECT_BASE, cid, fields)
-                if result:
-                    print(f"[CoreSignal] Found Base Company match: {result.get('name', 'Unknown')}")
+                if result and is_valid_company_match(result, name_or_domain):
+                    print(f"[CoreSignal] Found valid Base Company match: {result.get('name', 'Unknown')}")
                     return result
-    print(f"[CoreSignal] no Base Company match for '{name_or_domain}'")
+                elif result:
+                    print(f"[CoreSignal] Skipping invalid Base Company match: {result.get('name', 'Unknown')}")
+    print(f"[CoreSignal] no valid Base Company match for '{name_or_domain}'")
     return None 

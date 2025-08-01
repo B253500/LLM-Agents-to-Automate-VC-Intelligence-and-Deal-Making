@@ -44,18 +44,31 @@ def format_enhanced_financials_section(profile: StartupProfile, current_date: st
 
 
 def format_clean_financials_section(profile: StartupProfile, current_date: str) -> str:
-    """Clean, focused financial section with key metrics only."""
+    """Enhanced financial section that displays all extracted financial data."""
     lines = []
     
-    # Get key financial metrics
+    # Get all available financial metrics
     implied_valuation = getattr(profile, 'implied_valuation', None)
     latest_round_amount = getattr(profile, 'latest_round_amount', None)
     total_funding_raised = getattr(profile, 'total_funding_raised', None)
     web_sources = getattr(profile, 'web_sources', [])
     
+    # NEW: Get enhanced financial data from our extraction
+    revenue = getattr(profile, 'revenue', None)
+    mrr = getattr(profile, 'mrr', None)
+    gmv = getattr(profile, 'gmv', None)
+    cagr = getattr(profile, 'cagr', None)
+    growth_rate = getattr(profile, 'growth_rate', None)
+    gross_profit = getattr(profile, 'gross_profit', None)
+    revenue_per_merchant = getattr(profile, 'revenue_per_merchant', None)
+    subscription_pricing = getattr(profile, 'subscription_pricing', None)
+    merchants = getattr(profile, 'merchants', None)
+    
     # Check if we have any financial data
     has_financial_data = any([
-        implied_valuation, latest_round_amount, total_funding_raised
+        implied_valuation, latest_round_amount, total_funding_raised,
+        revenue, mrr, gmv, cagr, growth_rate, gross_profit,
+        revenue_per_merchant, subscription_pricing, merchants
     ])
     
     if not has_financial_data:
@@ -64,30 +77,75 @@ def format_clean_financials_section(profile: StartupProfile, current_date: str) 
     lines.append("**📊 Financial Analysis**")
     lines.append("")
     
-    # Add key metrics with sources - handle both numeric and string values
+    # NEW: Display enhanced financial metrics from deck extraction
+    deck_metrics = []
+    
+    if revenue:
+        deck_metrics.append(f"• **Revenue**: {revenue}")
+    
+    if mrr:
+        deck_metrics.append(f"• **Monthly Recurring Revenue (MRR)**: {mrr}")
+    
+    if gmv:
+        deck_metrics.append(f"• **Gross Merchandise Value (GMV)**: {gmv}")
+    
+    if cagr:
+        deck_metrics.append(f"• **Compound Annual Growth Rate (CAGR)**: {cagr}%")
+    
+    if growth_rate:
+        deck_metrics.append(f"• **Growth Rate**: {growth_rate}%")
+    
+    if gross_profit:
+        deck_metrics.append(f"• **Gross Profit**: {gross_profit}")
+    
+    if revenue_per_merchant:
+        deck_metrics.append(f"• **Revenue per Merchant**: {revenue_per_merchant}")
+    
+    if merchants:
+        deck_metrics.append(f"• **Active Merchants**: {merchants}")
+    
+    if subscription_pricing:
+        deck_metrics.append(f"• **Subscription Pricing**: {subscription_pricing}")
+    
+    # Display deck metrics if available
+    if deck_metrics:
+        lines.append("**📈 Key Financial Metrics (from Deck):**")
+        lines.append("")
+        lines.extend(deck_metrics)
+        lines.append("")
+    
+    # Add web-sourced financial data
+    web_metrics = []
+    
     if implied_valuation:
         if isinstance(implied_valuation, (int, float)) and implied_valuation > 1_000_000:
-            lines.append(f"• **Current Valuation**: ${implied_valuation:,.0f}")
+            web_metrics.append(f"• **Current Valuation**: ${implied_valuation:,.0f}")
         elif isinstance(implied_valuation, str) and implied_valuation.strip():
-            lines.append(f"• **Current Valuation**: {implied_valuation}")
+            web_metrics.append(f"• **Current Valuation**: {implied_valuation}")
     
     if latest_round_amount:
         if isinstance(latest_round_amount, (int, float)) and latest_round_amount > 10_000:
-            lines.append(f"• **Latest Funding Round**: ${latest_round_amount:,.0f}")
+            web_metrics.append(f"• **Latest Funding Round**: ${latest_round_amount:,.0f}")
         elif isinstance(latest_round_amount, str) and latest_round_amount.strip():
-            lines.append(f"• **Latest Funding Round**: {latest_round_amount}")
+            web_metrics.append(f"• **Latest Funding Round**: {latest_round_amount}")
     
     if total_funding_raised:
         if isinstance(total_funding_raised, (int, float)) and total_funding_raised > 100_000:
-            lines.append(f"• **Total Funding Raised**: ${total_funding_raised:,.0f}")
+            web_metrics.append(f"• **Total Funding Raised**: ${total_funding_raised:,.0f}")
         elif isinstance(total_funding_raised, str) and total_funding_raised.strip():
-            lines.append(f"• **Total Funding Raised**: {total_funding_raised}")
+            web_metrics.append(f"• **Total Funding Raised**: {total_funding_raised}")
+    
+    # Display web-sourced metrics if available
+    if web_metrics:
+        lines.append("**🌐 Web-Sourced Financial Data:**")
+        lines.append("")
+        lines.extend(web_metrics)
+        lines.append("")
     
     # Add data sources if available
     if web_sources:
-        lines.append("")
         lines.append("**🔗 Data Sources**")
-        for source in web_sources[:2]:  # Limit to 2 sources (reduced from 3)
+        for source in web_sources[:2]:  # Limit to 2 sources
             # Handle both markdown links [text](url) and plain URLs
             if source.startswith('http'):
                 lines.append(f"• {source}")
