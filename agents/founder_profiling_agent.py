@@ -45,198 +45,7 @@ Team Bios:
     
     return overall_assessment
 
-def generate_team_section(profile: StartupProfile) -> str:
-    """Generate team section with detailed executive information."""
-    from core.perplexity_utils import search_perplexity
-    import re
-    
-    lines = []
-    execs = getattr(profile, 'executives', None) or []
-    company_name = getattr(profile, 'name', '')
-    
-    # Improved deduplication and validation
-    unique_execs = []
-    seen_names = set()
-    
-    for exec in execs:
-        if isinstance(exec, dict):
-            name = exec.get('name', '').strip()
-            role = exec.get('role', '').strip()
-            
-            if name and role:
-                # Clean the name and role
-                name = re.sub(r'[^\w\s\-\.]', '', name).strip()
-                role = re.sub(r'[^\w\s\-\.]', '', role).strip()
-                
-                # Check for duplicates using fuzzy matching
-                name_lower = name.lower()
-                is_duplicate = False
-                
-                for existing in unique_execs:
-                    existing_name = existing.get('name', '').lower()
-                    if (name_lower == existing_name or 
-                        name_lower in existing_name or 
-                        existing_name in name_lower or
-                        # Check for similar roles
-                        (role.lower() in existing.get('role', '').lower() or 
-                         existing.get('role', '').lower() in role.lower())):
-                        is_duplicate = True
-                        # Merge roles if it's the same person
-                        if name_lower == existing_name:
-                            existing_role = existing.get('role', '')
-                            if role not in existing_role:
-                                existing['role'] = f"{existing_role}/{role}"
-                        break
-                
-                if not is_duplicate and name_lower not in seen_names:
-                    unique_execs.append({
-                        'name': name,
-                        'role': role,
-                        'linkedin': exec.get('linkedin', ''),
-                        'bio': exec.get('bio', '')
-                    })
-                    seen_names.add(name_lower)
-    
-    # Sort by priority roles
-    key_roles = ['founder', 'ceo', 'chief executive officer', 'cfo', 'chief financial officer', 'chairman', 'cto', 'chief technology officer']
-    
-    def get_role_priority(role):
-        role_lower = role.lower()
-        for i, key_role in enumerate(key_roles):
-            if key_role in role_lower:
-                return i
-        return len(key_roles)  # Lower priority for other roles
-    
-    unique_execs.sort(key=lambda x: get_role_priority(x.get('role', '')))
-    
-    # Limit to top 3 executives
-    unique_execs = unique_execs[:3]
-    
-    # Generate team section
-    count = 0
-    for exec in unique_execs:
-        if count >= 3:
-            break
-            
-        name = exec.get('name', 'Unknown')
-        role = exec.get('role', '').title()
-        linkedin = exec.get('linkedin', '')
-        bio = exec.get('bio', '')
-        
-        # Format the executive entry
-        lines.append(f"{count + 1}. **{name} – {role.upper()}**")
-        
-        if linkedin:
-            lines.append(f"• LinkedIn: {linkedin}")
-        else:
-            # Try to find LinkedIn if missing
-            if name and company_name:
-                query = f"What is the LinkedIn profile URL for {name} at {company_name}? Please provide the direct LinkedIn URL."
-                result = search_perplexity(query)
-                if result and 'linkedin.com/in/' in result:
-                    patterns = [
-                        r"https?://[\w./-]*linkedin.com/in/[\w/_-]+",
-                        r"linkedin.com/in/[\w/_-]+",
-                        r"https?://www.linkedin.com/in/[\w/_-]+"
-                    ]
-                    for pattern in patterns:
-                        match = re.search(pattern, result)
-                        if match:
-                            linkedin = match.group(0)
-                            if not linkedin.startswith('http'):
-                                linkedin = 'https://' + linkedin
-                            lines.append(f"• LinkedIn: {linkedin}")
-                            break
-                    else:
-                        lines.append("• LinkedIn: No LinkedIn profile found")
-                else:
-                    lines.append("• LinkedIn: No LinkedIn profile found")
-            else:
-                lines.append("• LinkedIn: No LinkedIn profile found")
-        
-        if bio:
-            # Clean and format the bio
-            bio = bio.strip()
-            
-            # Check for incomplete/truncated bios
-            if bio.endswith('.') == False and len(bio.split()) < 20:
-                # Bio appears incomplete, generate a complete one
-                if 'CEO' in role.upper() or 'FOUNDER' in role.upper():
-                    bio = f"{name} serves as {role} at {company_name}, bringing extensive leadership experience in technology commercialization and strategic business development. Previously held executive roles at major technology companies, where he successfully led product development, market expansion, and strategic partnerships. His proven track record in scaling innovative technologies and building successful businesses positions {company_name} for continued growth and market leadership."
-                elif 'CFO' in role.upper():
-                    bio = f"{name} serves as {role} at {company_name}, where he leads financial strategy and fundraising efforts, including securing strategic investments to accelerate mass production. Prior to {company_name}, he held leadership roles at major technology companies, gaining expertise in financial management, scaling operations, and navigating complex global financial environments. His background includes driving capital-raising initiatives and optimizing financial infrastructure for high-growth technology companies."
-                elif 'CHAIRMAN' in role.upper():
-                    bio = f"{name} serves as {role} at {company_name}, bringing over 35 years of executive leadership in the automotive and mobility sectors. Previously held senior leadership positions at major automotive companies, where he successfully led strategic initiatives, market expansion, and corporate governance. His extensive industry experience and strategic oversight provide a solid foundation for {company_name}'s growth and market positioning."
-                else:
-                    bio = f"{name} serves as {role} at {company_name}, bringing relevant expertise and leadership experience to their role. Previously held leadership positions in related industries, where he successfully managed teams and strategic initiatives. His background and experience align with {company_name}'s mission and growth objectives."
-            
-            # Ensure bio starts with the person's name
-            if not bio.lower().startswith(name.lower()):
-                bio = f"{name} {bio}"
-            
-            # Format the bio nicely - split into sentences for better readability
-            bio_sentences = bio.split('. ')
-            if len(bio_sentences) > 1:
-                # First sentence as bullet point
-                lines.append(f"• {bio_sentences[0]}.")
-                # Additional sentences as continuation
-                for sentence in bio_sentences[1:]:
-                    if sentence.strip():
-                        lines.append(f"  {sentence.strip()}")
-            else:
-                lines.append(f"• {bio}")
-        else:
-            # Generate bio if missing
-            if name and role and company_name:
-                query = f"Write a 3-4 sentence professional bio for {name}, {role} at {company_name}. Focus on their specific role, key achievements, relevant background, and previous experience. Be concise, professional, and provide balanced detail similar to other executive bios. Do not repeat the person's name in the bio text."
-                result = search_perplexity(query)
-                if result and len(result.split()) > 8:
-                    bio = result.strip()
-                    # Clean the bio
-                    bio = re.sub(r'<think>.*?</think>', '', bio, flags=re.DOTALL)
-                    bio = re.sub(r'(First, from result|Result adds that|Result confirms|First, I need to check|Let\'s go through|From , I see that|Okay, I need to write|Me, I see that|Based on the search results|Looking at the information).*?(?=\n|$)', '', bio, flags=re.DOTALL)
-                    bio = re.sub(r'\d+\.\s*[A-Z].*?(?=\n|$)', '', bio, flags=re.MULTILINE)
-                    bio = re.sub(r'\[\d+\]', '', bio)
-                    bio = re.sub(r'\n\s*\n', '\n', bio)
-                    bio = bio.strip()
-                    
-                    if '<think>' in bio or 'First, from result' in bio or len(bio.split()) < 10:
-                        if 'CEO' in role.upper() or 'FOUNDER' in role.upper():
-                            bio = f"{name} serves as {role} at {company_name}, bringing extensive leadership experience in technology commercialization and strategic business development. Previously held executive roles at major technology companies, where he successfully led product development, market expansion, and strategic partnerships. His proven track record in scaling innovative technologies and building successful businesses positions {company_name} for continued growth and market leadership."
-                        elif 'CFO' in role.upper():
-                            bio = f"{name} serves as {role} at {company_name}, where he leads financial strategy and fundraising efforts, including securing strategic investments to accelerate mass production. Prior to {company_name}, he held leadership roles at major technology companies, gaining expertise in financial management, scaling operations, and navigating complex global financial environments. His background includes driving capital-raising initiatives and optimizing financial infrastructure for high-growth technology companies."
-                        elif 'CTO' in role.upper():
-                            bio = f"{name} serves as {role} at {company_name}, bringing deep technical expertise and experience in product development and technology strategy. Previously led technical teams at major technology companies, where he successfully developed and commercialized innovative technologies. His proven track record in technical leadership and product development positions {company_name} for continued innovation and market success."
-                        elif 'CHAIRMAN' in role.upper():
-                            bio = f"{name} serves as {role} at {company_name}, bringing over 35 years of executive leadership in the automotive and mobility sectors. Previously held senior leadership positions at major automotive companies, where he successfully led strategic initiatives, market expansion, and corporate governance. His extensive industry experience and strategic oversight provide a solid foundation for {company_name}'s growth and market positioning."
-                        else:
-                            bio = f"{name} serves as {role} at {company_name}, bringing relevant expertise and leadership experience to their role. Previously held leadership positions in related industries, where he successfully managed teams and strategic initiatives. His background and experience align with {company_name}'s mission and growth objectives."
-                    
-                    if bio and not bio.endswith('.') and not bio.endswith('!') and not bio.endswith('?'):
-                        bio = bio.rstrip() + '.'
-                    
-                    lines.append(f"• {bio}")
-        
-        count += 1
-    
-    # Add Overall Team Assessment (critical analysis) at the end
-    overall_assessment = getattr(profile, 'overall_team_assessment', None)
-    if not overall_assessment:
-        # Create a basic assessment without LLM call to avoid API issues
-        if lines:
-            overall_assessment = f"The leadership team at {company_name} demonstrates strong industry expertise and strategic vision, positioning the company well for growth and market success."
-        else:
-            overall_assessment = f"Team information for {company_name} requires additional research to provide a comprehensive assessment."
-    
-    if overall_assessment:
-        lines.append("\nOverall Team Assessment:")
-        lines.append(overall_assessment)
-    
-    # If no executives were found, create a basic team section
-    if not lines:
-        lines.append("Team and management information requires additional research.")
-    
-    return '\n'.join(lines)
+# Team formatting and validation functions moved to chains/team_chain.py
 
 def run_founder_profiling_chain(profile: StartupProfile, full_text: str = None) -> StartupProfile:
     """Run founder profiling using hybrid context or full text."""
@@ -260,11 +69,7 @@ def run_founder_profiling_chain(profile: StartupProfile, full_text: str = None) 
     if not profile.startup_id:
         profile.startup_id = sha1((profile.name or context[:40]).encode()).hexdigest()[:10]
     
-    # Add LinkedIn enrichment if using full_text and founder_name exists
-    if full_text and profile.founder_name:
-        linkedin_data = get_linkedin_profile_proxycurl(profile.founder_name, profile.name)
-        profile.founder_linkedin_data = linkedin_data
-        profile.founder_linkedin_formatted = format_linkedin_profile(linkedin_data)
+    # LinkedIn enrichment moved to chains/team_chain.py
     
     return profile
 
@@ -272,39 +77,7 @@ def run_founder_profiling_chain_with_text(full_text: str, profile: StartupProfil
     """Run founder profiling using extracted text as context."""
     return run_founder_profiling_chain(profile, full_text)
 
-def get_linkedin_profile_proxycurl(founder_name, company_name=None):
-    """Get LinkedIn profile data using Proxycurl API for founder profiling."""
-    api_key = os.getenv("PROXYCURL_API_KEY")
-    if not api_key:
-        return None
-    headers = {"Authorization": f"Bearer {api_key}"}
-    params = {
-        "first_name": founder_name.split()[0],
-        "last_name": founder_name.split()[-1],
-    }
-    if company_name:
-        params["company"] = company_name
-    url = "https://nubela.co/proxycurl/api/v2/linkedin/person"
-    response = requests.get(url, headers=headers, params=params)
-    if response.status_code == 200:
-        return response.json()
-    elif response.status_code == 404:
-        print(f"Proxycurl: LinkedIn profile not found for {founder_name}")
-        return None
-    else:
-        print(f"Proxycurl error: {response.status_code} {response.text}")
-        return None
-
-def format_linkedin_profile(data):
-    """Format LinkedIn profile data for display."""
-    if not data:
-        return "No LinkedIn profile found."
-    return f"""
-LinkedIn: {data.get('profile_url', 'N/A')}
-Headline: {data.get('headline', 'N/A')}
-Summary: {data.get('summary', 'N/A')}
-Current Position: {data.get('occupation', 'N/A')}
-"""
+# LinkedIn functions moved to chains/team_chain.py
 
 def enrich_executives_with_perplexity(company_name, existing_execs):
     """
@@ -508,78 +281,7 @@ def enrich_executive_details_with_perplexity(company_name, executives):
         enriched.append(exec)
     return enriched
 
-def validate_and_clean_executives(executives: list) -> list:
-    """Validate and clean executive data to remove invalid entries."""
-    if not executives:
-        return []
-    
-    cleaned = []
-    for exec in executives:
-        if not isinstance(exec, dict):
-            continue
-            
-        name = exec.get('name', '').strip()
-        role = exec.get('role', '').strip()
-        
-        # Skip entries with invalid names
-        if not name or len(name) < 2 or name.lower() in ['unknown', 'n/a', 'none', '']:
-            continue
-            
-        # Skip entries with invalid roles
-        if not role or len(role) < 2 or role.lower() in ['unknown', 'n/a', 'none', '']:
-            continue
-        
-        # Clean the name and role
-        name = re.sub(r'[^\w\s\-\.]', '', name).strip()
-        role = re.sub(r'[^\w\s\-\.]', '', role).strip()
-        
-        # Skip if cleaning resulted in empty strings
-        if not name or not role:
-            continue
-        
-        # Add to cleaned list
-        cleaned.append({
-            'name': name,
-            'role': role,
-            'linkedin': exec.get('linkedin', ''),
-            'bio': exec.get('bio', ''),
-            'prior_exits': exec.get('prior_exits', [])
-        })
-    
-    return cleaned
-
-def ensure_executives_found(profile: StartupProfile) -> StartupProfile:
-    """Ensure we have at least some executive information, even if from external search."""
-    execs = getattr(profile, 'executives', None) or []
-    
-    # Validate and clean existing executives
-    execs = validate_and_clean_executives(execs)
-    
-    # If we have no executives, try to find them via Perplexity
-    if not execs and profile.name:
-        print(f"[Team Search] No executives found in PDF for {profile.name}, searching externally...")
-        execs = enrich_executives_with_perplexity(profile.name, [])
-        if execs:
-            # Validate the found executives
-            execs = validate_and_clean_executives(execs)
-            profile.executives = execs
-            print(f"[Team Search] Found {len(execs)} executives via external search")
-        else:
-            print(f"[Team Search] No executives found via external search either")
-    
-    # If we still have no executives, create a placeholder
-    if not execs:
-        print(f"[Team Search] Creating placeholder executive entry for {profile.name}")
-        profile.executives = [{
-            'name': 'Executive Team',
-            'role': 'Management',
-            'linkedin': '',
-            'bio': f'The executive team at {profile.name} requires additional research to provide detailed information.'
-        }]
-    else:
-        profile.executives = execs
-    
-    return profile
+# Executive validation functions moved to chains/team_chain.py
 
 def build_founder_profiling_agent(profile: StartupProfile, trace_id=None):
     """Build the founder profiling agent with comprehensive executive analysis."""
@@ -597,6 +299,7 @@ def build_founder_profiling_agent(profile: StartupProfile, trace_id=None):
     def _callback(*_):
         # Use comprehensive extracted data context
         from core.hybrid_context import get_hybrid_context
+        from chains.team_chain import run_team_chain
         
         # Get comprehensive context including all extracted data
         comprehensive_context = get_hybrid_context(profile, "founder team executive", use_reports=False)
@@ -604,8 +307,8 @@ def build_founder_profiling_agent(profile: StartupProfile, trace_id=None):
         # Run comprehensive founder profiling with full context
         updated = run_founder_profiling_chain_with_text(comprehensive_context, profile)
         
-        # Ensure we have executive information
-        updated = ensure_executives_found(updated)
+        # Run team chain for executive processing and validation
+        updated = run_team_chain(updated)
         
         # Enrich executives if available - first discover new ones, then enrich details
         if hasattr(updated, 'executives') and isinstance(updated.executives, list):
@@ -614,8 +317,6 @@ def build_founder_profiling_agent(profile: StartupProfile, trace_id=None):
                 updated.executives = enrich_executives_with_perplexity(updated.name, updated.executives)
             # Then enrich the details of all executives
             updated.executives = enrich_executive_details_with_perplexity(updated.name, updated.executives)
-            # Finally, validate and clean the final list
-            updated.executives = validate_and_clean_executives(updated.executives)
         
         return updated.model_dump_json(indent=2)
 

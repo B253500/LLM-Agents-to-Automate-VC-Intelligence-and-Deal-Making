@@ -2,6 +2,41 @@ import os
 from pathlib import Path
 from typing import Dict, List, Any
 
+# Configuration settings for the VC memo generation system
+
+# LLM Configuration
+DEFAULT_MODEL = "gpt-4o"
+FALLBACK_MODEL = "gpt-4o"
+TEMPERATURE = 0.2
+
+# Token tracking and evaluation
+ENABLE_TOKEN_TRACKING = True
+ENABLE_EVALUATION_METRICS = True
+
+# External enrichment sources
+ENABLE_PROXYCURL_ENRICHMENT = False  # Disabled due to 404 errors
+ENABLE_PERPLEXITY_ENRICHMENT = True  # Enable Perplexity web search enrichment
+
+# Output settings
+OUTPUT_DIR = "out"
+CACHE_DIR = "extraction_cache"
+
+# Document processing
+MAX_TEXT_LENGTH = 8000  # Maximum characters for text processing
+MAX_TOKENS_PER_REQUEST = 4000  # Maximum tokens per LLM request
+
+# Evaluation settings
+EVALUATION_OUTPUT_DIR = "evaluation_results"
+EVALUATION_TEMPLATES_DIR = "evaluation_metrics/templates"
+
+# API Keys (set in environment variables)
+REQUIRED_API_KEYS = [
+    "OPENAI_API_KEY",
+    "PERPLEXITY_API_KEY",  # Optional for web search
+    "PROXYCURL_API_KEY",   # Optional for LinkedIn enrichment
+    "EXA_API_KEY"          # Optional for semantic search
+]
+
 class Config:
     """Generic configuration for the VC Analysis System - Works for any startup sector"""
     

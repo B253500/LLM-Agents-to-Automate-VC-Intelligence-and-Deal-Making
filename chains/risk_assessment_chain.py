@@ -1,9 +1,10 @@
 """
 Risk-assessment chain
-Aggregates red-flags across all profile fields.
+Aggregates red-flags across all profile fields and provides deterministic text processing.
 """
 
 import json
+import re
 from pathlib import Path
 from hashlib import sha1
 
@@ -39,6 +40,43 @@ Note: Do not provide a numerical risk score as it would be unreliable without cl
 PROMPT = ChatPromptTemplate.from_messages(
     [("system", SYSTEM), ("human", "Profile:\n```json\n{profile}\n```")]
 )
+
+
+def deduplicate_and_paraphrase(text, min_phrase_len=3, max_allowed=2):
+    """
+    Deduplicate and paraphrase repeated phrases in text.
+    - Finds repeated phrases (sequences of min_phrase_len+ words).
+    - If a phrase occurs more than max_allowed times, paraphrase extra occurrences.
+    - Keeps the first occurrence as-is.
+    """
+    # Find all phrases of min_phrase_len+ words
+    words = text.split()
+    phrase_counts = {}
+    phrase_locs = {}
+    for i in range(len(words) - min_phrase_len + 1):
+        phrase = ' '.join(words[i:i+min_phrase_len])
+        phrase_counts[phrase] = phrase_counts.get(phrase, 0) + 1
+        phrase_locs.setdefault(phrase, []).append(i)
+    # Only process phrases that occur more than max_allowed times
+    for phrase, count in phrase_counts.items():
+        if count > max_allowed:
+            # Paraphrase all but the first occurrence
+            locs = phrase_locs[phrase][1:]
+            for loc in locs:
+                # Find the phrase in the text and paraphrase it
+                pattern = re.escape(phrase)
+                matches = list(re.finditer(pattern, text))
+                if len(matches) > 1:
+                    match = matches[1]  # Paraphrase the second occurrence
+                    start, end = match.start(), match.end()
+                    # Use LLM to paraphrase
+                    paraphrase_prompt = f"Paraphrase this phrase to mean the same thing but with different words: '{phrase}'"
+                    try:
+                        paraphrased = llm.invoke(paraphrase_prompt).content.strip()
+                        text = text[:start] + paraphrased + text[end:]
+                    except:
+                        pass  # Keep original if paraphrasing fails
+    return text
 
 
 def run_risk_assessment_chain(profile: StartupProfile) -> StartupProfile:

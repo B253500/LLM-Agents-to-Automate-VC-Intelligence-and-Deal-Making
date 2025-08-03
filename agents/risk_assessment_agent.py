@@ -6,45 +6,12 @@ import re
 
 from core.schemas import StartupProfile
 from chains.risk_assessment_chain import run_risk_assessment_chain
+from chains.memo_synthesis_chain import run_risks_section_chain
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 llm = ChatOpenAI(model="gpt-4o", temperature=0.2)
 
-def deduplicate_and_paraphrase(text, min_phrase_len=3, max_allowed=2):
-    """
-    Deduplicate and paraphrase repeated phrases in text.
-    - Finds repeated phrases (sequences of min_phrase_len+ words).
-    - If a phrase occurs more than max_allowed times, paraphrase extra occurrences.
-    - Keeps the first occurrence as-is.
-    """
-    # Find all phrases of min_phrase_len+ words
-    words = text.split()
-    phrase_counts = {}
-    phrase_locs = {}
-    for i in range(len(words) - min_phrase_len + 1):
-        phrase = ' '.join(words[i:i+min_phrase_len])
-        phrase_counts[phrase] = phrase_counts.get(phrase, 0) + 1
-        phrase_locs.setdefault(phrase, []).append(i)
-    # Only process phrases that occur more than max_allowed times
-    for phrase, count in phrase_counts.items():
-        if count > max_allowed:
-            # Paraphrase all but the first occurrence
-            locs = phrase_locs[phrase][1:]
-            for loc in locs:
-                # Find the phrase in the text and paraphrase it
-                pattern = re.escape(phrase)
-                matches = list(re.finditer(pattern, text))
-                if len(matches) > 1:
-                    match = matches[1]  # Paraphrase the second occurrence
-                    start, end = match.start(), match.end()
-                    # Use LLM to paraphrase
-                    paraphrase_prompt = f"Paraphrase this phrase to mean the same thing but with different words: '{phrase}'"
-                    try:
-                        paraphrased = llm.invoke(paraphrase_prompt).content.strip()
-                        text = text[:start] + paraphrased + text[end:]
-                    except:
-                        pass  # Keep original if paraphrasing fails
-    return text
+# Text processing function moved to chains/risk_assessment_chain.py
 
 def generate_discussion_section(memo_body: str) -> str:
     """Generate AI discussion and commentary section."""
@@ -122,6 +89,12 @@ MEMO:
             discussion += "\n\n**Conclusion:**\nThis investment opportunity presents a compelling case with both significant potential and notable risks that require careful consideration. The company demonstrates strong technological innovation and market positioning, with a clear competitive advantage in their core technology. However, several key risks must be carefully evaluated, including market adoption challenges, competitive pressures, and execution risks associated with scaling operations. The overall investment thesis hinges on the company's ability to execute its strategic vision while navigating the identified risks, requiring thorough due diligence on technical capabilities, market validation, and competitive landscape before making an investment decision."
     
     return discussion
+
+
+def run_risks_section_agent(profile: StartupProfile) -> str:
+    """Run risks section analysis using the chain."""
+    return run_risks_section_chain(profile)
+
 
 def generate_counterfactual_section(profile: StartupProfile) -> str:
     """Generate counterfactual analysis section."""

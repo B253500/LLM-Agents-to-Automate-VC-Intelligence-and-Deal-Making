@@ -1,146 +1,149 @@
+"""
+External enrichment utilities including ProxyCurl integration.
+Additional enrichment sources without replacing existing functionality.
+"""
+
 import os
 import requests
-from core.perplexity_utils import search_perplexity
+from typing import Dict, Optional, Any
+from core.schemas import StartupProfile
+from langchain_openai import ChatOpenAI
 
-# --- EXA Search Tool ---
-def exa_search_competitors(query, num_results=5):
-    """
-    Use EXA API to search for competitors or company info.
-    Returns a list of dicts with relevant info.
-    """
-    api_key = os.getenv("EXA_API_KEY")
-    if not api_key:
-        print("[Warning] EXA_API_KEY not set in environment.")
-        return []
-    url = "https://api.exa.ai/search"
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    data = {
-        "query": query,
-        "numResults": num_results,
-        "category": "company"
-    }
-    try:
-        response = requests.post(url, headers=headers, json=data)
-        if response.status_code == 200:
-            return response.json().get("results", [])
-        else:
-            print(f"EXA API error: {response.status_code} {response.text}")
-            return []
-    except Exception as e:
-        print(f"EXA API exception: {e}")
-        return []
 
-def is_website_match(website_url, company_name, context_snippet=None):
+def find_company_website(company_name, founder_name=None, sector=None, full_text=None):
     """
-    Fetch the homepage and check if the company name or context appears in the text.
-    Returns True if a match is found, else False.
+    Find the official website for a company using AI reasoning.
     """
-    import requests
-    try:
-        resp = requests.get(website_url, timeout=8)
-        if resp.status_code == 200:
-            text = resp.text.lower()
-            
-            # Check for company name (more flexible matching)
-            if company_name:
-                company_lower = company_name.lower()
-                # Check exact match first
-                if company_lower in text:
-                    return True
-                # Check for partial matches (e.g., "lunchbox" in "lunchbox.io")
-                if company_lower.replace(' ', '') in text.replace(' ', ''):
-                    return True
-                # Check for domain name match
-                if company_lower in website_url.lower():
-                    return True
-            
-            # Check for sector/context keywords
-            if context_snippet:
-                context_lower = context_snippet.lower()
-                if context_lower in text:
-                    return True
-                
-    except Exception as e:
-        print(f"[Website Match] Error fetching {website_url}: {e}")
-    return False
-
-# Update find_company_website to use is_website_match
-
-def find_company_website(company_name, founder_name=None, sector=None, deck_text=None):
-    import re
-    from time import sleep
+    # Compose a reasoning prompt for the LLM
+    prompt = (
+        f"You are a research analyst. Find the official website for the company '{company_name}'."
+        f"{' The founder is ' + founder_name + '.' if founder_name else ''}"
+        f"{' The sector is ' + sector + '.' if sector else ''}"
+        " Use Google or web search if needed. Return only the official website URL. If ambiguous, explain your reasoning."
+    )
     
-    # 1. Try to extract from deck text first
-    if deck_text:
-        urls = re.findall(r"https?://[\w./-]+", deck_text)
-        # Filter out social media, admin pages, and subdomain URLs
-        filtered_urls = []
-        for url in urls:
-            # Skip social media and admin URLs
-            if any(x in url for x in ["linkedin.com", "twitter.com", "facebook.com", "crunchbase.com", "/admin", "/login", "myshopify.com"]):
-                continue
-            # Skip URLs that are clearly not company websites (e.g., store admin pages)
-            if any(x in url for x in ["admin", "login", "dashboard", "myshopify.com", "shopify.com/admin"]):
-                continue
-            # Skip Shopify merchant URLs (they're not the main company website)
-            if "myshopify.com" in url:
-                continue
-            # Skip URLs that contain "admin" anywhere in the path
-            if "/admin" in url:
-                continue
-            filtered_urls.append(url)
-        
-        for url in filtered_urls:
-            if is_website_match(url, company_name, sector):
-                return url
-    
-    # 2. Try sector-specific Perplexity search
     try:
-        if sector:
-            query = f"What is the official website for {company_name} ({sector} company)?"
-        else:
-            query = f"What is the official website for {company_name}?"
-        
-        result = search_perplexity(query)
-        url_matches = re.findall(r"https?://[\w./-]+", result or "")
-        
-        # Validate each URL found
-        for url in url_matches:
-            if is_website_match(url, company_name, sector):
-                return url
-            sleep(1)  # avoid hammering Perplexity
-    except Exception as e:
-        print(f"[WebsiteFinder] Perplexity error: {e}")
-    
-    # 3. Try LLM prompt with better context
-    try:
-        from langchain_openai import ChatOpenAI
-        
-        # Build context for better disambiguation
-        context_parts = []
-        if sector:
-            context_parts.append(f"sector: {sector}")
-        if founder_name:
-            context_parts.append(f"founder: {founder_name}")
-        
-        context_str = f" ({', '.join(context_parts)})" if context_parts else ""
-        
-        prompt = (
-            f"You are a research analyst. Find the official, public-facing company website (homepage) for '{company_name}'{context_str}."
-            " Return ONLY the official website URL. If not found, return 'unknown'."
-            " Do NOT return internal, admin, login, or example URLs (such as /admin, /login, or subdomains like myshopify.com)."
-            " Be specific and accurate - if there are multiple companies with similar names, choose the one that matches the sector/context."
-        )
-        
-        llm = ChatOpenAI(model='gpt-4o', temperature=0.1)
+        llm = ChatOpenAI(model='gpt-4o', api_key=os.getenv('OPENAI_API_KEY'))
         result = llm.invoke(prompt).content.strip()
-        
-        # Extract URLs from LLM response
-        url_matches = re.findall(r"https?://[\w./-]+", result)
-        for url in url_matches:
-            if is_website_match(url, company_name, sector):
-                return url
+        return result
     except Exception as e:
-        print(f"[WebsiteFinder] LLM error: {e}")
+        print(f"Website finder error: {e}")
+        return None
+
+
+def get_linkedin_profile_proxycurl(founder_name: str, company_name: str = None) -> Optional[Dict[str, Any]]:
+    """
+    Get LinkedIn profile data using ProxyCurl API.
+    Additional enrichment source without replacing existing functionality.
+    """
+    api_key = os.getenv("PROXYCURL_API_KEY")
+    if not api_key:
+        print("PROXYCURL_API_KEY not found in environment variables")
+        return None
     
-    return None 
+    headers = {"Authorization": f"Bearer {api_key}"}
+    params = {
+        "first_name": founder_name.split()[0],
+        "last_name": founder_name.split()[-1],
+    }
+    if company_name:
+        params["company"] = company_name
+    
+    url = "https://nubela.co/proxycurl/api/v2/linkedin/person"
+    
+    try:
+        response = requests.get(url, headers=headers, params=params, timeout=10)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            print(f"ProxyCurl error: {response.status_code} {response.text}")
+            return None
+    except Exception as e:
+        print(f"ProxyCurl request failed: {e}")
+        return None
+
+
+def format_linkedin_profile_proxycurl(data: Dict[str, Any]) -> str:
+    """Format ProxyCurl LinkedIn data for memo inclusion."""
+    if not data:
+        return "No LinkedIn profile found via ProxyCurl."
+    
+    lines = []
+    lines.append(f"LinkedIn: {data.get('profile_url', 'N/A')}")
+    lines.append(f"Headline: {data.get('headline', 'N/A')}")
+    
+    summary = data.get('summary', '')
+    if summary and len(summary) > 50:
+        lines.append(f"Summary: {summary[:200]}...")
+    elif summary:
+        lines.append(f"Summary: {summary}")
+    
+    current_position = data.get('occupation', '')
+    if current_position:
+        lines.append(f"Current Position: {current_position}")
+    
+    # Add experience if available
+    experiences = data.get('experiences', [])
+    if experiences:
+        lines.append("Experience:")
+        for exp in experiences[:3]:  # Limit to 3 most recent
+            company = exp.get('company', 'Unknown')
+            title = exp.get('title', '')
+            if company and title:
+                lines.append(f"  - {title} at {company}")
+    
+    return '\n'.join(lines)
+
+
+def enrich_executives_with_proxycurl(profile: StartupProfile) -> StartupProfile:
+    """
+    Enrich executives with ProxyCurl data as additional source.
+    Does not replace existing enrichment, just adds to it.
+    """
+    execs = getattr(profile, 'executives', None) or []
+    company_name = getattr(profile, 'name', '')
+    
+    if not execs:
+        return profile
+    
+    for exec in execs:
+        if isinstance(exec, dict):
+            name = exec.get('name', '').strip()
+            if name:
+                # Get ProxyCurl data
+                proxycurl_data = get_linkedin_profile_proxycurl(name, company_name)
+                if proxycurl_data:
+                    # Add ProxyCurl data as additional field
+                    exec['proxycurl_data'] = proxycurl_data
+                    exec['proxycurl_formatted'] = format_linkedin_profile_proxycurl(proxycurl_data)
+    
+    profile.executives = execs
+    return profile
+
+
+def get_enhanced_team_section(profile: StartupProfile) -> str:
+    """
+    Generate enhanced team section with ProxyCurl data included.
+    Combines existing team data with ProxyCurl enrichment.
+    """
+    from chains.memo_synthesis_chain import run_team_section_chain
+    
+    # First get the standard team section
+    base_team_section = run_team_section_chain(profile)
+    
+    # Add ProxyCurl enrichment if available
+    execs = getattr(profile, 'executives', None) or []
+    enhanced_lines = []
+    
+    for exec in execs:
+        if isinstance(exec, dict):
+            proxycurl_formatted = exec.get('proxycurl_formatted', '')
+            if proxycurl_formatted:
+                name = exec.get('name', 'Unknown')
+                enhanced_lines.append(f"\n**{name} - Additional LinkedIn Data:**")
+                enhanced_lines.append(proxycurl_formatted)
+    
+    if enhanced_lines:
+        return base_team_section + '\n' + '\n'.join(enhanced_lines)
+    
+    return base_team_section 

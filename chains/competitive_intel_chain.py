@@ -63,14 +63,22 @@ def run_competitive_intel_chain_with_text(full_text: str, profile: StartupProfil
         profile.startup_id = sha1((profile.name or context[:40]).encode()).hexdigest()[:10]
     return profile
 
-def run_competitive_intel_chain(profile: StartupProfile) -> StartupProfile:
-    # Build a context string from the profile fields for competitive analysis
-    context = f"""
+def run_competitive_intel_chain(profile: StartupProfile, comprehensive_context: str = "") -> StartupProfile:
+    # Use comprehensive context if provided, otherwise build from profile fields
+    if comprehensive_context and comprehensive_context.strip():
+        context = comprehensive_context
+    else:
+        # Build a context string from the profile fields for competitive analysis
+        context = f"""
 Company: {getattr(profile, 'name', '')}
 Sector: {getattr(profile, 'sector', '')}
 Product: {getattr(profile, 'tech_stack', '')}
 """
-    txt = llm.invoke(PROMPT.format(context=context, web_context="")).content.strip()
+    
+    # Get web search context for competitive analysis
+    web_context = web_search_competitive_context(profile.name, profile.sector)
+    
+    txt = llm.invoke(PROMPT.format(context=context, web_context=web_context)).content.strip()
     first, last = txt.find("{"), txt.rfind("}")
     if first == -1 or last == -1:
         return profile
@@ -90,6 +98,110 @@ Product: {getattr(profile, 'tech_stack', '')}
     if not profile.startup_id:
         profile.startup_id = sha1((profile.name or context[:40]).encode()).hexdigest()[:10]
     return profile
+
+def generate_competitive_landscape(profile: StartupProfile) -> str:
+    """Enhanced competitive landscape with detailed competitor analysis"""
+    competitors = getattr(profile, 'top_competitors', [])
+    if not competitors:
+        # Try to generate competitors from context with detailed descriptions
+        prompt = f"""
+        Based on this company's profile, identify exactly 3 main competitors in their space. For each competitor, provide:
+        - Company name
+        - Website URL
+        - 2-3 sentence description of their product/technology
+        - Key differentiator or competitive advantage
+        
+        Company: {getattr(profile, 'name', '')}
+        Sector: {getattr(profile, 'sector', '')}
+        Product: {getattr(profile, 'product_description', '')}
+        Market: {getattr(profile, 'market_summary', '')}
+        
+        Format each competitor as:
+        • **Company Name** (website.com)
+          Product description: [2-3 sentences about their technology/product]
+          Key differentiator: [What makes them unique]
+        
+        Focus on real companies with actual websites in the {getattr(profile, 'sector', 'technology')} sector. 
+        Provide specific, factual information about each competitor's technology and market position.
+        """
+        competitors_text = llm.invoke(prompt).content.strip()
+        if competitors_text:
+            return f"Key Competitors Analysis:\n{competitors_text}\n\nNote: This analysis should be verified with additional research."
+
+    # Find websites for competitors that don't have them
+    from core.external_enrichment import find_company_website
+    for comp in competitors:
+        # Handle both dict and Competitor objects
+        if hasattr(comp, 'name'):  # Competitor object
+            name = comp.name
+            website = comp.url or comp.website if hasattr(comp, 'url') or hasattr(comp, 'website') else None
+            if not website:
+                try:
+                    website = find_company_website(
+                        company_name=name,
+                        sector=getattr(profile, 'sector', None),
+                        deck_text=None
+                    )
+                    if website:
+                        comp.url = website
+                        print(f"[Competitor Website] Found website for {name}: {website}")
+                except Exception as e:
+                    print(f"[Competitor Website] Error finding website for {name}: {e}")
+        else:  # dict object
+            if not comp.get('website') and not comp.get('url'):
+                try:
+                    website = find_company_website(
+                        company_name=comp.get('name', ''),
+                        sector=getattr(profile, 'sector', None),
+                        deck_text=None
+                    )
+                    if website:
+                        comp['website'] = website
+                        print(f"[Competitor Website] Found website for {comp.get('name')}: {website}")
+                except Exception as e:
+                    print(f"[Competitor Website] Error finding website for {comp.get('name')}: {e}")
+
+    lines = ["Key Competitors Analysis:"]
+    
+    # Limit to top 3 competitors
+    top_competitors = competitors[:3]
+    
+    for comp in top_competitors:
+        # Handle both dict and Competitor objects
+        if hasattr(comp, 'name'):  # Competitor object
+            name = comp.name
+            website = comp.url or comp.website if hasattr(comp, 'url') or hasattr(comp, 'website') else ''
+            product = comp.product_offering or comp.product or comp.description if hasattr(comp, 'product_offering') or hasattr(comp, 'product') or hasattr(comp, 'description') else ''
+            differentiator = comp.differentiator if hasattr(comp, 'differentiator') else ''
+        else:  # dict object
+            name = comp.get('name', 'Unknown')
+            website = comp.get('website', '') or comp.get('url', '')
+            product = comp.get('product_offering', '') or comp.get('product', '') or comp.get('description', '')
+            differentiator = comp.get('differentiator', '')
+        
+        # Header with name and website (make name bold)
+        if website:
+            lines.append(f"\n• **{name}** ({website})")
+        else:
+            lines.append(f"\n• **{name}**")
+            
+        if product:
+            lines.append(f"  Product: {product}")
+        if differentiator and differentiator != product:
+            lines.append(f"  Differentiator: {differentiator}")
+            
+        # Add competitive positioning
+        if getattr(profile, 'competitive_positioning', None):
+            lines.append(f"  Positioning vs {name}: {profile.competitive_positioning}")
+            
+    # Add competitive summary if available
+    if getattr(profile, 'competitive_summary', None):
+        lines.append(f"\nCompetitive Summary:\n{profile.competitive_summary}")
+        
+    lines.append("\nNote: This analysis should be verified with additional research.")
+        
+    return '\n'.join(lines)
+
 
 def enrich_competitor_details(competitors):
     enriched = []

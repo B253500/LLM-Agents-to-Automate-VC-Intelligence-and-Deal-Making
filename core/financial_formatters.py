@@ -8,6 +8,24 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional
 from core.schemas import StartupProfile
 
+def format_money_display(value, currency="US$"):
+    """Format money values for display like 'US$ 57.0M'."""
+    if value is None:
+        return None
+    
+    try:
+        value = float(value)
+        if value >= 1e9:
+            return f"{currency} {value/1e9:.1f}B"
+        elif value >= 1e6:
+            return f"{currency} {value/1e6:.1f}M"
+        elif value >= 1e3:
+            return f"{currency} {value/1e3:.1f}K"
+        else:
+            return f"{currency} {value:,.0f}"
+    except (ValueError, TypeError):
+        return str(value)
+
 
 def format_enhanced_financials_section(profile: StartupProfile, current_date: str) -> str:
     """Enhanced financial section using the financial analysis agent."""
@@ -49,8 +67,8 @@ def format_clean_financials_section(profile: StartupProfile, current_date: str) 
     
     # Get all available financial metrics
     implied_valuation = getattr(profile, 'implied_valuation', None)
-    latest_round_amount = getattr(profile, 'latest_round_amount', None)
-    total_funding_raised = getattr(profile, 'total_funding_raised', None)
+    latest_round_amount = getattr(profile, 'latest_round_amount_display', None) or getattr(profile, 'latest_round_amount', None)
+    total_funding_raised = getattr(profile, 'total_funding_raised_display', None) or getattr(profile, 'total_funding_raised', None)
     web_sources = getattr(profile, 'web_sources', [])
     
     # NEW: Get enhanced financial data from our extraction
@@ -81,13 +99,16 @@ def format_clean_financials_section(profile: StartupProfile, current_date: str) 
     deck_metrics = []
     
     if revenue:
-        deck_metrics.append(f"• **Revenue**: {revenue}")
+        formatted_revenue = format_money_display(revenue)
+        deck_metrics.append(f"• **Revenue**: {formatted_revenue}")
     
     if mrr:
-        deck_metrics.append(f"• **Monthly Recurring Revenue (MRR)**: {mrr}")
+        formatted_mrr = format_money_display(mrr)
+        deck_metrics.append(f"• **Monthly Recurring Revenue (MRR)**: {formatted_mrr}")
     
     if gmv:
-        deck_metrics.append(f"• **Gross Merchandise Value (GMV)**: {gmv}")
+        formatted_gmv = format_money_display(gmv)
+        deck_metrics.append(f"• **Gross Merchandise Value (GMV)**: {formatted_gmv}")
     
     if cagr:
         deck_metrics.append(f"• **Compound Annual Growth Rate (CAGR)**: {cagr}%")
@@ -96,7 +117,8 @@ def format_clean_financials_section(profile: StartupProfile, current_date: str) 
         deck_metrics.append(f"• **Growth Rate**: {growth_rate}%")
     
     if gross_profit:
-        deck_metrics.append(f"• **Gross Profit**: {gross_profit}")
+        formatted_profit = format_money_display(gross_profit)
+        deck_metrics.append(f"• **Gross Profit**: {formatted_profit}")
     
     if revenue_per_merchant:
         deck_metrics.append(f"• **Revenue per Merchant**: {revenue_per_merchant}")
@@ -145,10 +167,19 @@ def format_clean_financials_section(profile: StartupProfile, current_date: str) 
     # Add data sources if available
     if web_sources:
         lines.append("**🔗 Data Sources**")
-        for source in web_sources[:2]:  # Limit to 2 sources
+        for source in web_sources[:3]:  # Limit to 3 sources for better coverage
             # Handle both markdown links [text](url) and plain URLs
             if source.startswith('http'):
-                lines.append(f"• {source}")
+                # Extract domain name for cleaner display
+                from urllib.parse import urlparse
+                try:
+                    parsed = urlparse(source)
+                    domain = parsed.netloc
+                    if domain.startswith('www.'):
+                        domain = domain[4:]
+                    lines.append(f"• [{domain}]({source})")
+                except:
+                    lines.append(f"• {source}")
             elif '[' in source and '](' in source and ')' in source:
                 # Extract URL from markdown link [text](url)
                 url_match = re.search(r'\[([^\]]+)\]\(([^)]+)\)', source)
@@ -620,78 +651,5 @@ def format_financial_history_section(profile: StartupProfile) -> str:
     return '\n'.join(lines)
 
 
-def clean_think_tags_and_debugging(text: str) -> str:
-    """Comprehensive cleaning function to remove all think tags and debugging sentences."""
-    if not isinstance(text, str):
-        return text
-    
-    # Remove <think> tags and their content (handle nested tags)
-    # First, remove all <think> and </think> tags completely
-    text = re.sub(r'<think>', '', text)
-    text = re.sub(r'</think>', '', text)
-    
-    # Remove thinking process markers (comprehensive list)
-    thinking_patterns = [
-        r'(Okay, so I need to figure out|First, from the|Looking at the|Based on the|From the search results|Let me start by|I need to analyze|Let me examine).*?(?=\n|$)',
-        r'(Let me look through|I need to look through|Looking at result|Result mentions|First, result|Result from|Based on result).*?(?=\n|$)',
-        r'(The user wants|The user asked|The user is asking|The query is about).*?(?=\n|$)',
-        r'(I need to answer|I need to tackle|Let me tackle|Let me answer).*?(?=\n|$)',
-        r'(Okay, let\'s tackle|Let\'s tackle|Let me tackle).*?(?=\n|$)',
-        r'(The user wants me to|The user wants to know|The user is looking for).*?(?=\n|$)',
-        r'(I should look|I need to look|Let me look).*?(?=\n|$)',
-        r'(Based on the provided|Based on the search|From the search).*?(?=\n|$)',
-        r'(Financial Research Summary for|Company:).*?(?=\n|$)',
-        r'(First, looking at|Looking at result|Result mentions|First, result).*?(?=\n|$)',
-        r'(Wait, but|Wait, the|Wait, that\'s|Wait, no).*?(?=\n|$)',
-        r'(Hmm,|Hmm.|Hmm, but|Hmm, that\'s).*?(?=\n|$)',
-        r'(So, putting this together|Putting this together).*?(?=\n|$)',
-        r'(Need to check|Need to verify|Need to confirm).*?(?=\n|$)',
-        r'(However,|However, the|However, there\'s).*?(?=\n|$)',
-        r'(But wait,|But wait.|But wait, the).*?(?=\n|$)',
-        r'(Maybe the|Maybe there\'s|Maybe it\'s).*?(?=\n|$)',
-        r'(It\'s possible that|It\'s likely that).*?(?=\n|$)',
-        r'(Without more|Without additional).*?(?=\n|$)',
-        r'(The user might need|The user should know).*?(?=\n|$)',
-        # Add more patterns for <think> sentences
-        r'(<think>.*?</think>)',
-        r'(Okay, I need to figure out.*?)(?=\n|$)',
-        r'(Let me start by.*?)(?=\n|$)',
-        r'(Based on the search results.*?)(?=\n|$)',
-        r'(Looking at the data.*?)(?=\n|$)',
-        r'(From the information provided.*?)(?=\n|$)',
-        r'(I need to analyze.*?)(?=\n|$)',
-        r'(Let me examine.*?)(?=\n|$)',
-    ]
-    
-    for pattern in thinking_patterns:
-        text = re.sub(pattern, '', text, flags=re.DOTALL)
-    
-    # Remove numbered analysis that's part of thinking process
-    text = re.sub(r'^\d+\.\s*[A-Z].*?(?=\n|$)', '', text, flags=re.MULTILINE)
-    
-    # Remove citation markers
-    text = re.sub(r'\[\d+\]', '', text)
-    
-    # Remove hashtags and markdown formatting that might be artifacts
-    text = re.sub(r'#+\s*[A-Za-z\s]+', '', text)
-    
-    # Remove standalone bullet points that don't have content
-    text = re.sub(r'^\s*•\s*$', '', text, flags=re.MULTILINE)
-    
-    # Remove bullet points at the beginning of lines that are followed by whitespace
-    text = re.sub(r'^\s*•\s+(?=\s|$)', '', text, flags=re.MULTILINE)
-    
-    # Remove lines that are just debugging markers
-    text = re.sub(r'^\s*(Sources:|Source:|Sources|Source)\s*$', '', text, flags=re.MULTILINE)
-    
-    # Remove empty tables (lines with just | | |)
-    text = re.sub(r'^\s*\|\s*\|\s*\|\s*$', '', text, flags=re.MULTILINE)
-    text = re.sub(r'^\s*\|\s*Metric\s*\|\s*Value\s*\|\s*$', '', text, flags=re.MULTILINE)
-    text = re.sub(r'^\s*\|\s*--------\s*\|\s*-------\s*\|\s*$', '', text, flags=re.MULTILINE)
-    
-    # Clean up extra whitespace and newlines
-    text = re.sub(r'\n\s*\n', '\n', text)
-    text = re.sub(r' +', ' ', text)
-    text = text.strip()
-    
-    return text 
+# Import the centralized clean_think_tags_and_debugging function
+from core.text_cleaners import clean_think_tags_and_debugging 

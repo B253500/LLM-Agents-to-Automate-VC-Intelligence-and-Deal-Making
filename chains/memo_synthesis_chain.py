@@ -1,16 +1,7 @@
 from langchain_openai import ChatOpenAI
 from core.schemas import StartupProfile
+from core.text_cleaners import clean_blank_bullets
 import re
-
-def clean_blank_bullets(text):
-    """Remove empty bullet points and clean up formatting."""
-    lines = text.split('\n')
-    cleaned = []
-    for line in lines:
-        stripped = line.strip()
-        if stripped and stripped not in ['•', '-', '*', '• ', '- ', '* ']:
-            cleaned.append(line)
-    return '\n'.join(cleaned)
 
 def run_detailed_summary_chain(profile: StartupProfile) -> str:
     """Generate detailed summary for the memo."""
@@ -344,35 +335,62 @@ Regulatory: {getattr(profile, 'regulatory', '')}
     return raw
 
 def run_team_section_chain(profile: StartupProfile) -> str:
-    """Generate team section for the memo."""
-    llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
-    context = f"""
-Company: {getattr(profile, 'name', 'N/A')}
-Executives: {getattr(profile, 'executives', '')}
-Sector: {getattr(profile, 'sector', '')}
-"""
-    prompt = f"""
-You are a top-tier VC analyst. Write a detailed, multi-paragraph, multi-bullet Team & Management section for an investment memo, using only the provided context. For each of the 3 key team members (founder/CEO, CFO, CTO/Chairman), include:
-- Name and role
-- LinkedIn (if available) 
-- Short bio/track record (notable companies, roles, achievements)
-Use a critical, VC-style lens. Do not make up facts. Use plain text, no HTML.
-- Use bold formatting (**text**) for headers, NOT markdown headers (###).
-
-IMPORTANT: Use tentative language and clearly indicate when you are making assumptions or interpretations.
-- Use phrases like "appears to be", "seems to", "may be", "could be", "based on available information"
-- Do not present assumptions as facts about team members' backgrounds
-- If information is limited, explicitly state what additional research is needed
-
-Context:
-{context}
-"""
-    response = llm.invoke(prompt)
-    raw = response.content if hasattr(response, 'content') else response
-    # Convert markdown headers to bold formatting
-    raw = re.sub(r'^###\s*\*\*(.*?)\*\*', r'**\1**', raw, flags=re.MULTILINE)
-    raw = re.sub(r'^###\s*(.*?)$', r'**\1**', raw, flags=re.MULTILINE)
-    return raw
+    """Generate team section for the memo using deterministic formatting like old_logic."""
+    lines = []
+    execs = getattr(profile, 'executives', None) or []
+    founder = getattr(profile, 'founder_name', None)
+    
+    # Key roles to prioritize (same as old_logic)
+    key_roles = ['founder', 'ceo', 'chief executive officer', 'cfo', 'chief financial officer', 
+                 'chairman', 'cto', 'chief technology officer', 'coo', 'chief operating officer']
+    
+    # Always show founder if present
+    if founder:
+        lines.append(f"**{founder} – FOUNDER**")
+    
+    # Process executives with deduplication
+    seen_names = set()
+    if founder:
+        seen_names.add(founder.lower())
+    
+    for exec in execs:
+        if isinstance(exec, dict):
+            name = exec.get('name', '').strip()
+            role = exec.get('role', '').strip()
+            linkedin = exec.get('linkedin', '')
+            
+            if name and role and name.lower() not in seen_names:
+                # Check if role is in key roles
+                role_lower = role.lower()
+                if any(key_role in role_lower for key_role in key_roles):
+                    # Format like old_logic: Name (Role)
+                    formatted_role = role.upper()
+                    lines.append(f"**{name} – {formatted_role}**")
+                    if linkedin:
+                        lines.append(f"LinkedIn: {linkedin}")
+                    seen_names.add(name.lower())
+    
+    # Add prior exits if available
+    prior_exits = getattr(profile, 'prior_exits', None)
+    prior_exit_details = getattr(profile, 'prior_exit_details', None) or []
+    if prior_exits and int(prior_exits) > 0:
+        lines.append(f"Prior Exits: {prior_exits}")
+        for exit in prior_exit_details:
+            if isinstance(exit, dict):
+                cname = exit.get('company', 'Unknown')
+                link = exit.get('link', '')
+                if link:
+                    lines.append(f"  - {cname}: {link}")
+                else:
+                    lines.append(f"  - {cname}")
+            else:
+                lines.append(f"  - {exit}")
+    
+    # Add LinkedIn summary if available
+    if hasattr(profile, 'founder_linkedin_formatted') and profile.founder_linkedin_formatted:
+        lines.append(profile.founder_linkedin_formatted)
+    
+    return '\n'.join(lines) if lines else 'Team and management information not available.'
 
 def run_esg_section_chain(profile: StartupProfile) -> str:
     """Generate ESG section for the memo."""

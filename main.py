@@ -14,7 +14,7 @@ from datetime import datetime
 from pathlib import Path
 
 # Local application imports
-from core.download_utils import extract_text, get_cache_path, load_from_cache, save_to_cache
+from core.download_utils import extract_text, get_cache_path, load_from_cache, save_to_cache, validate_extraction_quality
 from core.utils import merge_outputs
 from core.orchestration import run_all_sequential_with_text
 from core.schemas import StartupProfile
@@ -30,60 +30,44 @@ from core.evaluation_utils import generate_excel_output, save_evaluation_metrics
 from config import Config
 
 # Chain imports
-from chains.pitch_deck_chain import run_pitch_deck_chain
+from chains.pitch_deck_chain import run_pitch_deck_chain_with_text
 from chains.technical_dd_chain import run_technical_dd_chain
 from chains.market_sizing_chain import run_market_sizing_chain
 from chains.financial_analysis_chain import run_financial_analysis_chain
 from chains.competitive_intel_chain import run_competitive_intel_chain
 from chains.risk_assessment_chain import run_risk_assessment_chain
-from chains.product_description_chain import run_product_description_chain
 from chains.memo_synthesis_chain import (
     run_detailed_summary_chain,
     run_problem_statement_chain,
     run_solution_overview_chain,
-    run_business_model_chain,
     run_risks_section_chain,
     run_team_section_chain,
-    run_esg_section_chain,
-    run_analyst_commentary_chain,
-    run_exit_strategies_chain,
-    run_followup_section_chain
+    run_analyst_commentary_chain
 )
 
 # Agent imports
-from agents.technical_dd_agent import build_technical_dd_agent, format_technical_dd_section
-from agents.market_sizing_agent import build_market_sizing_agent, generate_market_size_section
-from agents.competitive_intel_agent import build_competitive_intel_agent, generate_competitive_landscape
-from agents.founder_profiling_agent import build_founder_profiling_agent, generate_team_section
+from agents.technical_dd_agent import build_technical_dd_agent
+from chains.technical_dd_chain import format_technical_dd_section
+from agents.market_sizing_agent import build_market_sizing_agent
+from agents.competitive_intel_agent import build_competitive_intel_agent
+from chains.market_sizing_chain import generate_market_size_section
+from chains.competitive_intel_chain import generate_competitive_landscape
+from agents.founder_profiling_agent import build_founder_profiling_agent
+from chains.team_chain import generate_team_section
 from agents.risk_assessment_agent import build_risk_assessment_agent, generate_discussion_section, generate_counterfactual_section
+from agents.business_model_agent import build_business_model_agent
+from agents.product_description_agent import build_product_description_agent
+from agents.exit_strategy_agent import build_exit_strategy_agent
+from agents.esg_agent import build_esg_agent
+from agents.follow_up_agent import build_follow_up_agent
 
 CACHE_DIR = "extraction_cache"
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 
-def run_pitch_deck_chain_with_text(full_text: str, profile: StartupProfile) -> StartupProfile:
-    from chains.pitch_deck_chain import run_pitch_deck_chain_with_text as run_pitch_chain
-    return run_pitch_chain(full_text, profile)
-
-
-def run_technical_dd_chain_with_text(full_text: str, profile: StartupProfile) -> StartupProfile:
-    return run_technical_dd_chain(profile)
-
-
-def run_founder_profiling_chain_with_text(full_text: str, profile: StartupProfile) -> StartupProfile:
-    from agents.founder_profiling_agent import run_founder_profiling_chain_with_text as run_founder_chain
-    return run_founder_chain(full_text, profile)
-
-
-def run_market_sizing_chain_with_text(full_text: str, profile: StartupProfile) -> StartupProfile:
-    return run_market_sizing_chain(profile)
-
-
 def run_financial_analysis_chain_with_text(full_text: str, profile: StartupProfile) -> StartupProfile:
+    """Enhanced financial analysis with comprehensive context building."""
     try:
-        # Use the enhanced financial analysis chain from new_main.py
-        from chains.financial_analysis_chain import run_financial_analysis_chain
-        
         # Build comprehensive financial context
         financial_context = ""
         
@@ -114,26 +98,58 @@ def run_financial_analysis_chain_with_text(full_text: str, profile: StartupProfi
         return profile
         
     except Exception as e:
-        print(f"[Financial Analysis] Error in enhanced chain: {e}")
-        # Fallback to original simple approach
-        try:
-            from chains.financial_analysis_chain import run_financial_analysis_chain
-            return run_financial_analysis_chain(profile)
-        except ImportError as import_error:
-            print(f"[Financial Analysis] Import error: {import_error}")
-            # Final fallback to basic financial formatting
-            return profile
+        print(f"[Financial Analysis] Error: {e}")
+        return profile
 
 
-def run_competitive_intel_chain_with_text(full_text: str, profile: StartupProfile) -> StartupProfile:
-    return run_competitive_intel_chain(profile)
+def clean_memo_section(content: str) -> str:
+    """Helper function to clean memo sections consistently."""
+    return clean_think_tags_and_debugging(clean(content))
 
 
-def run_risk_assessment_chain_with_text(full_text: str, profile: StartupProfile) -> StartupProfile:
-    return run_risk_assessment_chain(profile)
+def run_product_description_agent(profile: StartupProfile) -> str:
+    """Run product description agent and return the result."""
+    agent, task = build_product_description_agent(profile)
+    # For now, we'll call the chain directly since we're not using CrewAI execution
+    from chains.product_description_chain import run_product_description_chain
+    return run_product_description_chain(profile)
 
 
-def run_followup_section_chain_with_text(full_text: str, profile: StartupProfile) -> StartupProfile:
+def run_business_model_agent(profile: StartupProfile) -> str:
+    """Run business model agent and return the result."""
+    agent, task = build_business_model_agent(profile)
+    # For now, we'll call the chain directly since we're not using CrewAI execution
+    from chains.memo_synthesis_chain import run_business_model_chain
+    return run_business_model_chain(profile)
+
+
+def run_esg_section_agent(profile: StartupProfile) -> str:
+    """Run ESG section agent and return the result."""
+    agent, task = build_esg_agent(profile)
+    # For now, we'll call the chain directly since we're not using CrewAI execution
+    from chains.memo_synthesis_chain import run_esg_section_chain
+    return run_esg_section_chain(profile)
+
+
+def run_risks_section_agent(profile: StartupProfile) -> str:
+    """Run risks section agent and return the result."""
+    from agents.risk_assessment_agent import run_risks_section_agent
+    return run_risks_section_agent(profile)
+
+
+def run_exit_strategies_agent(profile: StartupProfile) -> str:
+    """Run exit strategies agent and return the result."""
+    agent, task = build_exit_strategy_agent(profile)
+    # For now, we'll call the chain directly since we're not using CrewAI execution
+    from chains.memo_synthesis_chain import run_exit_strategies_chain
+    return run_exit_strategies_chain(profile)
+
+
+def run_followup_section_agent(profile: StartupProfile) -> str:
+    """Run follow-up section agent and return the result."""
+    agent, task = build_follow_up_agent(profile)
+    # For now, we'll call the chain directly since we're not using CrewAI execution
+    from chains.memo_synthesis_chain import run_followup_section_chain
     return run_followup_section_chain(profile)
 
 
@@ -143,56 +159,56 @@ def format_memo(profile: StartupProfile) -> str:
 
     memo_body = f"""
 1. DETAILED SUMMARY
-{clean_think_tags_and_debugging(clean(run_detailed_summary_chain(profile)))}
+{clean_memo_section(run_detailed_summary_chain(profile))}
 
 2. COMPANY OVERVIEW
-{clean_think_tags_and_debugging(clean(format_company_overview_section(profile)))}
+{clean_memo_section(format_company_overview_section(profile))}
 
 3. PROBLEM STATEMENT
-{clean_think_tags_and_debugging(clean(run_problem_statement_chain(profile)))}
+{clean_memo_section(run_problem_statement_chain(profile))}
     
 4. SOLUTION OVERVIEW
-{clean_think_tags_and_debugging(clean(run_solution_overview_chain(profile)))}
+{clean_memo_section(run_solution_overview_chain(profile))}
     
 5. PRODUCT/SERVICE DESCRIPTION
-{clean_think_tags_and_debugging(run_product_description_chain(profile))}
+{clean_memo_section(run_product_description_agent(profile))}
     
 6. MARKET SIZE & ANALYSIS
-{clean_think_tags_and_debugging(generate_market_size_section(profile))}
-{clean_think_tags_and_debugging(clean(getattr(profile, 'sector', '')))}
+{clean_memo_section(generate_market_size_section(profile))}
+{clean_memo_section(getattr(profile, 'sector', ''))}
 
 7. COMPETITORS
-{clean_think_tags_and_debugging(clean(generate_competitive_landscape(profile)))}
-{clean_think_tags_and_debugging(clean(getattr(profile, 'competitive_summary', '')))}
+{clean_memo_section(generate_competitive_landscape(profile))}
+{clean_memo_section(getattr(profile, 'competitive_summary', ''))}
 
 8. BUSINESS MODEL
-{clean_think_tags_and_debugging(run_business_model_chain(profile))}
+{clean_memo_section(run_business_model_agent(profile))}
 
 9. TECHNICAL DUE DILIGENCE
-{clean_think_tags_and_debugging(clean(format_technical_dd_section(profile)))}
+{clean_memo_section(format_technical_dd_section(profile))}
 
 10. FINANCIAL ANALYSIS
-{clean_think_tags_and_debugging(format_enhanced_financials_section(profile, current_date))}
+{clean_memo_section(format_enhanced_financials_section(profile, current_date))}
 
-{clean_think_tags_and_debugging(format_financial_history_section(profile))}
+{clean_memo_section(format_financial_history_section(profile))}
 
 11. TEAM & MANAGEMENT
-{clean_think_tags_and_debugging(clean(generate_team_section(profile)))}
+{clean_memo_section(generate_team_section(profile))}
 
 12. ESG CONSIDERATIONS
-{clean_think_tags_and_debugging(run_esg_section_chain(profile))}
+{clean_memo_section(run_esg_section_agent(profile))}
 
 13. RISKS
-{clean_think_tags_and_debugging(run_risks_section_chain(profile))}
+{clean_memo_section(run_risks_section_agent(profile))}
 
 14. INVESTMENT & EXIT STRATEGIES
-{clean_think_tags_and_debugging(run_exit_strategies_chain(profile))}
+{clean_memo_section(run_exit_strategies_agent(profile))}
 
 15. COUNTERFACTUAL ANALYSIS: WHAT IF WE DON'T INVEST?
-{clean_think_tags_and_debugging(generate_counterfactual_section(profile))}
+{clean_memo_section(generate_counterfactual_section(profile))}
 
 16. FOLLOW-UP QUESTIONS & NEXT STEPS
-{clean_think_tags_and_debugging(clean(run_followup_section_chain(profile)))}
+{clean_memo_section(run_followup_section_agent(profile))}
 """
     discussion = generate_discussion_section(memo_body)
     return deduplicate_memo(f"{memo_body}\n17. AI DISCUSSION AND COMMENTARY\n{clean_discussion_section(discussion)}\n\n---\nGenerated by VC Analysis System on {current_date}\nData Sources: Company documents, market research, competitive intelligence, technical analysis\nAnalysis Framework: Multi-agent AI system with specialized domain expertise\n")
@@ -214,7 +230,6 @@ def main():
                 extracted = extract_text(file_path, return_structured=True)
                 
                 # Validate extraction quality
-                from core.download_utils import validate_extraction_quality
                 quality_report = validate_extraction_quality(extracted)
                 
                 if quality_report["recommendation"] == "reprocess":
@@ -290,6 +305,10 @@ def main():
         # Add timing for each major step
         evaluator.log_section_start("PITCH DECK EXTRACTION")
         profile = run_all_sequential_with_text(text, profile, file_path, evaluator)
+        print(f"[DEBUG] Profile after orchestration: {profile}")
+        if profile is None:
+            print("[ERROR] Profile is None after orchestration!")
+            return
         evaluator.log_section_end("PITCH DECK EXTRACTION", tokens_used=0, model="local")
         
         pipeline_time = time.time() - start_time
@@ -299,6 +318,9 @@ def main():
         evaluator.log_section_end("COMPLETE ANALYSIS PIPELINE", tokens_used=estimated_tokens, model="gpt-4o-mini")
         
         # Populating structured data
+        if profile is None:
+            print("[ERROR] Profile is None - cannot continue with memo generation")
+            return
         profile.tables = tables
         profile.figures = figures
 

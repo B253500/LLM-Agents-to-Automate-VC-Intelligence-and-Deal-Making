@@ -1,6 +1,11 @@
 import os
 import requests
 import re
+from dotenv import load_dotenv
+from pathlib import Path
+
+# Load environment variables from .env file
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 def extract_snippet_and_url(perplexity_answer):
     """

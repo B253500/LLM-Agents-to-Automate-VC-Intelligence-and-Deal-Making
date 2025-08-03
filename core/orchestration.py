@@ -2,8 +2,7 @@ import json
 import re
 from crewai import Crew
 from core.schemas import StartupProfile
-from core.download_utils import extract_market_size_from_text
-from core.utils import parse_money_string
+from chains.market_sizing_chain import extract_market_size_from_text
 from core.coresignal_utils import get_full_company_data
 from core.perplexity_utils import search_perplexity
 from chains.pitch_deck_chain import run_pitch_deck_chain_with_text
@@ -114,7 +113,7 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
         if hasattr(profile, k) and v:
             # Use parse_money_string for TAM, SAM, SOM, etc.
             if k in ["TAM", "SAM", "SOM"] and isinstance(v, str):
-                from core.download_utils import parse_money_string
+                from core.utils import parse_money_string
                 parsed = parse_money_string(v)
                 if parsed:
                     v = parsed
@@ -195,7 +194,8 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
             detected_website = find_company_website(company_name, founder_name, sector, full_text)
             if detected_website:
                 profile.website = detected_website
-                print(f"[Website Detection] Detected website: {detected_website}")
+                profile._ai_detected_website = detected_website  # Mark as AI-detected
+                print(f"[Website Detection] AI detected: {detected_website}")
             else:
                 # Don't set to "unknown" yet - let CoreSignal try to find it
                 print(f"[Website Detection] Website not found locally, will try CoreSignal fallback")
@@ -267,9 +267,10 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
                         display_key = key.replace('_', ' ').title()
                         context_parts.append(f"{display_key}: {value}")
         
-        # Add extracted text data
+        # Add extracted text data (using smart context for efficiency)
         if full_text:
-            context_parts.append(f"Extracted Text: {full_text[:2000]}...")
+            # Use first 10k chars for general context, but chains will use their own smart context
+            context_parts.append(f"Extracted Text: {full_text[:10000]}...")
         
         # Add tables data if available
         if hasattr(profile, 'tables_text') and profile.tables_text:
@@ -296,285 +297,17 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
     # Store the comprehensive context for agents to use
     profile.extracted_data_context = extracted_context
 
-    # Deck extraction (chain + agent)    
-    if evaluator:
-        evaluator.log_section_start("PITCH DECK EXTRACTION")
-    profile = run_pitch_deck_chain_with_text(full_text, profile, pdf_path=file_path, evaluator=evaluator)
-    if evaluator:
-        evaluator.log_section_end("PITCH DECK EXTRACTION", tokens_used=0, model="gpt-4o")
-    
+    # Deck extraction (agent only - no duplicate chain calls)    
     if evaluator:
         evaluator.log_section_start("DECK AGENT")
-    deck_agent, deck_task = build_deck_agent(file_path)
+    print(f"[DEBUG] Profile before deck agent: {profile}")
+    deck_agent, deck_task = build_deck_agent(file_path, existing_profile=profile)
     deck_agent_output = deck_task.callback()
+    print(f"[DEBUG] Profile after deck agent: {profile}")
     if evaluator:
         evaluator.log_section_end("DECK AGENT", tokens_used=0, model="gpt-4o")
 
-    # --- CoreSignal full enrichment ---
-    if evaluator:
-        evaluator.log_section_start("CORESIGNAL ENRICHMENT")
-    if profile.name and profile.name.lower() not in ['unknown', 'n/a', 'not available', 'none']:
-        cs_full_data = get_full_company_data(profile.name)
-        # Handle both list and dict results
-        if isinstance(cs_full_data, list):
-            print(f"[CoreSignal] Returned a list with {len(cs_full_data)} items. Searching for a company profile dict...")
-            found = None
-            for item in cs_full_data:
-                if isinstance(item, dict) and 'name' in item:
-                    found = item
-                    print(f"[CoreSignal] Found company profile dict with fields: {list(found.keys())}")
-                    break
-            cs_full_data = found
-        elif isinstance(cs_full_data, dict):
-            print(f"[CoreSignal] Returned a dict with fields: {list(cs_full_data.keys())}")
-        else:
-            print(f"[CoreSignal] No valid enrichment data returned for {profile.name}.")
-            cs_full_data = None
-        if cs_full_data and isinstance(cs_full_data, dict):
-            print(f"[CoreSignal] Enriching profile for {profile.name} with mapped fields:")
-            # Field mapping checklist with fallbacks
-            mapping = {
-                "company_id": cs_full_data.get("id") or cs_full_data.get("company_id"),
-                "name": cs_full_data.get("name"),
-                "legal_name": cs_full_data.get("company_legal_name") or cs_full_data.get("legal_name"),
-                "shorthand_name": cs_full_data.get("company_shorthand_name") or cs_full_data.get("shorthand_name"),
-                "description": cs_full_data.get("description"),
-                "industry": cs_full_data.get("industry"),
-                "domain": cs_full_data.get("website") or cs_full_data.get("domain"),
-                "primary_domain": cs_full_data.get("primary_domain"),
-                "other_domains": cs_full_data.get("other_domains"),
-                "size_range": cs_full_data.get("size") or cs_full_data.get("size_range"),
-                "founded_year": cs_full_data.get("founded") or cs_full_data.get("founded_year"),
-                "status": cs_full_data.get("type") or cs_full_data.get("status"),
-                "hq_city": cs_full_data.get("headquarters_city") or cs_full_data.get("headquarters_new_address"),
-                "hq_country_iso2": cs_full_data.get("headquarters_country_restored") or cs_full_data.get("hq_country_iso2"),
-                "office_locations": cs_full_data.get("company_locations_collection") or cs_full_data.get("office_locations"),
-                "workforce_trends": cs_full_data.get("workforce_trends"),
-                "active_job_postings": cs_full_data.get("active_job_postings"),
-                "linkedin_followers": cs_full_data.get("followers") or cs_full_data.get("linkedin_followers"),
-                "x_followers": cs_full_data.get("x_followers"),
-                "news_counts": cs_full_data.get("news_counts"),
-                "news_features": cs_full_data.get("company_updates_collection") or cs_full_data.get("news_features"),
-                "website_traffic": cs_full_data.get("website_traffic"),
-                "estimated_revenue_range": cs_full_data.get("estimated_revenue_range"),
-                "revenue_currency": cs_full_data.get("revenue_currency"),
-                "revenue_source": cs_full_data.get("revenue_source"),
-                "last_funding_round_name": cs_full_data.get("last_funding_round_name"),
-                "last_funding_round_amount_raised": cs_full_data.get("last_funding_round_amount_raised"),
-                "last_funding_round_announced_date": cs_full_data.get("last_funding_round_announced_date"),
-                "funding_rounds": cs_full_data.get("company_funding_rounds_collection") or cs_full_data.get("funding_rounds"),
-                "acquisitions": cs_full_data.get("acquisition_list_source_1") or cs_full_data.get("acquisitions"),
-                # "top_competitors": cs_full_data.get("company_similar_collection") or cs_full_data.get("competitors"),  # Disabled - pulls irrelevant similar companies
-                "technographics": cs_full_data.get("technographics"),
-                "emails": cs_full_data.get("emails"),
-                "phones": cs_full_data.get("phones"),
-                "linkedin": cs_full_data.get("linkedin"),
-                "twitter": cs_full_data.get("twitter"),
-                "facebook": cs_full_data.get("facebook"),
-            }
-            for k, v in mapping.items():
-                if hasattr(profile, k) and v is not None and (getattr(profile, k, None) in [None, '', []]):
-                    # Special handling for office_locations to deduplicate
-                    if k == "office_locations" and isinstance(v, list):
-                        v = deduplicate_office_locations(v)
-                    setattr(profile, k, v)
-                    print(f"[CoreSignal] Set profile.{k} = '{v}'")
-            
-            # --- FALLBACK: Use CoreSignal data for missing website and sector ---
-            # Website fallback with validation
-            if (not getattr(profile, 'website', None) or 
-                getattr(profile, 'website', '').lower() in ['unknown', 'n/a', '']) and cs_full_data.get('website'):
-                
-                # Validate that this is the correct company before setting the website
-                core_signal_website = cs_full_data.get('website')
-                core_signal_industry = cs_full_data.get('industry', '').lower()
-                detected_sector = getattr(profile, 'sector', '').lower()
-                
-                # Check if the CoreSignal data matches our detected sector
-                sector_mismatch = False
-                if detected_sector and core_signal_industry:
-                    # Define sector mappings for validation
-                    sector_mappings = {
-                        'restaurant technology': ['restaurant', 'food service', 'hospitality', 'dining'],
-                        'battery technology': ['battery', 'energy storage', 'electric vehicle', 'automotive'],
-                        'fintech': ['financial', 'payment', 'banking', 'fintech'],
-                        'healthtech': ['healthcare', 'medical', 'biotech', 'pharma'],
-                        'ai': ['artificial intelligence', 'machine learning', 'ai', 'software'],
-                        'ecommerce': ['retail', 'ecommerce', 'marketplace', 'consumer']
-                    }
-                    
-                    # Check if there's a sector mismatch
-                    if detected_sector in sector_mappings:
-                        expected_keywords = sector_mappings[detected_sector]
-                        if not any(keyword in core_signal_industry for keyword in expected_keywords):
-                            sector_mismatch = True
-                            print(f"[CoreSignal Validation] Sector mismatch: detected '{detected_sector}' but CoreSignal shows '{core_signal_industry}'")
-                
-                # Only set CoreSignal website if AI hasn't already detected a valid website
-                current_website = getattr(profile, 'website', None)
-                if (not current_website or 
-                    (isinstance(current_website, str) and current_website.lower() in ['unknown', 'n/a', ''])) and not sector_mismatch:
-                    profile.website = core_signal_website
-                    print(f"[CoreSignal Fallback] Set website from CoreSignal: {profile.website}")
-                elif current_website and is_valid_company_website(current_website):
-                    print(f"[CoreSignal Fallback] Skipping website - AI already detected valid website: {current_website}")
-                else:
-                    print(f"[CoreSignal Validation] Skipping website due to sector mismatch")
-            
-            # Sector fallback - ONLY set if AI hasn't already set a valid sector
-            current_sector = getattr(profile, 'sector', None)
-            if (not current_sector or 
-                (isinstance(current_sector, str) and current_sector.lower() in ['unknown', 'n/a', ''])) and cs_full_data.get('industry'):
-                profile.sector = cs_full_data.get('industry')
-                print(f"[CoreSignal Fallback] Set sector from CoreSignal: {profile.sector}")
-            elif current_sector and cs_full_data.get('industry'):
-                # AI has already set a sector, so skip CoreSignal sector allocation
-                print(f"[CoreSignal Fallback] Skipping sector allocation - AI already set sector to '{current_sector}'")
-            
-            # --- ENHANCED: Additional CoreSignal data for better memo quality ---
-            # Company basics
-            current_founded_year = getattr(profile, 'founded_year', None)
-            if (not current_founded_year or 
-                (isinstance(current_founded_year, str) and current_founded_year.lower() in ['unknown', 'n/a', ''])) and cs_full_data.get('founded'):
-                profile.founded_year = cs_full_data.get('founded')
-                print(f"[CoreSignal Enhanced] Set founded_year from CoreSignal: {profile.founded_year}")
-            
-            if (not getattr(profile, 'status', None) or 
-                getattr(profile, 'status', '').lower() in ['unknown', 'n/a', '']) and cs_full_data.get('type'):
-                profile.status = cs_full_data.get('type')
-                print(f"[CoreSignal Enhanced] Set status from CoreSignal: {profile.status}")
-            
-            # Financial data
-            current_revenue_range = getattr(profile, 'estimated_revenue_range', None)
-            if (not current_revenue_range or 
-                (isinstance(current_revenue_range, str) and current_revenue_range.lower() in ['unknown', 'n/a', ''])) and cs_full_data.get('estimated_revenue_range'):
-                profile.estimated_revenue_range = cs_full_data.get('estimated_revenue_range')
-                print(f"[CoreSignal Enhanced] Set estimated_revenue_range from CoreSignal: {profile.estimated_revenue_range}")
-            
-            current_funding_amount = getattr(profile, 'last_funding_round_amount_raised', None)
-            if (not current_funding_amount or 
-                (isinstance(current_funding_amount, str) and current_funding_amount.lower() in ['unknown', 'n/a', ''])) and cs_full_data.get('last_funding_round_amount_raised'):
-                profile.last_funding_round_amount_raised = cs_full_data.get('last_funding_round_amount_raised')
-                print(f"[CoreSignal Enhanced] Set last_funding_round_amount_raised from CoreSignal: {profile.last_funding_round_amount_raised}")
-            
-            current_funding_date = getattr(profile, 'last_funding_round_announced_date', None)
-            if (not current_funding_date or 
-                (isinstance(current_funding_date, str) and current_funding_date.lower() in ['unknown', 'n/a', ''])) and cs_full_data.get('last_funding_round_announced_date'):
-                profile.last_funding_round_announced_date = cs_full_data.get('last_funding_round_announced_date')
-                print(f"[CoreSignal Enhanced] Set last_funding_round_announced_date from CoreSignal: {profile.last_funding_round_announced_date}")
-            
-            # Location data
-            current_hq_city = getattr(profile, 'hq_city', None)
-            if (not current_hq_city or 
-                (isinstance(current_hq_city, str) and current_hq_city.lower() in ['unknown', 'n/a', ''])) and cs_full_data.get('headquarters_city'):
-                profile.hq_city = cs_full_data.get('headquarters_city')
-                print(f"[CoreSignal Enhanced] Set hq_city from CoreSignal: {profile.hq_city}")
-            
-            # Social media data
-            current_linkedin_followers = getattr(profile, 'linkedin_followers', None)
-            if (not current_linkedin_followers or 
-                (isinstance(current_linkedin_followers, str) and current_linkedin_followers.lower() in ['unknown', 'n/a', ''])) and cs_full_data.get('followers'):
-                profile.linkedin_followers = cs_full_data.get('followers')
-                print(f"[CoreSignal Enhanced] Set linkedin_followers from CoreSignal: {profile.linkedin_followers}")
-            
-            current_x_followers = getattr(profile, 'x_followers', None)
-            if (not current_x_followers or 
-                (isinstance(current_x_followers, str) and current_x_followers.lower() in ['unknown', 'n/a', ''])) and cs_full_data.get('x_followers'):
-                profile.x_followers = cs_full_data.get('x_followers')
-                print(f"[CoreSignal Enhanced] Set x_followers from CoreSignal: {profile.x_followers}")
-            
-            current_website_traffic = getattr(profile, 'website_traffic', None)
-            if (not current_website_traffic or 
-                (isinstance(current_website_traffic, str) and current_website_traffic.lower() in ['unknown', 'n/a', ''])) and cs_full_data.get('website_traffic'):
-                profile.website_traffic = cs_full_data.get('website_traffic')
-                print(f"[CoreSignal Enhanced] Set website_traffic from CoreSignal: {profile.website_traffic}")
-            
-            current_news_counts = getattr(profile, 'news_counts', None)
-            if (not current_news_counts or 
-                (isinstance(current_news_counts, str) and current_news_counts.lower() in ['unknown', 'n/a', ''])) and cs_full_data.get('news_counts'):
-                profile.news_counts = cs_full_data.get('news_counts')
-                print(f"[CoreSignal Enhanced] Set news_counts from CoreSignal: {profile.news_counts}")
-            
-            # Technical and contact data
-            current_technographics = getattr(profile, 'technographics', None)
-            if (not current_technographics or 
-                (isinstance(current_technographics, str) and current_technographics.lower() in ['unknown', 'n/a', ''])) and cs_full_data.get('technographics'):
-                profile.technographics = cs_full_data.get('technographics')
-                print(f"[CoreSignal Enhanced] Set technographics from CoreSignal: {profile.technographics}")
-            
-            current_emails = getattr(profile, 'emails', None)
-            if (not current_emails or 
-                (isinstance(current_emails, str) and current_emails.lower() in ['unknown', 'n/a', ''])) and cs_full_data.get('emails'):
-                profile.emails = cs_full_data.get('emails')
-                print(f"[CoreSignal Enhanced] Set emails from CoreSignal: {profile.emails}")
-            
-            current_phones = getattr(profile, 'phones', None)
-            if (not current_phones or 
-                (isinstance(current_phones, str) and current_phones.lower() in ['unknown', 'n/a', ''])) and cs_full_data.get('phones'):
-                profile.phones = cs_full_data.get('phones')
-                print(f"[CoreSignal Enhanced] Set phones from CoreSignal: {profile.phones}")
-            
-            current_linkedin = getattr(profile, 'linkedin', None)
-            if (not current_linkedin or 
-                (isinstance(current_linkedin, str) and current_linkedin.lower() in ['unknown', 'n/a', ''])) and cs_full_data.get('linkedin'):
-                profile.linkedin = cs_full_data.get('linkedin')
-                print(f"[CoreSignal Enhanced] Set linkedin from CoreSignal: {profile.linkedin}")
-            
-            current_twitter = getattr(profile, 'twitter', None)
-            if (not current_twitter or 
-                (isinstance(current_twitter, str) and current_twitter.lower() in ['unknown', 'n/a', ''])) and cs_full_data.get('twitter'):
-                profile.twitter = cs_full_data.get('twitter')
-                print(f"[CoreSignal Enhanced] Set twitter from CoreSignal: {profile.twitter}")
-            
-            current_facebook = getattr(profile, 'facebook', None)
-            if (not current_facebook or 
-                (isinstance(current_facebook, str) and current_facebook.lower() in ['unknown', 'n/a', ''])) and cs_full_data.get('facebook'):
-                profile.facebook = cs_full_data.get('facebook')
-                print(f"[CoreSignal Enhanced] Set facebook from CoreSignal: {profile.facebook}")
-            
-            # Set defaults if still missing after CoreSignal
-            if not getattr(profile, 'website', None) or getattr(profile, 'website', '').lower() in ['unknown', 'n/a', '']:
-                profile.website = "unknown"
-                print(f"[CoreSignal Fallback] Website still missing, using 'unknown'")
-            
-            # Only set fallback sector if it's truly missing or invalid
-            current_sector = getattr(profile, 'sector', None)
-            if not current_sector or (isinstance(current_sector, str) and current_sector.lower() in ['unknown', 'n/a', '']):
-                profile.sector = "Technology"  # Default fallback
-                print(f"[CoreSignal Fallback] Sector still missing, using 'Technology'")
-            else:
-                print(f"[CoreSignal Fallback] Sector already set to '{current_sector}', keeping AI detection")
-        else:
-            print(f"[CoreSignal] No enrichment data available for {profile.name}.")
-            # Set defaults if CoreSignal has no data
-            if not getattr(profile, 'website', None) or getattr(profile, 'website', '').lower() in ['unknown', 'n/a', '']:
-                profile.website = "unknown"
-                print(f"[CoreSignal Fallback] No CoreSignal data, website set to 'unknown'")
-            
-            # Only set fallback sector if it's truly missing or invalid
-            current_sector = getattr(profile, 'sector', None)
-            if not current_sector or (isinstance(current_sector, str) and current_sector.lower() in ['unknown', 'n/a', '']):
-                profile.sector = "Technology"  # Default fallback
-                print(f"[CoreSignal Fallback] No CoreSignal data, sector set to 'Technology'")
-            else:
-                print(f"[CoreSignal Fallback] No CoreSignal data, but sector already set to '{current_sector}', keeping AI detection")
-    else:
-        print(f"[CoreSignal] Skipping enrichment for {profile.name} (name not available or invalid).")
-        # Set defaults if CoreSignal is skipped
-        if not getattr(profile, 'website', None) or getattr(profile, 'website', '').lower() in ['unknown', 'n/a', '']:
-            profile.website = "unknown"
-            print(f"[CoreSignal Fallback] CoreSignal skipped, website set to 'unknown'")
-        
-        # Only set fallback sector if it's truly missing or invalid
-        current_sector = getattr(profile, 'sector', None)
-        if not current_sector or (isinstance(current_sector, str) and current_sector.lower() in ['unknown', 'n/a', '']):
-            profile.sector = "Technology"  # Default fallback
-            print(f"[CoreSignal Fallback] CoreSignal skipped, sector set to 'Technology'")
-        else:
-            print(f"[CoreSignal Fallback] CoreSignal skipped, but sector already set to '{current_sector}', keeping AI detection")
-    
-    if evaluator:
-        evaluator.log_section_end("CORESIGNAL ENRICHMENT", tokens_used=0, model="local")
+
     
     # --- Website enrichment if missing or invalid ---
     if evaluator:
@@ -620,9 +353,20 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
     
     # Check if AI already detected a valid website
     ai_detected_website = getattr(profile, '_ai_detected_website', None)
+    current_website = getattr(profile, 'website', None)
+    
+    # Skip enrichment if AI already detected a valid website
     if ai_detected_website and is_valid_company_website(ai_detected_website):
-        print(f"[Website Enrichment] AI already detected valid website '{ai_detected_website}', skipping enrichment")
-    elif not is_valid_company_website(current_website):
+        print(f"[Website Enrichment] Skipping - AI already detected valid website: {ai_detected_website}")
+        # Don't return - continue with the rest of the function
+    
+    # Skip enrichment if current website is already valid
+    elif current_website and is_valid_company_website(current_website):
+        print(f"[Website Enrichment] Skipping - valid website already set: {current_website}")
+        # Don't return - continue with the rest of the function
+    
+    # Only run enrichment if we don't have a valid website
+    if not is_valid_company_website(current_website):
         try:
             from core.external_enrichment import find_company_website
             website = find_company_website(
@@ -638,6 +382,88 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
                 print("[Website Enrichment] No valid website found.")
         except Exception as e:
             print(f"[Website Enrichment] Error: {e}")
+    
+    # Enhanced CoreSignal enrichment with website
+    if evaluator:
+        try:
+            from core.coresignal_utils import get_full_company_data
+            # Use website if available for more accurate matching
+            website_for_search = profile.website if hasattr(profile, 'website') and profile.website else None
+            coresignal_data = get_full_company_data(
+                name_or_domain=profile.name,
+                website=website_for_search
+            )
+            if coresignal_data:
+                print(f"[CoreSignal] Enriched with website: {coresignal_data.get('name', 'Unknown')}")
+                print(f"[CoreSignal] Enriching profile for {profile.name} with comprehensive field mapping:")
+                
+                # Comprehensive field mapping from old system
+                mapping = {
+                    "company_id": coresignal_data.get("id") or coresignal_data.get("company_id"),
+                    "name": coresignal_data.get("name"),
+                    "legal_name": coresignal_data.get("company_legal_name") or coresignal_data.get("legal_name"),
+                    "shorthand_name": coresignal_data.get("company_shorthand_name") or coresignal_data.get("shorthand_name"),
+                    "description": coresignal_data.get("description"),
+                    "industry": coresignal_data.get("industry"),
+                    "domain": coresignal_data.get("website") or coresignal_data.get("domain"),
+                    "primary_domain": coresignal_data.get("primary_domain"),
+                    "other_domains": coresignal_data.get("other_domains"),
+                    "size_range": coresignal_data.get("size") or coresignal_data.get("size_range"),
+                    "founded_year": coresignal_data.get("founded") or coresignal_data.get("founded_year"),
+                    "status": coresignal_data.get("type") or coresignal_data.get("status"),
+                    "hq_city": coresignal_data.get("headquarters_city") or coresignal_data.get("headquarters_new_address"),
+                    "hq_country_iso2": coresignal_data.get("headquarters_country_restored") or coresignal_data.get("hq_country_iso2"),
+                    "office_locations": coresignal_data.get("company_locations_collection") or coresignal_data.get("office_locations"),
+                    "workforce_trends": coresignal_data.get("workforce_trends"),
+                    "active_job_postings": coresignal_data.get("active_job_postings"),
+                    "linkedin_followers": coresignal_data.get("followers") or coresignal_data.get("linkedin_followers"),
+                    "x_followers": coresignal_data.get("x_followers"),
+                    "news_counts": coresignal_data.get("news_counts"),
+                    "news_features": coresignal_data.get("company_updates_collection") or coresignal_data.get("news_features"),
+                    "website_traffic": coresignal_data.get("website_traffic"),
+                    "estimated_revenue_range": coresignal_data.get("estimated_revenue_range"),
+                    "revenue_currency": coresignal_data.get("revenue_currency"),
+                    "revenue_source": coresignal_data.get("revenue_source"),
+                    "last_funding_round_name": coresignal_data.get("last_funding_round_name"),
+                    "last_funding_round_amount_raised": coresignal_data.get("last_funding_round_amount_raised"),
+                    "last_funding_round_announced_date": coresignal_data.get("last_funding_round_announced_date"),
+                    "funding_rounds": coresignal_data.get("company_funding_rounds_collection") or coresignal_data.get("funding_rounds"),
+                    "acquisitions": coresignal_data.get("acquisition_list_source_1") or coresignal_data.get("acquisitions"),
+                    "technographics": coresignal_data.get("technographics"),
+                    "emails": coresignal_data.get("emails"),
+                    "phones": coresignal_data.get("phones"),
+                    "linkedin": coresignal_data.get("linkedin"),
+                    "twitter": coresignal_data.get("twitter"),
+                    "facebook": coresignal_data.get("facebook"),
+                }
+                
+                # Apply comprehensive field mapping
+                for k, v in mapping.items():
+                    if hasattr(profile, k) and v is not None and (getattr(profile, k, None) in [None, '', []]):
+                        # Special handling for office_locations to deduplicate
+                        if k == "office_locations" and isinstance(v, list):
+                            v = deduplicate_office_locations(v)
+                        setattr(profile, k, v)
+                        print(f"[CoreSignal] Set profile.{k} = '{v}'")
+                
+                # Enhanced field mapping for additional data
+                enhanced_mapping = {
+                    "website": coresignal_data.get("website"),
+                    "employees": coresignal_data.get("employees"),
+                    "founded": coresignal_data.get("founded"),
+                    "revenue": coresignal_data.get("revenue"),
+                    "funding": coresignal_data.get("funding"),
+                }
+                
+                # Apply enhanced mapping for basic fields
+                for k, v in enhanced_mapping.items():
+                    if hasattr(profile, k) and v is not None and (getattr(profile, k, None) in [None, '', []]):
+                        setattr(profile, k, v)
+                        print(f"[CoreSignal] Set profile.{k} = '{v}'")
+            else:
+                print("[CoreSignal] No company data found")
+        except Exception as e:
+            print(f"[CoreSignal] Error: {e}")
     else:
         print(f"[Website Enrichment] Valid website already set to '{current_website}', skipping enrichment")
     

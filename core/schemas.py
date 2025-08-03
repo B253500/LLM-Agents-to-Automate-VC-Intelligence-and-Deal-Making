@@ -31,8 +31,21 @@ class StartupProfile(BaseModel):
     # Basic identifiers
     name: Optional[str] = None
     sector: Optional[str] = None
+    industry: Optional[str] = None  # Added for CoreSignal data
     website: Optional[str] = None
     funding_stage: Optional[str] = None
+    
+    # CoreSignal enhanced fields
+    legal_name: Optional[str] = None
+    shorthand_name: Optional[str] = None
+    domain: Optional[str] = None
+    primary_domain: Optional[str] = None
+    other_domains: Optional[str] = None
+    workforce_trends: Optional[str] = None
+    active_job_postings: Optional[str] = None
+    acquisitions: Optional[str] = None
+    company_id: Optional[str] = None
+    description: Optional[str] = None
 
     # Populated by specialised agents (Phase 2+)
     tech_maturity: Optional[str] = None
@@ -123,10 +136,7 @@ class StartupProfile(BaseModel):
     market_size_sources: Optional[list[str]] = None
     revenue: Optional[float] = None
     gmv: Optional[float] = None
-    mrr: Optional[float] = None
     gross_profit: Optional[float] = None
-    cagr: Optional[float] = None
-    cagr_source: Optional[str] = None
     growth_rate: Optional[float] = None
     growth_rate_source: Optional[str] = None
     financial_growth_rate: Optional[float] = None
@@ -137,7 +147,6 @@ class StartupProfile(BaseModel):
     financials_table: Optional[str] = None
     financials_by_year: Optional[dict] = None
     market_summary: Optional[str] = None
-    market_reasoning: Optional[str] = None
     
     # --- Technical DD fields ---
     complexity: Optional[str] = None
@@ -147,11 +156,44 @@ class StartupProfile(BaseModel):
     testing: Optional[str] = None
     product_specifications: Optional[str] = None
     
+    # --- Enhanced Technical Advantages ---
+    technical_development_speed: Optional[str] = None  # e.g., "5-10x faster development time"
+    infrastructure_details: Optional[str] = None  # e.g., "Amazon S3, EC2"
+    performance_focus: Optional[str] = None  # e.g., "Obsession with performance"
+    technical_advantages: Optional[str] = None  # e.g., "Seamless compression, encryption, binary diffing"
+    
+    # --- Enhanced Business Model Details ---
+    business_model_individuals: Optional[str] = None  # e.g., "freemium"
+    business_model_smb: Optional[str] = None  # e.g., "shared folder per-seat license"
+    business_model_platform: Optional[str] = None  # e.g., "broker all UGC from desktop to web"
+    it_cost_reduction: Optional[str] = None  # e.g., "reduces IT headcount"
+    
+    # --- Enhanced Competitive Analysis ---
+    competitive_os_integration: Optional[str] = None  # e.g., "Deep OS integration"
+    competitive_user_experience: Optional[str] = None  # e.g., "Doesn't make you change the way you work"
+    competitive_apis: Optional[str] = None  # e.g., "Open APIs to link desktop & web"
+    
+    # --- Enhanced Market Analysis ---
+    market_timing: Optional[str] = None  # e.g., "unclaimed, unmonetized territory"
+    market_comparison: Optional[str] = None  # e.g., "much like search pre-Google"
+    market_drivers: Optional[str] = None  # e.g., "Falling bandwidth, storage prices"
+    
+    # --- Enhanced Growth Strategy ---
+    customer_acquisition_strategy: Optional[str] = None  # e.g., "natural influencers"
+    viral_elements: Optional[str] = None  # e.g., "file sharing, shared folders, photo/media galleries"
+    free_customer_acquisition: Optional[str] = None  # e.g., "Platform, partnerships → free customer acquisition"
+    
+    # --- Validation Signals ---
+    external_validation: Optional[str] = None  # e.g., "Ranked #1 among summer YC startups"
+    recognition_quotes: Optional[str] = None  # e.g., "simplicity and elegance of its interface"
+    
     # --- Additional fields used in main.py ---
     size: Optional[str] = None
     founded: Optional[str] = None
     followers: Optional[int] = None
     employees_count: Optional[int] = None
+    employees: Optional[str] = None  # Added for CoreSignal data
+    funding: Optional[str] = None  # Added for CoreSignal data
     website_traffic: Optional[str] = None
     funding_amount: Optional[str] = None
     funding_source: Optional[str] = None
@@ -172,7 +214,6 @@ class StartupProfile(BaseModel):
     TAM_original: Optional[str] = None
     SAM_original: Optional[str] = None
     SOM_original: Optional[str] = None
-    market_reasoning: Optional[str] = None
     market_size: Optional[float] = None
     market_size_source: Optional[str] = None
     total_merchants: Optional[float] = None

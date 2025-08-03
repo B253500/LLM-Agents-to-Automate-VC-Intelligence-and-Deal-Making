@@ -183,10 +183,18 @@ def format_company_overview_section(profile: StartupProfile) -> str:
     # Team
     execs = getattr(profile, 'executives', []) or []
     if execs:
-        team_str = "Team: " + ", ".join(
-            f"{e.get('name', 'Unknown')} ({e.get('role', '')})" if isinstance(e, dict) else str(e)
-            for e in execs[:3]
-        )
+        team_members = []
+        for e in execs[:3]:
+            if isinstance(e, dict):
+                name = e.get('name', 'Unknown')
+                role = e.get('role', '')
+                if role:
+                    team_members.append(f"{name} ({role})")
+                else:
+                    team_members.append(name)
+            else:
+                team_members.append(str(e))
+        team_str = "Team: " + ", ".join(team_members)
         lines.append(team_str)
     
     return '\n'.join(lines)

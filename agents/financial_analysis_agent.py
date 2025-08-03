@@ -25,7 +25,6 @@ def build_financial_analysis_agent(profile: StartupProfile, full_text: str = "",
     def _callback(*_):
         # Use comprehensive extracted data context with financial focus
         from core.hybrid_context import get_hybrid_context
-        from core.download_utils import extract_financials_from_text
         
         # Get comprehensive context including all extracted data with financial focus
         comprehensive_context = get_hybrid_context(profile, "financial analysis OR revenue OR funding OR valuation OR burn rate OR runway OR cash flow OR financial metrics OR profitability OR growth OR business model", use_reports=False)
@@ -40,25 +39,8 @@ def build_financial_analysis_agent(profile: StartupProfile, full_text: str = "",
             # Add full text as backup
             financial_context += "\n\nFULL TEXT:\n" + full_text[:3000]
         
-        # NEW: Use comprehensive financial extraction
-        print("[Financial Analysis] Running comprehensive financial extraction...")
-        extracted_financials = extract_financials_from_text(full_text)
-        
-        # Update profile with extracted financial data
-        for key, value in extracted_financials.items():
-            if value and value != "null":
-                # Convert field names to match profile attributes
-                field_name = key.replace('_', '')  # Remove underscores for compatibility
-                if hasattr(profile, field_name):
-                    setattr(profile, field_name, value)
-                    print(f"[Financial Analysis] Updated {field_name}={value}")
-                else:
-                    # Store as custom field
-                    custom_field = f"financial_{key}"
-                    setattr(profile, custom_field, value)
-                    print(f"[Financial Analysis] Stored {custom_field}={value}")
-        
-        # Call the chain with the comprehensive context
+        # Call the chain with the comprehensive context - let the chain handle all extraction
+        print("[Financial Analysis] Running comprehensive financial analysis chain...")
         updated = run_financial_analysis_chain(profile, financial_context=financial_context)
         return updated.model_dump_json(indent=2)
 

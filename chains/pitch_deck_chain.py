@@ -16,6 +16,61 @@ from core.vector_store import add_doc
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")  # loads OPENAI_API_KEY
 llm = ChatOpenAI(model="gpt-4", temperature=0.2)
 
+def get_smart_team_context(text):
+    """Extract team-relevant sections from text for better executive detection"""
+    import re
+    
+    # High-priority team keywords (these get more context)
+    high_priority_keywords = [
+        'founder', 'ceo', 'cfo', 'cto', 'chief', 'executive', 'president',
+        'founder', 'co-founder', 'cofounder', 'founders', 'management',
+        'team', 'leadership', 'board', 'director', 'chairman', 'chairwoman'
+    ]
+    
+    # Medium-priority keywords (name patterns)
+    medium_priority_keywords = [
+        'mr.', 'ms.', 'dr.', 'professor', 'phd', 'mba', 'linkedin',
+        'experience', 'background', 'previously', 'former', 'current'
+    ]
+    
+    # Find high-priority sections with more context
+    high_priority_sections = []
+    for keyword in high_priority_keywords:
+        # Get more context around high-priority keywords (1000 chars each side)
+        pattern = re.compile(rf'.{{0,1000}}{keyword}.{{0,1000}}', re.IGNORECASE)
+        matches = pattern.findall(text)
+        high_priority_sections.extend(matches)
+    
+    # Find medium-priority sections with less context
+    medium_priority_sections = []
+    for keyword in medium_priority_keywords:
+        # Get less context around medium-priority keywords (500 chars each side)
+        pattern = re.compile(rf'.{{0,500}}{keyword}.{{0,500}}', re.IGNORECASE)
+        matches = pattern.findall(text)
+        medium_priority_sections.extend(matches)
+    
+    # Combine all sections, prioritizing high-priority ones
+    all_sections = high_priority_sections + medium_priority_sections
+    
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_sections = []
+    for section in all_sections:
+        if section not in seen:
+            seen.add(section)
+            unique_sections.append(section)
+    
+    # Combine sections
+    combined_context = '\n\n'.join(unique_sections)
+    
+    # If we don't have enough context, add strategic parts of the text
+    if len(combined_context) < 3000:
+        # Add the beginning and end of the text (where team info often is)
+        combined_context += '\n\n' + text[:4000] + '\n\n' + text[-4000:]
+    
+    # Limit to 8k chars total for efficiency
+    return combined_context[:8000]
+
 SYSTEM = """
 You are a top-tier VC investment analyst. Extract the following fields as JSON:
 - name
@@ -23,11 +78,26 @@ You are a top-tier VC investment analyst. Extract the following fields as JSON:
 - sector
 - website
 - funding_stage
-- executives: a list of ONLY the following roles if present: CEO/Founder, CFO (Chief Financial Officer), Chairman, CTO (Chief Technology Officer). For each, include name, role, LinkedIn if available, and a list of prior exits with company name and link if available.
+- executives: a list of key executives found in the text. Look for team sections, leadership sections, or any area that lists company executives. For each executive, include name, role, LinkedIn if available, and a list of prior exits with company name and link if available. Common roles to look for: CEO, Chief Executive Officer, Founder, Co-Founder, CFO, Chief Financial Officer, CTO, Chief Technology Officer, Chairman, COO, Chief Operating Officer, Head of Product, Chief Risk Officer.
 
 IMPORTANT: For executives, DO NOT duplicate the same person. If someone appears multiple times with different roles, combine them into one entry with all roles. For example, if "Drew Houston" appears as both "CEO" and "Founder", create one entry: {{"name": "Drew Houston", "role": "CEO/Founder"}}
 
+EXAMPLES OF EXECUTIVE FORMATS TO RECOGNIZE:
+- "Tom Blomfield\nChief Executive Officer" → {{"name": "Tom Blomfield", "role": "Chief Executive Officer"}}
+- "Paul Rippon\nDeputy CEO & Co-Founder" → {{"name": "Paul Rippon", "role": "Deputy CEO & Co-Founder"}}
+- "Gary Dolman\nCFO & Co-Founder" → {{"name": "Gary Dolman", "role": "CFO & Co-Founder"}}
+
 CRITICAL: If NO executive information is found in the text (no names, no roles mentioned), return an EMPTY executives array: "executives": []. Do NOT make up or infer executive information.
+
+EXECUTIVE EXTRACTION RULES:
+1. Only extract executives that are CLEARLY mentioned with both name and role
+2. Look for patterns like: "Name - Role", "Name (Role)", "Name, Role", "Role: Name", "Name\nRole", "Role\nName"
+3. Also look for executives listed in team sections with names and roles on separate lines
+4. Common executive roles to extract: CEO, Chief Executive Officer, Founder, Co-Founder, CFO, Chief Financial Officer, CTO, Chief Technology Officer, Chairman, COO, Chief Operating Officer, Head of Product, Chief Risk Officer
+5. Do NOT extract partial information or inferred roles
+6. Do NOT include generic text like "from search results" or "dated 2025-01-01"
+7. Clean names: remove numbers, extra text, and formatting artifacts
+8. If you see a team section with multiple executives, extract all clearly identified ones
 
 For the 'name' field: 
 1. Look for the official company name that appears most frequently in the text
@@ -56,7 +126,7 @@ ADDITIONAL METRICS TO EXTRACT:
 If not explicitly stated, return "unknown". Do NOT hallucinate or infer.
 Return ONLY valid JSON.
 """
-HUMAN = "Pitch-deck text (first 5000 characters):\n```markdown\n{deck}\n```"
+HUMAN = "Pitch-deck text (team-relevant sections):\n```markdown\n{deck}\n```"
 PROMPT = ChatPromptTemplate.from_messages([("system", SYSTEM), ("human", HUMAN)])
 
 
@@ -493,144 +563,108 @@ def run_pitch_deck_chain_with_text(deck_text: str, profile: StartupProfile = Non
         if ai_company_name and ai_company_name.lower() != "unknown":
             print(f"[Company Detection] AI successfully detected: {ai_company_name}")
             profile.name = ai_company_name
-            
-            # Skip JSON extraction since we have a good company name
-            print("[Company Detection] Skipping JSON extraction - using AI result")
         else:
-            print("[Company Detection] AI detection failed, trying JSON extraction...")
-            
-            # FALLBACK: JSON extraction when AI fails
-            prompt = PROMPT.format(deck=truncated_text)
-            response = llm.invoke(prompt)
-            txt = response.content.strip()
-            
-            # Track token usage for main pitch deck extraction
-            if evaluator and hasattr(response, 'usage'):
-                input_tokens = getattr(response.usage, 'prompt_tokens', 0)
-                output_tokens = getattr(response.usage, 'completion_tokens', 0)
-                evaluator.log_agent_tokens("PITCH DECK MAIN EXTRACTION", input_tokens, output_tokens, "gpt-4o")
+            print("[Company Detection] AI detection failed")
+    
+    # ALWAYS run JSON extraction to get executives and other data
+    print("[JSON Extraction] Running JSON extraction for executives and other data...")
+    # Use smart team context for better executive detection
+    team_context = get_smart_team_context(truncated_text)
+    prompt = PROMPT.format(deck=team_context)
+    response = llm.invoke(prompt)
+    txt = response.content.strip()
+    
+    # Track token usage for main pitch deck extraction
+    if evaluator and hasattr(response, 'usage'):
+        input_tokens = getattr(response.usage, 'prompt_tokens', 0)
+        output_tokens = getattr(response.usage, 'completion_tokens', 0)
+        evaluator.log_agent_tokens("PITCH DECK MAIN EXTRACTION", input_tokens, output_tokens, "gpt-4o")
 
-            # Extract JSON from LLM output
-            first, last = txt.find("{"), txt.rfind("}")
-            if first == -1 or last == -1 or last < first:
-                print("[Warning] No JSON object found, falling back to extraction")
+    # Extract JSON from LLM output
+    first, last = txt.find("{"), txt.rfind("}")
+    if first == -1 or last == -1 or last < first:
+        print("[Warning] No JSON object found, falling back to extraction")
+        if not profile.name or not is_valid_string(profile.name):
+            fallback_name = extract_common_term(truncated_text, pdf_path or "unknown.pdf", evaluator)
+            profile.name = fallback_name
+    else:
+        try:
+            json_str = txt[first : last + 1]
+            raw = json.loads(json_str)
+
+            # Only update company name if we don't already have a good one
+            if not profile.name or not is_valid_string(profile.name):
+                if not raw.get("name") or not is_valid_string(raw.get("name")):
+                    fallback_name = extract_common_term(truncated_text, pdf_path or "unknown.pdf", evaluator)
+                    raw["name"] = fallback_name
+                profile.name = raw.get("name", profile.name)
+
+            if not raw.get("founder_name") or not is_valid_string(raw.get("founder_name")):
+                raw["founder_name"] = "unknown"
+
+            # Update profile with extracted data
+            for key, value in raw.items():
+                if hasattr(profile, key) and value:
+                    setattr(profile, key, value)
+            
+            # Extract additional metrics using AI
+            additional_metrics = extract_financial_metrics_with_ai(truncated_text, evaluator)
+            for key, value in additional_metrics.items():
+                if hasattr(profile, key) and value and is_valid_string(value):
+                    # Consolidate with existing data - prefer more specific/recent values
+                    existing_value = getattr(profile, key, None)
+                    if existing_value and is_valid_string(existing_value):
+                        # Keep the more specific value
+                        if len(str(value)) > len(str(existing_value)) or "million" in str(value).lower() or "billion" in str(value).lower():
+                            setattr(profile, key, value)
+                            print(f"[AI Metrics] Updated {key} from '{existing_value}' to '{value}'")
+                        else:
+                            print(f"[AI Metrics] Keeping existing {key}: '{existing_value}' (more specific than '{value}')")
+                    else:
+                        setattr(profile, key, value)
+                        print(f"[AI Metrics] Set {key} = {value}")
+                elif key == "total_merchants" and hasattr(profile, "merchants_count") and value and is_valid_string(value):
+                    profile.merchants_count = value
+                    print(f"[AI Metrics] Set merchants_count = {value}")
+                elif key == "total_gmv" and hasattr(profile, "gmv") and value and is_valid_string(value):
+                    profile.gmv = value
+                    print(f"[AI Metrics] Set gmv = {value}")
+                elif key == "target_market" and hasattr(profile, "TAM") and value and is_valid_string(value):
+                    profile.TAM = value
+                    print(f"[AI Metrics] Set TAM = {value}")
+                elif key == "growth_rate" and hasattr(profile, "growth_rate") and value and is_valid_string(value):
+                    profile.growth_rate = value
+                    print(f"[AI Metrics] Set growth_rate = {value}")
+                elif key == "latest_funding" and hasattr(profile, "latest_round_amount") and value and is_valid_string(value):
+                    profile.latest_round_amount = value
+                    print(f"[AI Metrics] Set latest_round_amount = {value}")
+                elif key == "valuation" and hasattr(profile, "valuation") and value and is_valid_string(value):
+                    profile.valuation = value
+                    print(f"[AI Metrics] Set valuation = {value}")
+                elif key == "gross_profit" and hasattr(profile, "gross_profit") and value and is_valid_string(value):
+                    profile.gross_profit = value
+                    print(f"[AI Metrics] Set gross_profit = {value}")
+            
+            # Explicitly handle executives if present
+            if "executives" in raw and raw["executives"]:
+                # Deduplicate executives by name
+                deduplicated_executives = deduplicate_executives(raw["executives"])
+                profile.executives = deduplicated_executives
+                print(f"[Team Extraction] Found {len(deduplicated_executives)} unique executives")
+                
+                # Collect all prior exits from executives
+                prior_exit_details = []
+                for exec in deduplicated_executives:
+                    if isinstance(exec, dict) and exec.get("prior_exits"):
+                        for ex in exec["prior_exits"]:
+                            prior_exit_details.append(ex)
+                if prior_exit_details:
+                    profile.prior_exit_details = prior_exit_details
+        except Exception as e:
+            print(f"[Error] Failed to parse LLM output: {e}")
+            if not profile.name or not is_valid_string(profile.name):
                 fallback_name = extract_common_term(truncated_text, pdf_path or "unknown.pdf", evaluator)
                 profile.name = fallback_name
-            else:
-                try:
-                    json_str = txt[first : last + 1]
-                    raw = json.loads(json_str)
-
-                    if not raw.get("name") or not is_valid_string(raw.get("name")):
-                        fallback_name = extract_common_term(truncated_text, pdf_path or "unknown.pdf", evaluator)
-                        raw["name"] = fallback_name
-
-                    if not raw.get("founder_name") or not is_valid_string(raw.get("founder_name")):
-                        raw["founder_name"] = "unknown"
-
-                    # Update profile with extracted data
-                    for key, value in raw.items():
-                        if hasattr(profile, key) and value:
-                            setattr(profile, key, value)
-                    
-                    # Extract additional metrics using AI
-                    additional_metrics = extract_financial_metrics_with_ai(truncated_text, evaluator)
-                    for key, value in additional_metrics.items():
-                        if hasattr(profile, key) and value and is_valid_string(value):
-                            # Consolidate with existing data - prefer more specific/recent values
-                            existing_value = getattr(profile, key, None)
-                            if existing_value and is_valid_string(existing_value):
-                                # Keep the more specific value
-                                if len(str(value)) > len(str(existing_value)) or "million" in str(value).lower() or "billion" in str(value).lower():
-                                    setattr(profile, key, value)
-                                    print(f"[AI Metrics] Updated {key} from '{existing_value}' to '{value}'")
-                                else:
-                                    print(f"[AI Metrics] Keeping existing {key}: '{existing_value}' (more specific than '{value}')")
-                            else:
-                                setattr(profile, key, value)
-                                print(f"[AI Metrics] Set {key} = {value}")
-                        elif key == "total_merchants" and hasattr(profile, "merchants_count") and value and is_valid_string(value):
-                            profile.merchants_count = value
-                            print(f"[AI Metrics] Set merchants_count = {value}")
-                        elif key == "total_gmv" and hasattr(profile, "gmv") and value and is_valid_string(value):
-                            profile.gmv = value
-                            print(f"[AI Metrics] Set gmv = {value}")
-                        elif key == "target_market" and hasattr(profile, "TAM") and value and is_valid_string(value):
-                            profile.TAM = value
-                            print(f"[AI Metrics] Set TAM = {value}")
-                        elif key == "growth_rate" and hasattr(profile, "growth_rate") and value and is_valid_string(value):
-                            profile.growth_rate = value
-                            print(f"[AI Metrics] Set growth_rate = {value}")
-                        elif key == "latest_funding" and hasattr(profile, "latest_round_amount") and value and is_valid_string(value):
-                            profile.latest_round_amount = value
-                            print(f"[AI Metrics] Set latest_round_amount = {value}")
-                        elif key == "valuation" and hasattr(profile, "valuation") and value and is_valid_string(value):
-                            profile.valuation = value
-                            print(f"[AI Metrics] Set valuation = {value}")
-                        elif key == "gross_profit" and hasattr(profile, "gross_profit") and value and is_valid_string(value):
-                            profile.gross_profit = value
-                            print(f"[AI Metrics] Set gross_profit = {value}")
-                    
-                    # Explicitly handle executives if present
-                    if "executives" in raw and raw["executives"]:
-                        # Deduplicate executives by name
-                        deduplicated_executives = deduplicate_executives(raw["executives"])
-                        profile.executives = deduplicated_executives
-                        print(f"[Team Extraction] Found {len(deduplicated_executives)} unique executives")
-                        
-                        # Collect all prior exits from executives
-                        prior_exit_details = []
-                        for exec in deduplicated_executives:
-                            if isinstance(exec, dict) and exec.get("prior_exits"):
-                                for ex in exec["prior_exits"]:
-                                    prior_exit_details.append(ex)
-                        if prior_exit_details:
-                            profile.prior_exit_details = prior_exit_details
-                except Exception as e:
-                    print(f"[Error] Failed to parse LLM output: {e}")
-                    fallback_name = extract_common_term(truncated_text, pdf_path or "unknown.pdf", evaluator)
-                    profile.name = fallback_name
-    else:
-        print(f"[Company Detection] Skipping - company name already detected: {profile.name}")
-        
-        # Still run other AI extractions for additional data
-        # Extract additional metrics using AI
-        additional_metrics = extract_financial_metrics_with_ai(truncated_text, evaluator)
-        for key, value in additional_metrics.items():
-            if hasattr(profile, key) and value and is_valid_string(value):
-                # Consolidate with existing data - prefer more specific/recent values
-                existing_value = getattr(profile, key, None)
-                if existing_value and is_valid_string(existing_value):
-                    # Keep the more specific value
-                    if len(str(value)) > len(str(existing_value)) or "million" in str(value).lower() or "billion" in str(value).lower():
-                        setattr(profile, key, value)
-                        print(f"[AI Metrics] Updated {key} from '{existing_value}' to '{value}'")
-                    else:
-                        print(f"[AI Metrics] Keeping existing {key}: '{existing_value}' (more specific than '{value}')")
-                else:
-                    setattr(profile, key, value)
-                    print(f"[AI Metrics] Set {key} = {value}")
-            elif key == "total_merchants" and hasattr(profile, "merchants_count") and value and is_valid_string(value):
-                profile.merchants_count = value
-                print(f"[AI Metrics] Set merchants_count = {value}")
-            elif key == "total_gmv" and hasattr(profile, "gmv") and value and is_valid_string(value):
-                profile.gmv = value
-                print(f"[AI Metrics] Set gmv = {value}")
-            elif key == "target_market" and hasattr(profile, "TAM") and value and is_valid_string(value):
-                profile.TAM = value
-                print(f"[AI Metrics] Set TAM = {value}")
-            elif key == "growth_rate" and hasattr(profile, "growth_rate") and value and is_valid_string(value):
-                profile.growth_rate = value
-                print(f"[AI Metrics] Set growth_rate = {value}")
-            elif key == "latest_funding" and hasattr(profile, "latest_round_amount") and value and is_valid_string(value):
-                profile.latest_round_amount = value
-                print(f"[AI Metrics] Set latest_round_amount = {value}")
-            elif key == "valuation" and hasattr(profile, "valuation") and value and is_valid_string(value):
-                profile.valuation = value
-                print(f"[AI Metrics] Set valuation = {value}")
-            elif key == "gross_profit" and hasattr(profile, "gross_profit") and value and is_valid_string(value):
-                profile.gross_profit = value
-                print(f"[AI Metrics] Set gross_profit = {value}")
 
     # Fallback if still missing
     if not profile.name or not is_valid_string(profile.name):

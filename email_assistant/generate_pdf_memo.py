@@ -91,24 +91,8 @@ Generate a detailed and comprehensive investment memorandum based on the followi
 
 # --- End Perplexity/LLM integration ---
 
-def run_all_sequential_with_text(full_text: str, profile: StartupProfile) -> StartupProfile:
-    print(f"🔍 Processing extracted text ({len(full_text)} characters)")
-    print(f"📄 Starting with fresh profile: {profile.name}")
-    profile = run_pitch_deck_chain_with_text(full_text, profile)
-    print(f"📊 After pitch deck: Company={profile.name}, Founder={profile.founder_name}")
-    profile = run_technical_dd_chain_with_text(full_text, profile)
-    print(f"🔧 After tech DD: Maturity={profile.tech_maturity}, Moat={profile.moat_strength}")
-    profile = run_founder_profiling_chain_with_text(full_text, profile)
-    print(f"👤 After founder profiling: Score={profile.founder_fit_score}")
-    profile = run_market_sizing_chain_with_text(full_text, profile)
-    print(f"📈 After market sizing: TAM={profile.TAM}, SAM={profile.SAM}, SOM={profile.SOM}")
-    profile = run_financial_analysis_chain_with_text(full_text, profile)
-    print(f"💰 After financial analysis: Burn={profile.cash_burn_12m}, Runway={profile.runway_months}")
-    profile = run_competitive_intel_chain_with_text(full_text, profile)
-    print(f"🏆 After competitive intel: {len(profile.top_competitors)} competitors found")
-    profile = run_risk_assessment_chain_with_text(full_text, profile)
-    print(f"⚠️ After risk assessment: Score={profile.risk_score}, {len(profile.risk_flags)} flags")
-    return profile
+# Import the centralized orchestration function
+from core.orchestration import run_all_sequential_with_text
 
 def run_pitch_deck_chain_with_text(full_text: str, profile: StartupProfile) -> StartupProfile:
     from chains.pitch_deck_chain import run_pitch_deck_chain_with_text as run_pitch_chain
@@ -173,7 +157,7 @@ def main():
             continue
         clear_collection()
         profile = StartupProfile()
-        profile = run_all_sequential_with_text(text, profile)
+        profile = run_all_sequential_with_text(text, profile, file_path)
         if use_llm:
             memo_text = generate_llm_memo(profile, extra_context=text)
         else:
