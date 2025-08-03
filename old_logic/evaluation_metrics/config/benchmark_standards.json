@@ -1,0 +1,36 @@
+{
+  "quality_benchmarks": {
+    "excellent": {
+      "section_completeness": 0.95,
+      "readability_score": 70.0,
+      "quality_score": 9.0
+    },
+    "good": {
+      "section_completeness": 0.85,
+      "readability_score": 60.0,
+      "quality_score": 7.5
+    },
+    "acceptable": {
+      "section_completeness": 0.75,
+      "readability_score": 50.0,
+      "quality_score": 6.0
+    }
+  },
+  "performance_benchmarks": {
+    "excellent": {
+      "generation_time_seconds": 18000,
+      "cost_usd": 500.0,
+      "token_usage": 30000
+    },
+    "good": {
+      "generation_time_seconds": 30000,
+      "cost_usd": 1000.0,
+      "token_usage": 40000
+    },
+    "acceptable": {
+      "generation_time_seconds": 54000,
+      "cost_usd": 2250.0,
+      "token_usage": 50000
+    }
+  }
+}

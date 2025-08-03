@@ -43,7 +43,6 @@ def web_search_financial_context(company_name):
                     cleaned_result = result.strip()
                     
                     # Remove <think> tags and their content
-                    import re
                     cleaned_result = re.sub(r'<think>.*?</think>', '', cleaned_result, flags=re.DOTALL)
                     
                     # Remove thinking process markers (more comprehensive)
@@ -151,7 +150,6 @@ def parse_money_string(s):
     s = str(s).replace(",", "").strip()
     
     # Remove currency codes (USD, EUR, etc.) first - look anywhere in the string
-    import re
     s = re.sub(r'\s*(USD|EUR|GBP|CAD|AUD|JPY)\s*', '', s, flags=re.IGNORECASE)
     
     # Remove $ and other currency symbols first
@@ -393,7 +391,6 @@ from core.utils import parse_money_string
 
 def get_smart_financial_context(text):
     """Extract financial-relevant sections from text and create a focused 10k summary"""
-    import re
     
     # High-priority financial keywords (these get more context)
     high_priority_keywords = [
@@ -541,7 +538,6 @@ Text to analyze:
         
         # Parse the JSON response
         import json
-        import re
         
         # Clean up the response to extract JSON
         json_match = re.search(r'\{.*\}', response, re.DOTALL)
@@ -886,7 +882,6 @@ Crunchbase Funding Data:
         if web_search_data:
             print(f"[Financial Analysis] Found web search data for {company_name}")
             # Extract URLs from web search data
-            import re
             urls = re.findall(r'https?://[^\s]+', web_search_data)
             web_sources = list(set(urls))  # Remove duplicates
             # Store web sources and data in profile
@@ -999,7 +994,6 @@ Crunchbase Funding Data:
     
     # Clean the LLM output to remove debugging artifacts
     cleaned_txt = txt
-    import re
     
     # Remove <think> tags and their content
     cleaned_txt = re.sub(r'<think>.*?</think>', '', cleaned_txt, flags=re.DOTALL)
@@ -1044,7 +1038,6 @@ Crunchbase Funding Data:
     if first == -1 or last == -1:
         return profile
     try:
-        import json
         data = json.loads(txt[first : last + 1])
         print("[Financial Chain] Parsed JSON:", data)
         # Only assign values if they are present in the original text/tables

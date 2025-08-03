@@ -15,7 +15,6 @@ llm = ChatOpenAI(model="gpt-4o", temperature=0.1)
 
 def get_smart_market_context(text):
     """Extract market-relevant sections from text and create a focused 10k summary"""
-    import re
     
     # High-priority market keywords (these get more context)
     high_priority_keywords = [
@@ -178,7 +177,6 @@ Market-Relevant Text to analyze:
         
         # Parse the JSON response
         import json
-        import re
         
         # Clean up the response to extract JSON
         json_match = re.search(r'\{.*\}', response, re.DOTALL)
@@ -362,7 +360,6 @@ def run_market_sizing_chain(profile: StartupProfile) -> StartupProfile:
         json_str = txt[first : last + 1]
         
         # Clean up the JSON string
-        import re
         # Remove any newlines and extra whitespace that might break JSON
         json_str = re.sub(r'\s+', ' ', json_str)
         json_str = json_str.replace('\n', ' ').replace('\r', ' ')
@@ -511,7 +508,6 @@ def generate_market_size_section(profile: StartupProfile) -> str:
             return ""
         
         # Remove <think> tags and their content
-        import re
         cleaned = re.sub(r'<think>.*?</think>', '', response, flags=re.DOTALL)
         
         # Remove thinking process markers (but be more careful)
@@ -576,7 +572,6 @@ def generate_market_size_section(profile: StartupProfile) -> str:
                     if search_results:
                         print(f"[Market Agent] Found search results, extracting URLs...")
                         # Extract URLs BEFORE cleaning the response
-                        import re
                         
                         # Look for markdown links first: [text](url) - BEFORE cleaning
                         markdown_links = re.findall(r'\[([^\]]+)\]\((https?://[^\)]+)\)', search_results)
@@ -628,7 +623,6 @@ def generate_market_size_section(profile: StartupProfile) -> str:
             
             if search_results:
                 # Extract URLs BEFORE cleaning the response
-                import re
                 
                 # Look for markdown links first: [text](url) - BEFORE cleaning
                 markdown_links = re.findall(r'\[([^\]]+)\]\((https?://[^\)]+)\)', search_results)

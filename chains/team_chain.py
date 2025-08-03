@@ -116,7 +116,6 @@ def generate_team_section(profile: StartupProfile) -> str:
         # Use background_summary if available, otherwise use bio
         if background_summary:
             # Clean up any remaining AI thinking patterns
-            import re
             clean_summary = background_summary
             thinking_patterns = [
                 r'Let me extract.*?\.',
@@ -139,7 +138,6 @@ def generate_team_section(profile: StartupProfile) -> str:
                 lines.append(f"Background: {clean_summary}")
         elif bio:
             # Clean up bio as well
-            import re
             clean_bio = bio
             thinking_patterns = [
                 r'Let me extract.*?\.',
@@ -267,7 +265,6 @@ def get_linkedin_profile_perplexity(name, company_name=None):
         
         if result:
             # Extract LinkedIn URL if found (more flexible pattern)
-            import re
             linkedin_patterns = [
                 r'https?://[\w./-]*linkedin\.com/in/[\w/_-]+',
                 r'https://www\.linkedin\.com/in/[\w/_-]+',
@@ -377,7 +374,6 @@ def generate_linkedin_url(name, company_name=None):
 
 def extract_headline(text, name):
     """Extract current headline/role from text."""
-    import re
     
     # Clean up the text first - remove Perplexity thinking patterns
     text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
@@ -409,7 +405,6 @@ def extract_headline(text, name):
 
 def extract_summary(text):
     """Extract summary/background from text."""
-    import re
     
     # Clean up the text first - remove Perplexity thinking patterns
     text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
@@ -462,7 +457,6 @@ def extract_summary(text):
 
 def extract_experiences(text):
     """Extract work experiences from text."""
-    import re
     
     # Clean up the text first
     text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
@@ -670,7 +664,6 @@ def generate_executive_background_summary(name: str, role: str, linkedin_data: d
         
         if search_result:
             # Clean up the search result - remove AI thinking patterns
-            import re
             cleaned_result = re.sub(r'<think>.*?</think>', '', search_result, flags=re.DOTALL)
             cleaned_result = re.sub(r'Based on.*?', '', cleaned_result, flags=re.DOTALL)
             cleaned_result = re.sub(r'According to.*?', '', cleaned_result, flags=re.DOTALL)
@@ -729,7 +722,6 @@ def enrich_executives_with_perplexity(company_name, existing_execs):
         return existing_execs
     
     # Clean the result to remove AI thinking text
-    import re
     cleaned_result = result
     
     # Remove common AI thinking patterns
@@ -890,7 +882,6 @@ def enrich_executive_details_with_perplexity(company_name, executives):
             query = f"What is the LinkedIn profile URL for {name} at {company_name}?"
             result = search_perplexity(query)
             if result and 'linkedin.com/in/' in result:
-                import re
                 # Find LinkedIn URL in result - try multiple patterns
                 patterns = [
                     r"https?://[\w./-]*linkedin.com/in/[\w/_-]+",
@@ -934,7 +925,6 @@ def enrich_executive_details_with_perplexity(company_name, executives):
             result = search_perplexity(query)
             if result and len(result.split()) > 8:
                 # Clean up the bio - remove AI thinking text
-                import re
                 bio = result.strip()
                 # Remove common AI thinking patterns
                 thinking_patterns = [
@@ -1023,7 +1013,6 @@ def run_team_chain(profile: StartupProfile) -> StartupProfile:
                         from core.perplexity_utils import search_perplexity
                         result = search_perplexity(query)
                         if result and 'linkedin.com/in/' in result:
-                            import re
                             match = re.search(r"https?://[\w./-]*linkedin.com/in/[\w/_-]+", result)
                             if match:
                                 enriched_exec['linkedin'] = match.group(0)
@@ -1036,7 +1025,6 @@ def run_team_chain(profile: StartupProfile) -> StartupProfile:
                         result = search_perplexity(query)
                         if result and len(result.split()) > 8:
                             # Clean up the bio - remove AI thinking text
-                            import re
                             bio = result.strip()
                             # Remove common AI thinking patterns
                             thinking_patterns = [

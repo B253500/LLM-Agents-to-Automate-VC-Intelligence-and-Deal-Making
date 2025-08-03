@@ -1,0 +1,504 @@
+{
+  "What's the current deal activity size for Insurtech in the most recent financial quarter?": {
+    "answer": "The current deal activity size for Insurtech in the most recent financial quarter, Q1 2025, is $1.8 billion in deal value and 121 in deal count.",
+    "sources": [
+      {
+        "source": "Q1_2025_Insurtech_VC_Trends_19315.pdf",
+        "has_visual": false,
+        "temporal_valid": true,
+        "keywords_found": [
+          "deal",
+          "activity",
+          "for",
+          "insurtech"
+        ]
+      },
+      {
+        "source": "Q1_2025_E-Commerce_VC_Trends_19312.pdf",
+        "has_visual": false,
+        "temporal_valid": true,
+        "keywords_found": [
+          "s",
+          "for",
+          "quarter",
+          "the",
+          "in"
+        ]
+      },
+      {
+        "source": "Q2_2025_PitchBook_Analyst_Note_Tariffs_and_Supply_Chain_Challenges_in_Clean_Energy_19416.pdf",
+        "has_visual": false,
+        "temporal_valid": true,
+        "keywords_found": [
+          "what",
+          "recent",
+          "most",
+          "for",
+          "the",
+          "in"
+        ]
+      },
+      {
+        "source": "Q1_2025_Foodtech_VC_Trends_19411.pdf",
+        "has_visual": false,
+        "temporal_valid": true,
+        "keywords_found": [
+          "financial",
+          "for",
+          "the",
+          "in",
+          "deal"
+        ]
+      }
+    ],
+    "validation": {
+      "temporal_valid": true,
+      "tokens_used": 3014,
+      "cost": 0.0309,
+      "keywords_searched": [
+        "financial",
+        "what",
+        "most",
+        "insurtech",
+        "recent",
+        "s",
+        "for",
+        "current",
+        "activity",
+        "quarter",
+        "the",
+        "size",
+        "in",
+        "deal"
+      ]
+    }
+  },
+  "What's the total value of exits in the biotechnology/bio tools space in Q1 2025?": {
+    "answer": "The provided context does not specify the total value of exits in the biotechnology/bio tools space for Q1 2025. The information given focuses on venture capital (VC) deal activity, including deal values and counts across different stages of company maturity, but does not directly mention exit values such as IPOs or acquisitions for that specific quarter.",
+    "sources": [
+      {
+        "source": "Q1_2025_Pharma_Biotools_VC_Trends_19367.pdf",
+        "has_visual": false,
+        "temporal_valid": false,
+        "keywords_found": [
+          "value",
+          "tools",
+          "s",
+          "of",
+          "q1",
+          "the",
+          "2025",
+          "in"
+        ]
+      },
+      {
+        "source": "Q1_2025_Gaming_VC_Trends_19414.pdf",
+        "has_visual": false,
+        "temporal_valid": false,
+        "keywords_found": [
+          "exits",
+          "value",
+          "s",
+          "of",
+          "2025",
+          "the",
+          "in"
+        ]
+      },
+      {
+        "source": "Q2_2025_PitchBook_Analyst_Note_Tariffs_and_Supply_Chain_Challenges_in_Clean_Energy_19416.pdf",
+        "has_visual": false,
+        "temporal_valid": false,
+        "keywords_found": [
+          "what",
+          "2025",
+          "the",
+          "in",
+          "of"
+        ]
+      },
+      {
+        "source": "Q1_2025_Insurtech_VC_Trends_19315.pdf",
+        "has_visual": false,
+        "temporal_valid": false,
+        "keywords_found": [
+          "value",
+          "2025",
+          "of"
+        ]
+      },
+      {
+        "source": "NPL-Quantum-Ecosystem-Mapping-Report-2024_PDF.pdf",
+        "has_visual": false,
+        "temporal_valid": false,
+        "keywords_found": [
+          "tools",
+          "s",
+          "the",
+          "in",
+          "of"
+        ]
+      }
+    ],
+    "validation": {
+      "temporal_valid": false,
+      "tokens_used": 2892,
+      "cost": 0.0303,
+      "keywords_searched": [
+        "exits",
+        "what",
+        "value",
+        "tools",
+        "s",
+        "q1",
+        "total",
+        "temporal",
+        "the",
+        "space",
+        "2025",
+        "in",
+        "biotechnology",
+        "bio",
+        "of"
+      ]
+    }
+  },
+  "What are the top 3 academic institutions by spin out activity in the UK? How many companies do they spin out on average individually?": {
+    "answer": "The top 3 academic institutions by spinout activity in the UK, as of January 2025, are:\n\n1. University of Oxford with 225 spinouts\n2. University of Cambridge with 175 spinouts\n3. Imperial College London with 132 spinouts\n\nTo calculate the average number of companies they spin out individually, we sum the total number of spinouts from these institutions and then divide by the number of institutions (3 in this case).\n\n\\[ \\text{Average} = \\frac{(225 + 175 + 132)}{3} \\]\n\n\\[ \\text{Average} = \\frac{532}{3} \\]\n\n\\[ \\text{Average} = 177.33 \\]\n\nTherefore, on average, these top 3 academic institutions spin out approximately 177 companies individually.",
+    "sources": [
+      {
+        "source": "Beauhurst_Royal-Academy-of-Engineering_Spotlight-on-Spinouts-2025.pdf",
+        "has_visual": false,
+        "temporal_valid": true,
+        "keywords_found": [
+          "institutions",
+          "companies",
+          "academic",
+          "on",
+          "by",
+          "the",
+          "are",
+          "top"
+        ]
+      },
+      {
+        "source": "NPL-Quantum-Ecosystem-Mapping-Report-2024_PDF.pdf",
+        "has_visual": false,
+        "temporal_valid": true,
+        "keywords_found": [
+          "institutions",
+          "companies",
+          "academic",
+          "the",
+          "are",
+          "in"
+        ]
+      },
+      {
+        "source": "Q2_2025_PitchBook_Analyst_Note_US_VC-Backed_MA_Outlook_19317.pdf",
+        "has_visual": false,
+        "temporal_valid": true,
+        "keywords_found": [
+          "3",
+          "companies",
+          "on",
+          "by",
+          "the",
+          "in"
+        ]
+      }
+    ],
+    "validation": {
+      "temporal_valid": true,
+      "tokens_used": 1234,
+      "cost": 0.015620000000000002,
+      "keywords_searched": [
+        "institutions",
+        "companies",
+        "spin",
+        "on",
+        "they",
+        "uk",
+        "out",
+        "by",
+        "how",
+        "many",
+        "in",
+        "3",
+        "academic",
+        "what",
+        "do",
+        "top",
+        "average",
+        "activity",
+        "the",
+        "are",
+        "individually"
+      ]
+    }
+  },
+  "What is the top sector of UK academic spinouts?": {
+    "answer": "The top sector of UK academic spinouts, as of January 2025, is Artificial Intelligence (AI), with 214 companies.",
+    "sources": [
+      {
+        "source": "Beauhurst_Royal-Academy-of-Engineering_Spotlight-on-Spinouts-2025.pdf",
+        "has_visual": false,
+        "temporal_valid": true,
+        "keywords_found": [
+          "top",
+          "uk",
+          "spinouts",
+          "the",
+          "sector",
+          "of"
+        ]
+      },
+      {
+        "source": "NPL-Quantum-Ecosystem-Mapping-Report-2024_PDF.pdf",
+        "has_visual": false,
+        "temporal_valid": true,
+        "keywords_found": [
+          "spinouts",
+          "academic",
+          "the",
+          "of"
+        ]
+      },
+      {
+        "source": "Q2_2025_PitchBook_Analyst_Note_Tariffs_and_Supply_Chain_Challenges_in_Clean_Energy_19416.pdf",
+        "has_visual": false,
+        "temporal_valid": true,
+        "keywords_found": [
+          "what",
+          "the",
+          "of"
+        ]
+      },
+      {
+        "source": "data/vc_reports/Tecscaler-annual-report-2024.pdf",
+        "has_visual": false,
+        "temporal_valid": true,
+        "keywords_found": [
+          "academic",
+          "what",
+          "is",
+          "top",
+          "uk",
+          "the",
+          "sector",
+          "of"
+        ]
+      },
+      {
+        "source": "Q1_2025_E-Commerce_VC_Trends_19312.pdf",
+        "has_visual": false,
+        "temporal_valid": true,
+        "keywords_found": [
+          "top",
+          "the",
+          "of"
+        ]
+      }
+    ],
+    "validation": {
+      "temporal_valid": true,
+      "tokens_used": 2136,
+      "cost": 0.021900000000000003,
+      "keywords_searched": [
+        "academic",
+        "what",
+        "of",
+        "is",
+        "uk",
+        "the",
+        "spinouts",
+        "sector",
+        "top"
+      ]
+    }
+  },
+  "What's the top sub-sector of Quantum Computing by number of companies generated?": {
+    "answer": "The top sub-sector of Quantum Computing by number of companies is Electronics Hardware, comprising 119 companies, which represents 15.4% of the total identified quantum companies.",
+    "sources": [
+      {
+        "source": "NPL-Quantum-Ecosystem-Mapping-Report-2024_PDF.pdf",
+        "has_visual": false,
+        "temporal_valid": true,
+        "keywords_found": [
+          "companies",
+          "quantum",
+          "sub",
+          "top",
+          "the",
+          "computing",
+          "sector",
+          "of"
+        ]
+      },
+      {
+        "source": "data/vc_reports/Tecscaler-annual-report-2024.pdf",
+        "has_visual": false,
+        "temporal_valid": true,
+        "keywords_found": [
+          "number",
+          "companies",
+          "what",
+          "s",
+          "sub",
+          "top",
+          "the",
+          "by",
+          "sector",
+          "of"
+        ]
+      },
+      {
+        "source": "Q2_2025_PitchBook_Analyst_Note_US_VC-Backed_MA_Outlook_19317.pdf",
+        "has_visual": false,
+        "temporal_valid": true,
+        "keywords_found": [
+          "number",
+          "companies",
+          "s",
+          "the",
+          "by",
+          "sector",
+          "of"
+        ]
+      },
+      {
+        "source": "Q2_2025_PitchBook_Analyst_Note_Tariffs_and_Supply_Chain_Challenges_in_Clean_Energy_19416.pdf",
+        "has_visual": false,
+        "temporal_valid": true,
+        "keywords_found": [
+          "what",
+          "the",
+          "of"
+        ]
+      }
+    ],
+    "validation": {
+      "temporal_valid": true,
+      "tokens_used": 1413,
+      "cost": 0.01481,
+      "keywords_searched": [
+        "number",
+        "companies",
+        "what",
+        "quantum",
+        "s",
+        "of",
+        "sub",
+        "the",
+        "by",
+        "generated",
+        "computing",
+        "sector",
+        "top"
+      ]
+    }
+  },
+  "What's the CAGR of median gaming early-stage VC deal value and pre-money valuation ($M) in the segment of development?": {
+    "answer": "To calculate the Compound Annual Growth Rate (CAGR) for both the median gaming early-stage VC deal value and pre-money valuation in the development segment, we use the formula:\n\n\\[ \\text{CAGR} = \\left( \\frac{\\text{Ending Value}}{\\text{Beginning Value}} \\right)^{\\frac{1}{\\text{n}}} - 1 \\]\n\nwhere:\n- Ending Value is the value at the end of the period,\n- Beginning Value is the value at the beginning of the period,\n- n is the number of years.\n\n**Deal Value CAGR Calculation:**\n\nBeginning Value (2020) = $5.4M\nEnding Value (2025) = $4.3M\nn = 5 years\n\n\\[ \\text{CAGR} = \\left( \\frac{4.3}{5.4} \\right)^{\\frac{1}{5}} - 1 \\]\n\n\\[ \\text{CAGR} = (0.7963)^{0.2} - 1 \\]\n\n\\[ \\text{CAGR} = 0.9706 - 1 \\]\n\n\\[ \\text{CAGR} = -0.0294 \\]\n\n\\[ \\text{CAGR} = -2.94\\% \\]\n\n**Pre-money Valuation CAGR Calculation:**\n\nBeginning Value (2020) = $15.0M\nEnding Value (2025) = $155.9M\nn = 5 years\n\n\\[ \\text{CAGR} = \\left( \\frac{155.9}{15.0} \\right)^{\\frac{1}{5}} - 1 \\]\n\n\\[ \\text{CAGR} = (10.3933)^{0.2} - 1 \\]\n\n\\[ \\text{CAGR} = 2.589 - 1 \\]\n\n\\[ \\text{CAGR} = 1.589 \\]\n\n\\[ \\text{CAGR} = 158.9\\% \\]\n\nTherefore, the CAGR for the median gaming early-stage VC deal value in the development segment over the period from 2020 to 2025 is -2.94%, indicating a decrease, while the CAGR for the pre-money valuation is 158.9%, indicating a significant increase.",
+    "sources": [
+      {
+        "source": "Q1_2025_Gaming_VC_Trends_19414.pdf",
+        "has_visual": false,
+        "temporal_valid": true,
+        "keywords_found": [
+          "development",
+          "early",
+          "value",
+          "money",
+          "vc",
+          "stage",
+          "valuation",
+          "median",
+          "and",
+          "pre",
+          "m",
+          "segment",
+          "gaming",
+          "deal"
+        ]
+      },
+      {
+        "source": "Q1_2025_Insurtech_VC_Trends_19315.pdf",
+        "has_visual": false,
+        "temporal_valid": true,
+        "keywords_found": [
+          "deal",
+          "value",
+          "money",
+          "vc",
+          "valuation",
+          "pre",
+          "of"
+        ]
+      },
+      {
+        "source": "data/vc_reports/Tecscaler-annual-report-2024.pdf",
+        "has_visual": false,
+        "temporal_valid": true,
+        "keywords_found": [
+          "development",
+          "early",
+          "deal",
+          "value",
+          "what",
+          "money",
+          "vc",
+          "stage",
+          "s",
+          "of",
+          "valuation",
+          "and",
+          "pre",
+          "m",
+          "the",
+          "gaming",
+          "in"
+        ]
+      },
+      {
+        "source": "Beauhurst-DASA-Growth-Impact-Report-2025.pdf",
+        "has_visual": false,
+        "temporal_valid": true,
+        "keywords_found": [
+          "value",
+          "and",
+          "the",
+          "in",
+          "of"
+        ]
+      }
+    ],
+    "validation": {
+      "temporal_valid": true,
+      "tokens_used": 5245,
+      "cost": 0.061889999999999994,
+      "keywords_searched": [
+        "value",
+        "pre",
+        "m",
+        "cagr",
+        "in",
+        "development",
+        "of",
+        "early",
+        "what",
+        "money",
+        "vc",
+        "stage",
+        "s",
+        "valuation",
+        "median",
+        "and",
+        "segment",
+        "the",
+        "gaming",
+        "deal"
+      ]
+    }
+  }
+}
