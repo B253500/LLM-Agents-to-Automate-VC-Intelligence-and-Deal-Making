@@ -1,8 +1,8 @@
 # Core AI and LangChain
 crewai>=0.70.1
 crewai-tools
-langchain>=0.1.0
-langchain-openai>=0.0.2
+langchain>=0.2.0
+langchain-openai>=0.1.0
 langchain-community>=0.0.10
 langchain-core>=0.2.0
 openai>=1.0.0
@@ -41,6 +41,8 @@ beautifulsoup4
 fastapi
 uvicorn
 python-multipart
+flask>=3.0.0
+werkzeug>=3.0.0
 
 # Data Processing and Analysis
 pandas>=2.0.0
@@ -51,6 +53,7 @@ scikit-learn>=1.3.0
 # Google Cloud Services
 google-cloud-vision
 google-cloud-storage
+google-generativeai
 
 # PDF Generation and Conversion
 weasyprint
@@ -70,4 +73,9 @@ exa_py
 
 # Optional: Excel support (for evaluation metrics)
 openpyxl>=3.1.0
+
+playwright-stealth
+twocaptcha
+anticaptchaofficial
+pdfkit
 

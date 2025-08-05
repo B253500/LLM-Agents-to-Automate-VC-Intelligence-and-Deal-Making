@@ -1,0 +1,75 @@
+{
+  "name": "My workflow",
+  "active": 0,
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 2,
+      "position": [
+        -280,
+        -20
+      ],
+      "id": "13f0c729-bbae-4309-842b-2200a58436ff",
+      "name": "Email Trigger (IMAP)",
+      "credentials": {
+        "imap": {
+          "id": "J9BXPFnkI8TXLM3u",
+          "name": "IMAP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5001/analyze",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"question\": \"{{$json.text}}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -60,
+        -20
+      ],
+      "id": "4c05a243-38e8-4596-8215-1c2acfd24279",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "fromEmail": "ak.somnium@gmail.com",
+        "toEmail": "={{$json.from}}",
+        "subject": "=VC Analysis Response: {{$('HTTP Request').json.question}}",
+        "html": "=  Question: {{$('HTTP Request').json.question}}\n     \n     Answer: {{$('HTTP Request').json.answer}}\n     \n     Sources: {{$('HTTP Request').json.sources.map(s => s.source).join(', ')}}\n     \n     Validation: {{$('HTTP Request').json.validation.temporal_valid ? '\u2713 Valid' : '\u26a0 Invalid'}}\n     Tokens Used: {{$('HTTP Request').json.validation.tokens_used}}\n     Cost: ${{$('HTTP Request').json.validation.cost}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        160,
+        -20
+      ],
+      "id": "49674b8f-ed61-4e45-a9b2-2433e02a2674",
+      "name": "Send Email",
+      "webhookId": "57b9f365-1f6b-42cb-8e08-5136c1c2f741",
+      "disabled": true
+    }
+  ],
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null
+}

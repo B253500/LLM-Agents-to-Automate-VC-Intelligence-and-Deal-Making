@@ -1,0 +1,103 @@
+{
+  "name": "Report analysis",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMonth"
+            }
+          ]
+        },
+        "filters": {}
+      },
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -140,
+        220
+      ],
+      "id": "8ff6792b-a5a0-43c3-b6ea-255dd00fef31",
+      "name": "Gmail Trigger1",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "pSWPUNuYsx6RpLDZ",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "=From {{ $('Gmail Trigger1').item.json.From }}",
+        "subject": "=={{ 'Re: ' + ($json.payload?.headers?.find(h => h.name === 'Subject')?.value || 'LLM analysis') }}",
+        "emailType": "text",
+        "message": "={{ $('OpenAI').item.json.choices[0].message.content }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        320,
+        220
+      ],
+      "id": "04ce98c6-a693-4720-9101-19c35f10e6f6",
+      "name": "Gmail1",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "pSWPUNuYsx6RpLDZ",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+        "parameters": {
+            "model": "gpt-4o",
+            "prompt": "Analyze the following email snippet and provide a summary:\n\n{{ $('Gmail Trigger1').item.json.snippet }}"
+        },
+        "type": "n8n-nodes-base.openAi",
+        "typeVersion": 1,
+        "position": [
+            100,
+            220
+        ],
+        "id": "d9a99f71-2d8d-4754-9e42-8e66515e03f2",
+        "name": "OpenAI",
+        "credentials": {
+            "openAiApi": {
+                "id": "REPLACE_WITH_YOUR_CREDENTIAL_ID",
+                "name": "OpenAI account"
+            }
+        }
+    }
+  ],
+  "connections": {
+      "Gmail Trigger1": {
+          "main": [
+              [
+                  {
+                      "node": "OpenAI",
+                      "type": "main",
+                      "index": 0
+                  }
+              ]
+          ]
+      },
+      "OpenAI": {
+          "main": [
+              [
+                  {
+                      "node": "Gmail1",
+                      "type": "main",
+                      "index": 0
+                  }
+              ]
+          ]
+      }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null
+}

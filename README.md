@@ -18,7 +18,7 @@ The system consists of **3 distinct workflows**:
 
 ## Limitations
 
-The memo generator produces a strong draft addressing key investor considerations but serves as a starting point, not a finished product. It covers 60-70% of the work, requiring human input for nuance and judgment. The tool may reflect biases in the input and is limited by the underlying AI models. Competitor analysis provides initial insights but should be supplemented with additional research, and market size estimates should include a separate bottoms-up analysis. This tool is for informational purposes only.
+The memo generator produces a strong draft addressing key investor considerations but serves as a starting point, not a finished product. It covers substantial part of the work, requiring human input for nuance and judgment. The tool may reflect biases in the input and is limited by the underlying AI models. Competitor analysis provides initial insights but should be supplemented with additional research, and market size estimates should include a separate bottoms-up analysis. This tool is for prototype demonstration only.
 
 ## Features
 

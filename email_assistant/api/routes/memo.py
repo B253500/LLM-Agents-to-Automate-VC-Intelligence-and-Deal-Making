@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Body
 import uuid
-from memo_api.services.truncate import truncate_to_chars
+from email_assistant.api.services.truncate import truncate_to_chars
 
-from memo_api.services import (
+from email_assistant.api.services import (
     market_summary,
     market_analysis,
     memo_generator,

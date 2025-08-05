@@ -1,0 +1,36 @@
+{
+  "name": "My workflow 3",
+  "active": 0,
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "filters": {}
+      },
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "abff1415-151e-49a4-bc8b-2e64bab99aad",
+      "name": "Gmail Trigger",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "pSWPUNuYsx6RpLDZ",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": "{\"node:Gmail Trigger\":{\"Gmail Trigger\":{\"lastTimeChecked\":1750156326,\"possibleDuplicates\":[\"1977d7243e8d7b6d\"]}}}"
+}

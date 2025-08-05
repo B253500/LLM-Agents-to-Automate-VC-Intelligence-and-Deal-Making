@@ -1,0 +1,217 @@
+{
+  "name": "My workflow 4",
+  "active": 0,
+  "nodes": [
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "hour": 15
+            }
+          ]
+        }
+      },
+      "id": "cf288fb9-76df-4ced-9a69-206a0108f083",
+      "name": "Cron",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        -1980,
+        -100
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "fa2bd00e-629b-4aca-b9bf-73638c51d1fb",
+      "name": "Beauhurst Scrape",
+      "type": "n8n-nodes-base.puppeteer",
+      "typeVersion": 1,
+      "position": [
+        -1780,
+        -220
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "e3aacaf6-9b7b-4009-ba23-c55c9f7e96b8",
+      "name": "PitchBook Scrape",
+      "type": "n8n-nodes-base.puppeteer",
+      "typeVersion": 1,
+      "position": [
+        -1780,
+        -100
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "b345f2e7-32c3-490c-b670-ec64cf0d374f",
+      "name": "Crunchbase Scrape",
+      "type": "n8n-nodes-base.puppeteer",
+      "typeVersion": 1,
+      "position": [
+        -1780,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const all = [];\nall.push(...(items[0].json || []));\nall.push(...(items[1].json || []));\nall.push(...(items[2].json || []));\nreturn all.map(url => ({ json: { reportUrl: url } }));"
+      },
+      "id": "065f8432-e24d-4330-a2a8-9418fbd70f24",
+      "name": "Combine",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -1540,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "37a9f8a7-c3ba-4623-a677-92e82cfe44d8",
+      "name": "SplitInBatches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [
+        -1340,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json[\"reportUrl\"] }}",
+        "responseFormat": "string",
+        "options": {}
+      },
+      "id": "99040640-9ca2-4728-88b3-9f2a10c7746b",
+      "name": "Fetch Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        -1140,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "5060a98d-3b0f-4512-82b0-2e593cdc982c",
+      "name": "Extract PDF Link",
+      "type": "n8n-nodes-base.htmlExtract",
+      "typeVersion": 1,
+      "position": [
+        -940,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const url = item.json.pdfUrl;\nif (!url) return null;\nconst link = url.startsWith('http') ? url : new URL(item.json.reportUrl).origin + url;\nreturn { json: { remoteUrl: link, reportUrl: item.json.reportUrl } };"
+      },
+      "id": "f25f78df-2dee-4aa5-a38d-8793cc221783",
+      "name": "Normalize Link",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -740,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json[\"remoteUrl\"] }}",
+        "responseFormat": "file",
+        "options": {}
+      },
+      "id": "1c4bd6c3-d062-4db2-ab19-be3e5edd1071",
+      "name": "Download PDF",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        -540,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "fileName": "={{ $binary.pdf.fileName }}",
+        "options": {}
+      },
+      "id": "f241bcc8-b3c1-4845-a8cf-25f4195702d4",
+      "name": "Write PDF",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        -340,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "filePath": "/home/node/project/data/vc_reports/{{$binary.pdf.fileName}}"
+      },
+      "id": "327eb4ac-34ae-433f-890d-18aa343760c2",
+      "name": "Read PDF File",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        -140,
+        -100
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "bc4cec01-37b4-4634-b8c8-c067d3268b65",
+      "name": "Extract PDF Text",
+      "type": "n8n-nodes-base.pdfExtract",
+      "typeVersion": 1,
+      "position": [
+        80,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "table": "reports",
+        "columns": [
+          {
+            "name": "url",
+            "value": "={{ $json.reportUrl }}"
+          },
+          {
+            "name": "text",
+            "value": "={{ $json.text }}"
+          },
+          {
+            "name": "figures",
+            "value": "={{ JSON.stringify($json.images) }}"
+          }
+        ],
+        "additionalFields": {}
+      },
+      "id": "754704d7-3d4a-46b7-b328-ae28453d5a33",
+      "name": "Save to Postgres",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        280,
+        -100
+      ],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres Credentials"
+        }
+      }
+    }
+  ],
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null
+}

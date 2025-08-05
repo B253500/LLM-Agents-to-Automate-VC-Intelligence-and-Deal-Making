@@ -1,0 +1,42 @@
+{
+  "name": "Auto download workflow",
+  "active": 0,
+  "nodes": [
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "hour": 8
+            }
+          ]
+        }
+      },
+      "id": "26231bd5-b934-4aa5-8013-2daecc6ce7a1",
+      "name": "Cron",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        320,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "command": "cd /home/node/project && . /home/node/venv/bin/activate && python download_reports.py"
+      },
+      "id": "3aa37d54-0f16-4c69-9d1b-177933795bde",
+      "name": "Download Reports",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        520,
+        40
+      ]
+    }
+  ],
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null
+}

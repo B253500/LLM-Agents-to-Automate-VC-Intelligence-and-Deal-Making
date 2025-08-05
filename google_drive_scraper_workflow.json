@@ -1,0 +1,618 @@
+{
+  "name": "Scraper with Google Drive & Sheets Memory",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 4
+            }
+          ]
+        }
+      },
+      "id": "e305e54d-730a-48a5-83e4-39f28d7a1280",
+      "name": "Run Daily",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        420,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const pages = [];\nfor (let i = 1; i <= 5; i++) {\n  pages.push({ json: { pageNumber: i } });\n}\nreturn pages;"
+      },
+      "id": "3e3d937a-4286-444a-a309-ddf269a8b1ef",
+      "name": "Generate Page Numbers",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        820,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1
+      },
+      "id": "c76a9284-909d-4874-a690-67c006526e0b",
+      "name": "Loop Over Pages",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [
+        1020,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://techcrunch.com/page/' + $json.pageNumber }}",
+        "options": {}
+      },
+      "id": "a91e5d7a-1132-4148-933b-826d9e075c3f",
+      "name": "Get TechCrunch Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        1220,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "sourceData": "html",
+        "extractionValues": {
+          "values": [
+            {
+              "key": "articleUrl",
+              "cssSelector": "h2.post-block__title a",
+              "returnValue": "attribute",
+              "attribute": "href"
+            },
+            {
+              "key": "articleTitle",
+              "cssSelector": "h2.post-block__title a",
+              "returnValue": "text"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b188c034-7264-406c-b3a5-177b949980d0",
+      "name": "Extract TechCrunch Links",
+      "type": "n8n-nodes-base.htmlExtract",
+      "typeVersion": 1,
+      "position": [
+        1420,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://about.crunchbase.com/research-reports/page/' + $json.pageNumber }}",
+        "options": {}
+      },
+      "id": "49553b9e-6449-43a9-b3a1-2d7c491228e9",
+      "name": "Get Crunchbase Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        1220,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "sourceData": "html",
+        "extractionValues": {
+          "values": [
+            {
+              "key": "articleUrl",
+              "cssSelector": "a.post-block__title__link",
+              "returnValue": "attribute",
+              "attribute": "href"
+            },
+            {
+              "key": "articleTitle",
+              "cssSelector": "a.post-block__title__link",
+              "returnValue": "text"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "905d625b-c290-449e-af5b-f7e9f3b171c7",
+      "name": "Extract Crunchbase Links",
+      "type": "n8n-nodes-base.htmlExtract",
+      "typeVersion": 1,
+      "position": [
+        1420,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1
+      },
+      "id": "31bb7a56-da2d-451e-84b9-87c10b2df7e5",
+      "name": "Loop Over Articles",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [
+        1820,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://pitchbook.com/news/page/' + $json.pageNumber }}",
+        "options": {}
+      },
+      "id": "ab700305-6436-40e1-a67e-a0e28fcf4f5a",
+      "name": "Get PitchBook Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        1220,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "sourceData": "html",
+        "extractionValues": {
+          "values": [
+            {
+              "key": "articleUrl",
+              "cssSelector": "a[href*='/news/article']",
+              "returnValue": "attribute",
+              "attribute": "href"
+            },
+            {
+              "key": "articleTitle",
+              "cssSelector": "a[href*='/news/article']",
+              "returnValue": "text"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "848da075-802c-4fdf-976e-561b30528646",
+      "name": "Extract PitchBook Links",
+      "type": "n8n-nodes-base.htmlExtract",
+      "typeVersion": 1,
+      "position": [
+        1420,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://www.beauhurst.com/reports/page/' + $json.pageNumber }}",
+        "options": {}
+      },
+      "id": "2d1bb5e7-9d78-430c-a630-6d4323c2df23",
+      "name": "Get Beauhurst Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        1220,
+        840
+      ]
+    },
+    {
+      "parameters": {
+        "sourceData": "html",
+        "extractionValues": {
+          "values": [
+            {
+              "key": "articleUrl",
+              "cssSelector": "a[href*='/research/']",
+              "returnValue": "attribute",
+              "attribute": "href"
+            },
+            {
+              "key": "articleTitle",
+              "cssSelector": "a[href*='/research/']",
+              "returnValue": "text"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c623971c-4e89-40c0-b83b-3d6113b53a06",
+      "name": "Extract Beauhurst Links",
+      "type": "n8n-nodes-base.htmlExtract",
+      "typeVersion": 1,
+      "position": [
+        1420,
+        840
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "b0682701-14c1-41e3-b903-82de4365440d",
+      "name": "Merge All Sources",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 1,
+      "position": [
+        1620,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$node[\"Read Memory Sheet\"].json.processedUrl}}",
+              "operation": "notContains",
+              "value2": "={{$json.articleUrl}}"
+            }
+          ]
+        }
+      },
+      "id": "19b88981-5d9c-4627-80be-4560ba5232d3",
+      "name": "Is Article New?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        2020,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "a143f290-7d3c-4828-9104-a15d9a9f5d13",
+      "name": "Do Nothing (Already Processed)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2220,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$json.articleUrl}}",
+        "options": {}
+      },
+      "id": "a610f922-a7d5-45cd-a570-fd1172a118c7",
+      "name": "Get Article Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        2220,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "sourceData": "html",
+        "extractionValues": {
+          "values": [
+            {
+              "key": "articleContent",
+              "cssSelector": "div.article-content, article, .post-content",
+              "returnValue": "html"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b6df522d-3755-460d-88b9-e15250499d63",
+      "name": "Extract Content (HTML)",
+      "type": "n8n-nodes-base.htmlExtract",
+      "typeVersion": 1,
+      "position": [
+        2420,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "upload",
+        "fileId": "={{$node[\"Save HTML to Google Drive\"].json.id}}",
+        "updateFields": {},
+        "options": {}
+      },
+      "id": "586a117d-2b99-4702-861f-1c448bb992dd",
+      "name": "Save HTML to Google Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 1,
+      "position": [
+        2620,
+        360
+      ],
+      "notes": "Connect your Google Account here. Then, in 'File to Upload', select your 'Scraped Reports' folder.",
+      "credentials": {
+        "googleApi": {
+          "id": "YOUR_GOOGLE_API_CREDENTIAL_ID",
+          "name": "Your Google Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "append",
+        "documentId": "",
+        "sheetName": "",
+        "columns": {
+          "values": [
+            {
+              "column": "processedUrl",
+              "value": "={{$json.articleUrl}}"
+            }
+          ]
+        }
+      },
+      "id": "908e2f8f-c38a-4933-9114-1e04130f1464",
+      "name": "Append to Memory Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 1,
+      "position": [
+        2820,
+        360
+      ],
+      "notes": "Connect your Google Account. Then, select your 'N8N Scraper Memory' spreadsheet and the correct Sheet.",
+      "credentials": {
+        "googleApi": {
+          "id": "YOUR_GOOGLE_API_CREDENTIAL_ID",
+          "name": "Your Google Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "getAll",
+        "documentId": "",
+        "sheetName": "",
+        "options": {}
+      },
+      "id": "f519391a-b3e3-4d45-816b-952328198f6d",
+      "name": "Read Memory Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 1,
+      "position": [
+        620,
+        460
+      ],
+      "notes": "First, connect your Google Account here. Then, select your 'N8N Scraper Memory' spreadsheet and the correct Sheet.",
+      "credentials": {
+        "googleApi": {
+          "id": "YOUR_GOOGLE_API_CREDENTIAL_ID",
+          "name": "Your Google Account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Run Daily": {
+      "main": [
+        [
+          {
+            "node": "Read Memory Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Memory Sheet": {
+      "main": [
+        [
+          {
+            "node": "Generate Page Numbers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Page Numbers": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Pages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Pages": {
+      "main": [
+        [
+          {
+            "node": "Get TechCrunch Page",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Crunchbase Page",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get PitchBook Page",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Beauhurst Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get TechCrunch Page": {
+      "main": [
+        [
+          {
+            "node": "Extract TechCrunch Links",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract TechCrunch Links": {
+      "main": [
+        [
+          {
+            "node": "Merge All Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Crunchbase Page": {
+      "main": [
+        [
+          {
+            "node": "Extract Crunchbase Links",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Crunchbase Links": {
+      "main": [
+        [
+          {
+            "node": "Merge All Sources",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Get PitchBook Page": {
+      "main": [
+        [
+          {
+            "node": "Extract PitchBook Links",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract PitchBook Links": {
+      "main": [
+        [
+          {
+            "node": "Merge All Sources",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Get Beauhurst Page": {
+      "main": [
+        [
+          {
+            "node": "Extract Beauhurst Links",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Beauhurst Links": {
+      "main": [
+        [
+          {
+            "node": "Merge All Sources",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Merge All Sources": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Articles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Articles": {
+      "main": [
+        [
+          {
+            "node": "Is Article New?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Article New?": {
+      "main": [
+        [
+          {
+            "node": "Get Article Page",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Do Nothing (Already Processed)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Article Page": {
+      "main": [
+        [
+          {
+            "node": "Extract Content (HTML)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Content (HTML)": {
+      "main": [
+        [
+          {
+            "node": "Save HTML to Google Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save HTML to Google Drive": {
+      "main": [
+        [
+          {
+            "node": "Append to Memory Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

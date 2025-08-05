@@ -503,7 +503,7 @@ class MemoEvaluator:
         total_traditional_cost = self.TRADITIONAL_VC_BENCHMARKS["total_cost_usd"]
         
         time_savings_percentage = ((total_traditional_time_minutes - total_ai_time_minutes) / total_traditional_time_minutes) * 100
-        cost_savings_percentage = ((total_traditional_cost - total_ai_cost) / total_traditional_cost) * 100
+        cost_savings_percentage = self._calculate_cost_savings_percentage(total_ai_cost, total_traditional_cost)
         
         return {
             "traditional_time_minutes": total_traditional_time_minutes,
@@ -943,10 +943,21 @@ DETAILED SECTION METRICS
   - Quality Score: {sm.quality_score:.2f}/1.0
 """
         
+        # Calculate quality score and get breakdown
+        quality_score = self._calculate_overall_score(metrics)
+        quality_breakdown = self.get_quality_breakdown()
+        
         report += f"""
 OVERALL ASSESSMENT
 ------------------
-🎯 Overall Quality Score: {self._calculate_overall_score(metrics):.1f}/10
+🎯 Overall Quality Score: {quality_score:.1f}/10
+
+QUALITY SCORE BREAKDOWN:
+"""
+        for item in quality_breakdown:
+            report += f"  {item}\n"
+        
+        report += f"""
 📊 Pass/Fail Criteria Met: {self._check_pass_fail_criteria(metrics)}
 
 ACADEMIC ANALYSIS SUMMARY
@@ -965,26 +976,129 @@ The system represents a paradigm shift in VC due diligence, enabling faster, che
         return report
     
     def _calculate_overall_score(self, metrics: MemoEvaluationMetrics) -> float:
-        """Calculate overall quality score (0-10)"""
+        """Calculate overall quality score (0-10) with comprehensive evaluation"""
         score = 0.0
+        breakdown = []
         
         # Section completeness (2 points)
         if metrics.all_sections_present:
             score += 2.0
+            breakdown.append("✅ Section completeness: 2.0/2.0 (all sections present)")
+        else:
+            # Partial credit for having most sections
+            present_sections = len([s for s in self.REQUIRED_SECTIONS if s not in metrics.missing_sections])
+            coverage_ratio = present_sections / len(self.REQUIRED_SECTIONS)
+            section_score = 2.0 * coverage_ratio
+            score += section_score
+            breakdown.append(f"⚠️  Section completeness: {section_score:.1f}/2.0 ({present_sections}/{len(self.REQUIRED_SECTIONS)} sections)")
         
-        # Readability (1 point)
-        if metrics.flesch_kincaid_score <= 13 and metrics.analyst_readability_score >= 4:
-            score += 1.0
+        # Readability (1.5 points)
+        readability_score = 0.0
+        if metrics.flesch_kincaid_score <= 13:
+            readability_score += 1.0
+            breakdown.append(f"✅ Flesch-Kincaid readability: 1.0/1.0 (score: {metrics.flesch_kincaid_score:.1f})")
+        elif metrics.flesch_kincaid_score <= 16:
+            readability_score += 0.5
+            breakdown.append(f"⚠️  Flesch-Kincaid readability: 0.5/1.0 (score: {metrics.flesch_kincaid_score:.1f})")
+        else:
+            breakdown.append(f"❌ Flesch-Kincaid readability: 0.0/1.0 (score: {metrics.flesch_kincaid_score:.1f})")
+        
+        if metrics.analyst_readability_score >= 4:
+            readability_score += 0.5
+            breakdown.append(f"✅ Analyst readability: 0.5/0.5 (score: {metrics.analyst_readability_score:.1f})")
+        elif metrics.analyst_readability_score >= 3:
+            readability_score += 0.25
+            breakdown.append(f"⚠️  Analyst readability: 0.25/0.5 (score: {metrics.analyst_readability_score:.1f})")
+        else:
+            breakdown.append(f"❌ Analyst readability: 0.0/0.5 (score: {metrics.analyst_readability_score:.1f})")
+        
+        score += readability_score
+        
+        # Content depth and quality (2 points)
+        content_score = 0.0
+        
+        # Based on memo length and word count
+        if metrics.memo_length_words >= 2000:
+            content_score += 1.0
+            breakdown.append(f"✅ Content depth: 1.0/1.0 ({metrics.memo_length_words} words)")
+        elif metrics.memo_length_words >= 1000:
+            content_score += 0.5
+            breakdown.append(f"⚠️  Content depth: 0.5/1.0 ({metrics.memo_length_words} words)")
+        else:
+            breakdown.append(f"❌ Content depth: 0.0/1.0 ({metrics.memo_length_words} words)")
+        
+        # Based on coverage (lack of placeholders)
+        if metrics.unknown_coverage_ratio < 0.1:
+            content_score += 1.0
+            breakdown.append(f"✅ Content coverage: 1.0/1.0 ({metrics.unknown_coverage_ratio:.1%} placeholders)")
+        elif metrics.unknown_coverage_ratio < 0.2:
+            content_score += 0.5
+            breakdown.append(f"⚠️  Content coverage: 0.5/1.0 ({metrics.unknown_coverage_ratio:.1%} placeholders)")
+        else:
+            breakdown.append(f"❌ Content coverage: 0.0/1.0 ({metrics.unknown_coverage_ratio:.1%} placeholders)")
+        
+        score += content_score
         
         # Visuals (1 point)
         if metrics.chart_present:
             score += 1.0
+            breakdown.append("✅ Visuals: 1.0/1.0 (chart included)")
+        else:
+            breakdown.append("❌ Visuals: 0.0/1.0 (no chart)")
         
-        # Coverage (1 point)
-        if metrics.unknown_coverage_ratio < 0.2:
+        # Duplicate content (1 point)
+        if metrics.duplicate_ratio < 0.05:
             score += 1.0
+            breakdown.append(f"✅ Duplicate content: 1.0/1.0 ({metrics.duplicate_ratio:.1%} duplicates)")
+        elif metrics.duplicate_ratio < 0.1:
+            score += 0.5
+            breakdown.append(f"⚠️  Duplicate content: 0.5/1.0 ({metrics.duplicate_ratio:.1%} duplicates)")
+        else:
+            breakdown.append(f"❌ Duplicate content: 0.0/1.0 ({metrics.duplicate_ratio:.1%} duplicates)")
         
-        return score
+        # Professional structure (1.5 points)
+        structure_score = 0.0
+        
+        # Check for proper formatting and structure
+        if metrics.section_count >= 15:
+            structure_score += 1.0
+            breakdown.append(f"✅ Professional structure: 1.0/1.0 ({metrics.section_count}/17 sections)")
+        elif metrics.section_count >= 10:
+            structure_score += 0.5
+            breakdown.append(f"⚠️  Professional structure: 0.5/1.0 ({metrics.section_count}/17 sections)")
+        else:
+            breakdown.append(f"❌ Professional structure: 0.0/1.0 ({metrics.section_count}/17 sections)")
+        
+        # Additional quality indicators
+        if metrics.memo_length_chars >= 15000:  # Substantial content
+            structure_score += 0.5
+            breakdown.append(f"✅ Content length: 0.5/0.5 ({metrics.memo_length_chars:,} characters)")
+        else:
+            breakdown.append(f"❌ Content length: 0.0/0.5 ({metrics.memo_length_chars:,} characters)")
+        
+        score += structure_score
+        
+        final_score = min(10.0, score)  # Cap at 10
+        
+        # Store breakdown for later use
+        self._quality_breakdown = breakdown
+        
+        return final_score
+    
+    def get_quality_breakdown(self) -> List[str]:
+        """Get the detailed breakdown of quality score calculation"""
+        return getattr(self, '_quality_breakdown', [])
+    
+    def _calculate_cost_savings_percentage(self, actual_cost: float, traditional_cost: float) -> float:
+        """Calculate cost savings percentage more accurately"""
+        if traditional_cost <= 0:
+            return 0.0
+        
+        savings = traditional_cost - actual_cost
+        savings_percentage = (savings / traditional_cost) * 100
+        
+        # Cap at 99.999% to avoid showing 100% when there are actual costs
+        return min(99.999, savings_percentage)
     
     def _check_pass_fail_criteria(self, metrics: MemoEvaluationMetrics) -> str:
         """Check if memo meets pass/fail criteria"""

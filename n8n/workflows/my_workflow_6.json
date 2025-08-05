@@ -1,0 +1,282 @@
+{
+  "name": "My workflow 6",
+  "active": 0,
+  "nodes": [
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "hour": 9
+            }
+          ]
+        }
+      },
+      "id": "2a2ca830-b0b1-4442-b6ef-6e0f564afcf1",
+      "name": "Cron",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        240,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://about.crunchbase.com/research-reports/",
+        "responseFormat": "string",
+        "options": {}
+      },
+      "id": "be57c398-257c-43e9-9e2a-9dd2b917f9cf",
+      "name": "Crunchbase Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        540,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "dataPropertyName": "={{ $json.data }}",
+        "options": {}
+      },
+      "id": "384782a1-256d-4bac-aa63-2da9dbeb1416",
+      "name": "Crunchbase Extract",
+      "type": "n8n-nodes-base.htmlExtract",
+      "typeVersion": 1,
+      "position": [
+        760,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "24f60261-72fa-407c-8e7c-dd340832ee2c",
+      "name": "Crunchbase Split",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [
+        1020,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "\n// Remove duplicates using workflow static data\nconst link = $json;\nconst url = typeof link === 'string' ? link : link.result || link.href || link;\nconst data = getWorkflowStaticData('global');\ndata.seen = data.seen || [];\nif (data.seen.includes(url)) {\n    return []; // already processed\n}\ndata.seen.push(url);\nreturn [{json: {url}}];\n"
+      },
+      "id": "e709e5e6-e2c4-4576-885b-079e6b4cb42a",
+      "name": "Crunchbase Filter New",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1240,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$json.url}}",
+        "responseFormat": "file",
+        "options": {}
+      },
+      "id": "9753201c-3850-4a17-88b2-9f08107fbfbc",
+      "name": "Crunchbase Download",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        1680,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "fileName": "={{'/data/reports/' + ($json.url.split('/').pop() || 'report.pdf')}}",
+        "options": {}
+      },
+      "id": "8300e1ed-bd82-4c47-9576-0cf802f8527d",
+      "name": "Crunchbase Save",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        1800,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://www.beauhurst.com/reports/",
+        "responseFormat": "string",
+        "options": {}
+      },
+      "id": "e7440f20-0ccf-4333-ae2b-bf05496f45c1",
+      "name": "Beauhurst Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        540,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "c61afad8-4eec-4b57-ad29-33fc109c4dce",
+      "name": "Beauhurst Extract",
+      "type": "n8n-nodes-base.htmlExtract",
+      "typeVersion": 1,
+      "position": [
+        2000,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "6946365c-f46b-427c-bc2d-cd1aaecdfa54",
+      "name": "Beauhurst Split",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [
+        2240,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "\n// Remove duplicates using workflow static data\nconst link = $json;\nconst url = typeof link === 'string' ? link : link.result || link.href || link;\nconst data = getWorkflowStaticData('global');\ndata.seen = data.seen || [];\nif (data.seen.includes(url)) {\n    return []; // already processed\n}\ndata.seen.push(url);\nreturn [{json: {url}}];\n"
+      },
+      "id": "b40a4853-9573-4165-9b1d-97b9f200dea3",
+      "name": "Beauhurst Filter New",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        2500,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$json.url}}",
+        "responseFormat": "file",
+        "options": {}
+      },
+      "id": "c7ed312e-880f-473a-973a-98fe50c3f0d0",
+      "name": "Beauhurst Download",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        2700,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "fileName": "={{'/data/reports/' + ($json.url.split('/').pop() || 'report.pdf')}}",
+        "options": {}
+      },
+      "id": "f8fa264e-e485-4db2-a877-21dc1fb9dd76",
+      "name": "Beauhurst Save",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        3000,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://pitchbook.com/news/reports",
+        "responseFormat": "string",
+        "options": {}
+      },
+      "id": "05c89c99-6d8e-4dcb-8f56-83ac79b2ea3e",
+      "name": "PitchBook Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        2860,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "6f9241f9-d3fc-4a45-907b-5513a7caa88c",
+      "name": "PitchBook Extract",
+      "type": "n8n-nodes-base.htmlExtract",
+      "typeVersion": 1,
+      "position": [
+        3200,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "f9958980-f37d-4b1b-90b3-3a07f970faae",
+      "name": "PitchBook Split",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [
+        3440,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "\n// Remove duplicates using workflow static data\nconst link = $json;\nconst url = typeof link === 'string' ? link : link.result || link.href || link;\nconst data = getWorkflowStaticData('global');\ndata.seen = data.seen || [];\nif (data.seen.includes(url)) {\n    return []; // already processed\n}\ndata.seen.push(url);\nreturn [{json: {url}}];\n"
+      },
+      "id": "97b363cc-f543-40d7-80c1-e8d1453f74c2",
+      "name": "PitchBook Filter New",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        3700,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$json.url}}",
+        "responseFormat": "file",
+        "options": {}
+      },
+      "id": "a56f1340-4a70-41a4-81cc-69f098f7499c",
+      "name": "PitchBook Download",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        3940,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "fileName": "={{'/data/reports/' + ($json.url.split('/').pop() || 'report.pdf')}}",
+        "options": {}
+      },
+      "id": "cdea20d3-0d15-4e1c-8c87-21e6516def42",
+      "name": "PitchBook Save",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        4200,
+        20
+      ]
+    }
+  ],
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null
+}

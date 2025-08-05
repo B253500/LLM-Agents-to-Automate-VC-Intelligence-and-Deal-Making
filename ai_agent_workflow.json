@@ -1,0 +1,85 @@
+{
+  "name": "AI Agent with Report Memory",
+  "nodes": [
+    {
+      "parameters": {
+        "chatId": "={{$json.userId}}",
+        "question": "={{$json.message}}",
+        "memory": {
+          "__rl": true,
+          "value": "memory",
+          "mode": "connect"
+        }
+      },
+      "id": "e028b964-162e-4363-874e-5e7e1c841f3e",
+      "name": "AI Agent",
+      "type": "n8n-nodes-langchain.agent",
+      "typeVersion": 1,
+      "position": [
+        1220,
+        340
+      ],
+      "credentials": {
+        "chatModel": {
+          "id": "YOUR_CHAT_MODEL_CREDENTIAL_ID",
+          "name": "Your Chat Model"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "memoryName": "VC-Report-Memory",
+        "operation": "getAll"
+      },
+      "id": "e44d1872-972a-4663-8991-b66a6a241470",
+      "name": "Get from Report Memory",
+      "type": "n8n-nodes-base.simpleMemory",
+      "typeVersion": 1,
+      "position": [
+        1020,
+        540
+      ],
+      "notes": "This node retrieves all the data stored by the scraper workflow. Its 'memoryName' must match the scraper's memory name."
+    },
+    {
+      "parameters": {
+        "events": [
+          "message"
+        ]
+      },
+      "id": "1e72e816-3e7e-406e-8a58-9418641a96c7",
+      "name": "When chat message received",
+      "type": "n8n-nodes-base.chatTrigger",
+      "typeVersion": 1,
+      "position": [
+        820,
+        340
+      ]
+    }
+  ],
+  "connections": {
+    "Get from Report Memory": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {}
+}

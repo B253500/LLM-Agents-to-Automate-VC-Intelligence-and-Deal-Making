@@ -1,0 +1,103 @@
+{
+  "name": "My workflow 7",
+  "active": 0,
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Start",
+      "type": "n8n-nodes-base.start",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "45b3b6c5-775c-4f51-938e-eb05b2083426"
+    },
+    {
+      "parameters": {
+        "url": "https://pitchbook.com/news/reports",
+        "responseFormat": "text",
+        "options": {}
+      },
+      "name": "Get Reports List",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        200,
+        0
+      ],
+      "id": "33694589-c7f9-4a07-9f63-31b4965a8c4c"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "name": "Extract Links",
+      "type": "n8n-nodes-base.htmlExtract",
+      "typeVersion": 1,
+      "position": [
+        400,
+        0
+      ],
+      "id": "008da926-c823-44e4-b497-31051c6df427"
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [
+        600,
+        0
+      ],
+      "id": "ea785197-f54c-48bb-b20e-6b12e8713f70"
+    },
+    {
+      "parameters": {},
+      "name": "Playwright",
+      "type": "n8n-nodes-base.playwright",
+      "typeVersion": 1,
+      "position": [
+        800,
+        0
+      ],
+      "id": "d17cc34c-95ea-4d7c-bc86-63df69b93968"
+    },
+    {
+      "parameters": {
+        "url": "={{ $node['Playwright'].json['downloadUrls'][0] }}",
+        "responseFormat": "file",
+        "options": {}
+      },
+      "name": "Download PDF",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        0
+      ],
+      "id": "efe4f175-28f0-4c5f-9eff-154a74e63eb4"
+    },
+    {
+      "parameters": {
+        "fileName": "={{ $node['Download PDF'].binary.data.fileName }}",
+        "options": {}
+      },
+      "name": "Write File",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        0
+      ],
+      "id": "b5040626-276c-4a5e-8b55-b0b136eaabf5"
+    }
+  ],
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null
+}

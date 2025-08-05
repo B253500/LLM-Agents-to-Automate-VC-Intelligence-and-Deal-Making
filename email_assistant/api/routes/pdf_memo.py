@@ -2,7 +2,7 @@
 
 import uuid
 from fastapi import APIRouter, Body, Response
-from memo_api.services import market_summary, market_analysis, memo_generator, linkedin
+from email_assistant.api.services import market_summary, market_analysis, memo_generator, linkedin
 
 # from weasyprint import HTML
 

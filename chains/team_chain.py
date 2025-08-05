@@ -5,9 +5,73 @@ Moved from agents/founder_profiling_agent.py to separate deterministic logic fro
 
 import re
 import os
+import json
 import requests
 from typing import List, Dict, Any
+from langchain_openai import ChatOpenAI
+from langchain.prompts import ChatPromptTemplate
+from pathlib import Path
+from dotenv import load_dotenv
+
 from core.schemas import StartupProfile
+
+# --- LLM Post-Processing Setup ---
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+llm = ChatOpenAI(model="gpt-4o", temperature=0.2)
+
+SYSTEM_PROMPT_TEAM = '''
+You are a VC analyst tasked with creating a professional summary of a company's leadership team.
+Your goal is to process raw web search text and return clean, structured JSON.
+
+Your JSON output must follow this exact structure:
+{
+  "executives": [
+    {
+      "name": "Executive Name",
+      "role": "Current Role",
+      "linkedin": "https://www.linkedin.com/in/username (or null if not found)",
+      "background": "A concise 2-3 sentence professional background. Focus on experience, key achievements, and expertise. Do NOT include any of your own reasoning, meta-comments, or any text other than the background summary."
+    }
+  ]
+}
+
+Rules for the 'background' field:
+- It must be a professional, narrative summary.
+- It must NOT contain any "thinking process" or meta-commentary (e.g., "Based on my search...", "I found...").
+- It must NOT be a direct copy-paste of raw search results.
+- It must be well-written and ready for an investment memo.
+'''
+
+HUMAN_PROMPT_TEAM = ChatPromptTemplate.from_messages([
+    ("system", SYSTEM_PROMPT_TEAM),
+    ("human", "Please process the following raw text for the executives at {company_name} and generate the structured JSON output.\n\nRaw Text:\n{raw_text}")
+])
+
+def llm_process_raw_bio(raw_bio_text: str, company_name: str, executive_name: str, executive_role: str) -> dict:
+    """
+    Uses an LLM to process a raw text bio into a clean, structured dictionary.
+    """
+    if not raw_bio_text:
+        return {}
+    
+    # We create a more focused prompt here for a single executive
+    prompt = f"Company: {company_name}\nExecutive: {executive_name} ({executive_role})\n\nRaw Text to process:\n{raw_bio_text}"
+    
+    try:
+        llm_response_text = llm.invoke(HUMAN_PROMPT_TEAM.format(company_name=company_name, raw_text=prompt)).content.strip()
+        
+        json_match = re.search(r'\{.*\}', llm_response_text, re.DOTALL)
+        if json_match:
+            data = json.loads(json_match.group())
+            # Return the first executive found in the list
+            if data.get("executives") and isinstance(data["executives"], list) and len(data["executives"]) > 0:
+                return data["executives"][0]
+    except Exception as e:
+        print(f"[LLM Bio Processing] Failed for {executive_name}: {e}")
+        
+    return {}
+
+# --- End LLM Post-Processing ---
 
 
 def generate_team_section(profile: StartupProfile) -> str:
@@ -525,8 +589,7 @@ def format_linkedin_profile(data):
     """Format LinkedIn profile data for display."""
     if not data:
         return "No LinkedIn profile found."
-    return f"""
-LinkedIn: {data.get('profile_url', 'N/A')}
+    return f"""LinkedIn: {data.get('profile_url', 'N/A')}
 Headline: {data.get('headline', 'N/A')}
 Summary: {data.get('summary', 'N/A')}
 Current Position: {data.get('occupation', 'N/A')}
@@ -919,36 +982,27 @@ def enrich_executive_details_with_perplexity(company_name, executives):
                                         linkedin = 'https://' + linkedin
                                     break
         
-        # Enrich bio if missing or generic
-        if (not bio or 'not available' in bio.lower() or 'unknown' in bio.lower()) and name and role and company_name:
-            query = f"Write a 2-3 sentence professional bio for {name}, {role} at {company_name}. Include notable past roles, companies, and achievements if available."
-            result = search_perplexity(query)
-            if result and len(result.split()) > 8:
-                # Clean up the bio - remove AI thinking text
-                bio = result.strip()
-                # Remove common AI thinking patterns
-                thinking_patterns = [
-                    r'<think>.*?</think>',
-                    r'Okay, let me.*?\.',
-                    r'Let me analyze.*?\.',
-                    r'Based on.*?\.',
-                    r'According to.*?\.',
-                    r'First, looking at.*?\.',
-                    r'Now, putting this together.*?\.',
-                    r'I need to.*?\.',
-                    r'Let me start by.*?\.',
-                    r'Okay, I need to.*?\.',
-                    r'Let\'s tackle this.*?\.',
-                    r'Let me.*?\.',
-                    r'First,.*?\.',
-                    r'Now,.*?\.'
-                ]
-                for pattern in thinking_patterns:
-                    bio = re.sub(pattern, '', bio, flags=re.DOTALL | re.IGNORECASE)
-                bio = bio.strip()
-                # If bio is now too short, skip it
-                if len(bio.split()) < 5:
-                    bio = ''
+        # Enrich bio if missing or generic using LLM post-processing
+        if (not bio or 'not available' in bio.lower() or 'unknown' in bio.lower() or len(bio.split()) < 15) and name and role and company_name:
+            query = f"Provide a detailed 3-4 sentence professional background for {name}, {role} at {company_name}. Include their previous executive roles, industry experience, board positions, and key achievements."
+            raw_bio_text = search_perplexity(query)
+
+            if raw_bio_text:
+                print(f"[LLM Post-Processing] Cleaning raw bio for {name}...")
+                clean_data = llm_process_raw_bio(raw_bio_text, company_name, name, role)
+                if clean_data:
+                    bio = clean_data.get('background', bio) # Use cleaned background
+                    linkedin = clean_data.get('linkedin', linkedin) # Update linkedin if found
+                    print(f"[LLM Post-Processing] Successfully cleaned bio for {name}.")
+                else:
+                    print(f"[LLM Post-Processing] Failed to clean bio for {name}, using raw text.")
+                    # Fallback to simple regex cleaning if LLM fails
+                    bio = re.sub(r'<think>.*?</think>', '', raw_bio_text, flags=re.DOTALL)
+                    bio = re.sub(r'(First, from result|Result adds that|Result confirms|First, I need to check|Let\'s go through|From , I see that|Okay, I need to write|Me, I see that|Based on the search results|Looking at the information).*?(?=\n|$)', '', bio, flags=re.DOTALL)
+                    bio = re.sub(r'\d+\.\s*[A-Z].*?(?=\n|$)', '', bio, flags=re.MULTILINE)
+                    bio = re.sub(r'\[\d+\]', '', bio)
+                    bio = re.sub(r'\n\s*\n', '\n', bio)
+                    bio = bio.strip()
         
         # Generate background summary if missing
         if not background_summary and name and role and company_name:
@@ -1142,4 +1196,4 @@ def run_team_chain(profile: StartupProfile) -> StartupProfile:
         profile.founder_linkedin_data = linkedin_data
         profile.founder_linkedin_formatted = format_linkedin_profile(linkedin_data)
     
-    return profile 
+    return profile

@@ -1,0 +1,113 @@
+{
+  "name": "Investment Memo Generation from Email",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "filters": {
+          "attachments": "require"
+        }
+      },
+      "id": "d67cce08-42a5-4687-aa54-6e06b1c49653",
+      "name": "Gmail Trigger (New Deck)",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -160,
+        0
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_GMAIL_CREDENTIALS_ID",
+          "name": "Your Gmail Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5002/generate-memo",
+        "sendBody": true,
+        "specifyBody": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "file",
+              "value": "={{ $binary.data }}",
+              "sendInBody": "file"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "body": "file"
+            }
+          }
+        }
+      },
+      "id": "c5f49cc3-1b74-42b2-8abc-7529926eb383",
+      "name": "Generate Memo API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        80,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Gmail Trigger (New Deck)').item.json.from }}",
+        "subject": "=Re: {{ $('Gmail Trigger (New Deck)').item.json.subject }}",
+        "message": "Investment Memo Analysis Complete<br/><br/>Please find the detailed investment memo attached.<br/><br/>This analysis was generated using our AI-powered investment memo system.",
+        "attachments": "data",
+        "options": {}
+      },
+      "id": "046241c7-fd60-4257-a8ee-de9491ec5e96",
+      "name": "Send PDF Memo",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        304,
+        0
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_GMAIL_CREDENTIALS_ID",
+          "name": "Your Gmail Account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Gmail Trigger (New Deck)": {
+      "main": [
+        [
+          {
+            "node": "Generate Memo API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Memo API": {
+      "main": [
+        [
+          {
+            "node": "Send PDF Memo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {}
+}

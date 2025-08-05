@@ -1,0 +1,495 @@
+{
+  "name": "Final AI Scraper (TechCrunch, Crunchbase, PitchBook, Beauhurst)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 4
+            }
+          ]
+        }
+      },
+      "name": "Run Daily",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        620,
+        460
+      ],
+      "id": "e305e54d-730a-48a5-83e4-39f28d7a1280"
+    },
+    {
+      "parameters": {
+        "functionCode": "const pages = [];\nfor (let i = 1; i <= 5; i++) {\n  pages.push({ json: { pageNumber: i } });\n}\nreturn pages;"
+      },
+      "name": "Generate Page Numbers",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        820,
+        460
+      ],
+      "id": "3e3d937a-4286-444a-a309-ddf269a8b1ef"
+    },
+    {
+      "parameters": {
+        "batchSize": 1
+      },
+      "name": "Loop Over Pages",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [
+        1020,
+        460
+      ],
+      "id": "c76a9284-909d-4874-a690-67c006526e0b"
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://techcrunch.com/page/' + $json.pageNumber }}",
+        "options": {}
+      },
+      "name": "Get TechCrunch Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        1220,
+        240
+      ],
+      "id": "a91e5d7a-1132-4148-933b-826d9e075c3f"
+    },
+    {
+      "parameters": {
+        "sourceData": "html",
+        "extractionValues": {
+          "values": [
+            {
+              "key": "articleUrl",
+              "cssSelector": "h2.post-block__title a",
+              "returnValue": "attribute",
+              "attribute": "href"
+            },
+            {
+              "key": "articleTitle",
+              "cssSelector": "h2.post-block__title a",
+              "returnValue": "text"
+            }
+          ]
+        },
+        "options": {
+          "source": "TechCrunch"
+        }
+      },
+      "name": "Extract TechCrunch Links",
+      "type": "n8n-nodes-base.htmlExtract",
+      "typeVersion": 1,
+      "position": [
+        1420,
+        240
+      ],
+      "id": "b188c034-7264-406c-b3a5-177b949980d0"
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://about.crunchbase.com/research-reports/page/' + $json.pageNumber }}",
+        "options": {}
+      },
+      "name": "Get Crunchbase Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        1220,
+        440
+      ],
+      "id": "49553b9e-6449-43a9-b3a1-2d7c491228e9"
+    },
+    {
+      "parameters": {
+        "sourceData": "html",
+        "extractionValues": {
+          "values": [
+            {
+              "key": "articleUrl",
+              "cssSelector": "a.post-block__title__link",
+              "returnValue": "attribute",
+              "attribute": "href"
+            },
+            {
+              "key": "articleTitle",
+              "cssSelector": "a.post-block__title__link",
+              "returnValue": "text"
+            }
+          ]
+        },
+        "options": {
+          "source": "Crunchbase"
+        }
+      },
+      "name": "Extract Crunchbase Links",
+      "type": "n8n-nodes-base.htmlExtract",
+      "typeVersion": 1,
+      "position": [
+        1420,
+        440
+      ],
+      "id": "905d625b-c290-449e-af5b-f7e9f3b171c7"
+    },
+    {
+      "parameters": {
+        "batchSize": 1
+      },
+      "name": "Loop Over Articles",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [
+        1620,
+        460
+      ],
+      "id": "31bb7a56-da2d-451e-84b9-87c10b2df7e5"
+    },
+    {
+      "parameters": {
+        "url": "={{$json.articleUrl}}",
+        "options": {}
+      },
+      "name": "Get Article/Report Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        1820,
+        460
+      ],
+      "id": "58332152-32a7-47c0-a92c-29369e5d7967"
+    },
+    {
+      "parameters": {
+        "sourceData": "html",
+        "extractionValues": {
+          "values": [
+            {
+              "key": "articleContent",
+              "cssSelector": "div.article-content, article, .post-content",
+              "returnValue": "html"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Extract Content (HTML)",
+      "type": "n8n-nodes-base.htmlExtract",
+      "typeVersion": 1,
+      "position": [
+        2020,
+        460
+      ],
+      "id": "2c9fd94a-874e-4f7f-a63e-f1b29a2884a4"
+    },
+    {
+      "parameters": {
+        "functionCode": "const item = items[0];\nconst strippedContent = item.json.articleContent ? item.json.articleContent.replace(/<[^>]*>?/gm, '') : 'No content found.';\n\nconst text = `Source: ${item.json.source || 'N/A'}\\nTitle: ${item.json.articleTitle}\\nURL: ${item.json.articleUrl}\\nContent: ${strippedContent}`;\n\nitem.json.memoryText = text;\nitem.json.memoryKey = item.json.articleUrl; \n\nreturn item;",
+        "options": {
+          "memoryIdentifier": ""
+        }
+      },
+      "name": "Format for Memory",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        2220,
+        460
+      ],
+      "id": "b3f090d8-0e7d-417d-9371-55447b97e9b0"
+    },
+    {
+      "parameters": {
+        "memoryName": "VC-Report-Memory",
+        "operation": "add",
+        "key": "={{$json.memoryKey}}",
+        "value": "={{$json.memoryText}}"
+      },
+      "name": "Add to Report Memory",
+      "type": "n8n-nodes-base.simpleMemory",
+      "typeVersion": 1,
+      "position": [
+        2420,
+        460
+      ],
+      "id": "a9e63f70-5d6a-4934-8c8f-a3d8272f2e5a",
+      "notes": "This node adds the scraped article content into the shared AI memory. Make sure the 'memoryName' here matches the one used in your AI Agent workflow."
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://pitchbook.com/news/page/' + $json.pageNumber }}",
+        "options": {}
+      },
+      "name": "Get PitchBook Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        1220,
+        640
+      ],
+      "id": "ab700305-6436-40e1-a67e-a0e28fcf4f5a"
+    },
+    {
+      "parameters": {
+        "sourceData": "html",
+        "extractionValues": {
+          "values": [
+            {
+              "key": "articleUrl",
+              "cssSelector": "a[href*='/news/article']",
+              "returnValue": "attribute",
+              "attribute": "href"
+            },
+            {
+              "key": "articleTitle",
+              "cssSelector": "a[href*='/news/article']",
+              "returnValue": "text"
+            }
+          ]
+        },
+        "options": {
+          "source": "PitchBook"
+        }
+      },
+      "name": "Extract PitchBook Links",
+      "type": "n8n-nodes-base.htmlExtract",
+      "typeVersion": 1,
+      "position": [
+        1420,
+        640
+      ],
+      "id": "848da075-802c-4fdf-976e-561b30528646"
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://www.beauhurst.com/reports/page/' + $json.pageNumber }}",
+        "options": {}
+      },
+      "name": "Get Beauhurst Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        1220,
+        840
+      ],
+      "id": "2d1bb5e7-9d78-430c-a630-6d4323c2df23"
+    },
+    {
+      "parameters": {
+        "sourceData": "html",
+        "extractionValues": {
+          "values": [
+            {
+              "key": "articleUrl",
+              "cssSelector": "a[href*='/research/']",
+              "returnValue": "attribute",
+              "attribute": "href"
+            },
+            {
+              "key": "articleTitle",
+              "cssSelector": "a[href*='/research/']",
+              "returnValue": "text"
+            }
+          ]
+        },
+        "options": {
+          "source": "Beauhurst"
+        }
+      },
+      "name": "Extract Beauhurst Links",
+      "type": "n8n-nodes-base.htmlExtract",
+      "typeVersion": 1,
+      "position": [
+        1420,
+        840
+      ],
+      "id": "c623971c-4e89-40c0-b83b-3d6113b53a06"
+    }
+  ],
+  "connections": {
+    "Run Daily": {
+      "main": [
+        [
+          {
+            "node": "Generate Page Numbers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get TechCrunch Page": {
+      "main": [
+        [
+          {
+            "node": "Extract TechCrunch Links",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract TechCrunch Links": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Articles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Crunchbase Page": {
+      "main": [
+        [
+          {
+            "node": "Extract Crunchbase Links",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Crunchbase Links": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Articles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Pages": {
+      "main": [
+        [
+          {
+            "node": "Get TechCrunch Page",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Crunchbase Page",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get PitchBook Page",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Beauhurst Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Page Numbers": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Pages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Articles": {
+      "main": [
+        [
+          {
+            "node": "Get Article/Report Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Article/Report Page": {
+      "main": [
+        [
+          {
+            "node": "Extract Content (HTML)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Content (HTML)": {
+      "main": [
+        [
+          {
+            "node": "Format for Memory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format for Memory": {
+      "main": [
+        [
+          {
+            "node": "Add to Report Memory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get PitchBook Page": {
+      "main": [
+        [
+          {
+            "node": "Extract PitchBook Links",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract PitchBook Links": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Articles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Beauhurst Page": {
+      "main": [
+        [
+          {
+            "node": "Extract Beauhurst Links",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Beauhurst Links": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Articles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  ]
+}

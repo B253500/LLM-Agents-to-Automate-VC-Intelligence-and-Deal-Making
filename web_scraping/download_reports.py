@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 from datetime import datetime
 from playwright.sync_api import sync_playwright, Error as PlaywrightError
+from playwright_stealth import Stealth
 import imaplib
 import email
 from email.header import decode_header
@@ -13,9 +14,18 @@ import glob
 import random
 import string
 import os
+from twocaptcha import TwoCaptcha
+from anticaptchaofficial.recaptchav2proxyless import *
+from anticaptchaofficial.hcaptchaproxyless import *
+
+# --- CONFIGURATION FOR CAPTCHA SERVICES ---
+TWOCAPTCHA_API_KEY = os.getenv("TWOCAPTCHA_API_KEY", "YOUR_2CAPTCHA_API_KEY_HERE")
+ANTICAPTCHA_API_KEY = os.getenv("ANTICAPTCHA_API_KEY", "YOUR_ANTICAPTCHA_API_KEY_HERE")
+
 
 # Download directory
-DOWNLOAD_DIR = Path(__file__).parent / "data" / "vc_reports"
+today_str = datetime.now().strftime('%Y-%m-%d')
+DOWNLOAD_DIR = Path(__file__).parent / "data" / "vc_reports" / today_str
 DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 # Timeouts (ms)
@@ -23,8 +33,8 @@ NAV_TIMEOUT = 60000
 DOWNLOAD_TIMEOUT = 120000
 
 # --- CONFIGURATION FOR EMAIL DOWNLOAD ---
-GMAIL_USER = "ak.somnium@gmail.com"
-GMAIL_PASSWORD = "YOUR_APP_PASSWORD_HERE"  # Use an App Password if 2FA is enabled
+GMAIL_USER = os.getenv("GMAIL_USER", "ak.somnium@gmail.com")
+GMAIL_PASSWORD = os.getenv("GMAIL_PASSWORD", "YOUR_APP_PASSWORD_HERE")  # Use an App Password if 2FA is enabled
 BEAUHURST_EMAIL_DOMAIN = "@beauhurst.com"
 EMAIL_CHECK_INTERVAL = 60  # seconds
 
@@ -250,7 +260,7 @@ def fill_beauhurst_form(page):
                 break
         if filled and submit_btn:
             print("Submitting Beauhurst report request form...")
-            submit_btn.click()
+            submit_btn.click(timeout=10000)
             # --- Wait for paywall to disappear or .second_part to become visible ---
             try:
                 page.wait_for_selector('.second_part', timeout=10000, state='visible')
@@ -268,37 +278,146 @@ def fill_beauhurst_form(page):
         print(f"⚠️ Error filling Beauhurst form: {e}")
         return False
 
+def solve_captcha_if_present(page):
+    """
+    Detects and solves a reCAPTCHA or hCaptcha.
+    Tries 2Captcha first, then falls back to Anti-Captcha.
+    """
+    is_2captcha_configured = TWOCAPTCHA_API_KEY != "YOUR_2CAPTCHA_API_KEY_HERE"
+    is_anti_captcha_configured = ANTICAPTCHA_API_KEY != "YOUR_ANTICAPTCHA_API_KEY_HERE"
+
+    if not is_2captcha_configured and not is_anti_captcha_configured:
+        print("No captcha service is configured. Skipping captcha solving.")
+        return True
+
+    # --- Find the captcha details first ---
+    site_key = None
+    captcha_type = None
+    
+    # Check for reCAPTCHA
+    recaptcha_iframe = page.query_selector('iframe[src*="api2/anchor"]')
+    if recaptcha_iframe:
+        site_key_match = re.search(r'k=([\w-]+)', recaptcha_iframe.get_attribute('src'))
+        if site_key_match:
+            site_key = site_key_match.group(1)
+            captcha_type = 'recaptcha'
+            print(f"reCAPTCHA detected. Site key: {site_key}")
+
+    # Check for hCaptcha if reCAPTCHA not found
+    if not captcha_type:
+        hcaptcha_element = page.locator('.h-captcha')
+        if hcaptcha_element.count() > 0:
+            site_key = hcaptcha_element.first.get_attribute('data-sitekey')
+            captcha_type = 'hcaptcha'
+            print(f"hCaptcha detected. Site key: {site_key}")
+
+    if not captcha_type:
+        return True # No captcha found
+
+    page_url = page.url
+
+    # --- Attempt 1: 2Captcha ---
+    if is_2captcha_configured:
+        print("Attempting to solve with 2Captcha...")
+        try:
+            solver = TwoCaptcha(TWOCAPTCHA_API_KEY)
+            if captcha_type == 'recaptcha':
+                result = solver.recaptcha(sitekey=site_key, url=page_url)
+            else: # hcaptcha
+                result = solver.hcaptcha(sitekey=site_key, url=page_url)
+            
+            print("2Captcha solved successfully. Submitting solution...")
+            if captcha_type == 'recaptcha':
+                page.evaluate(f"document.getElementById('g-recaptcha-response').innerHTML = '{result['code']}';")
+            else:
+                page.evaluate(f"document.querySelector('[name=\"h-captcha-response\"]').innerHTML = '{result['code']}';")
+                page.evaluate(f"document.querySelector('[name=\"g-recaptcha-response\"]').innerHTML = '{result['code']}';")
+            return True
+        except Exception as e:
+            print(f"⚠️ 2Captcha failed: {e}")
+            # Don't return false yet, try the fallback
+
+    # --- Attempt 2: Anti-Captcha (Fallback) ---
+    if is_anti_captcha_configured:
+        print("Attempting to solve with Anti-Captcha as a fallback...")
+        try:
+            if captcha_type == 'recaptcha':
+                solver = recaptchaV2Proxyless()
+                solver.set_key(ANTICAPTCHA_API_KEY)
+                solver.set_website_url(page_url)
+                solver.set_website_key(site_key)
+                g_response = solver.solve_and_return_solution()
+                if g_response != 0:
+                    print("Anti-Captcha solved successfully.")
+                    page.evaluate(f'document.getElementById("g-recaptcha-response").innerHTML = "{g_response}";')
+                    return True
+                else:
+                    print(f"Anti-Captcha task finished with error: {solver.error_code}")
+            else: # hcaptcha
+                solver = hcaptchaProxyless()
+                solver.set_key(ANTICAPTCHA_API_KEY)
+                solver.set_website_url(page_url)
+                solver.set_website_key(site_key)
+                g_response = solver.solve_and_return_solution()
+                if g_response != 0:
+                    print("Anti-Captcha solved successfully.")
+                    page.evaluate(f'document.querySelector(\'[name="h-captcha-response"]\').innerHTML = "{g_response}";')
+                    page.evaluate(f'document.querySelector(\'[name="g-recaptcha-response"]\').innerHTML = "{g_response}";')
+                    return True
+                else:
+                    print(f"Anti-Captcha task finished with error: {solver.error_code}")
+
+        except Exception as e:
+            print(f"⚠️ Anti-Captcha failed: {e}")
+
+    print("Both 2Captcha and Anti-Captcha failed or were not configured. Skipping page.")
+    return False
+
 # --- EMAIL DOWNLOAD LOGIC ---
-def download_beauhurst_pdfs_from_gmail(download_dir, since=None):
-    """Connect to Gmail, find new Beauhurst emails, and download PDF attachments."""
-    print("Checking Gmail for new Beauhurst report emails...")
+def download_beauhurst_pdfs_from_gmail(download_dir):
+    """Connect to Gmail, find unread Beauhurst report emails, and download attachments."""
+    print("\n=== Checking Gmail for Beauhurst Reports ===")
+    
+    # Check for credentials
+    if GMAIL_USER == "ak.somnium@gmail.com" or GMAIL_PASSWORD == "YOUR_APP_PASSWORD_HERE":
+        print("⚠️ Gmail user/password not configured. Skipping email download.")
+        print("   Please set GMAIL_USER and GMAIL_PASSWORD environment variables or update the script.")
+        return
+
     try:
         mail = imaplib.IMAP4_SSL("imap.gmail.com")
         mail.login(GMAIL_USER, GMAIL_PASSWORD)
         mail.select("inbox")
-        # Search for emails from Beauhurst
-        status, messages = mail.search(None, f'FROM "{BEAUHURST_EMAIL_DOMAIN}"')
+
+        # Search for unread emails from Beauhurst with a specific subject
+        search_criteria = f'(UNSEEN FROM "{BEAUHURST_EMAIL_DOMAIN}" SUBJECT "Report download beauhurst")'
+        status, messages = mail.search(None, search_criteria)
+        
         if status != "OK":
-            print("No Beauhurst emails found.")
+            print("Could not search emails.")
+            mail.logout()
             return
-        for num in messages[0].split():
+        
+        email_ids = messages[0].split()
+        if not email_ids:
+            print("No new unread Beauhurst report emails found.")
+            mail.logout()
+            return
+        
+        print(f"Found {len(email_ids)} new report emails from Beauhurst.")
+
+        for num in email_ids:
             status, msg_data = mail.fetch(num, '(RFC822)')
             if status != "OK":
                 continue
+            
             msg = email.message_from_bytes(msg_data[0][1])
-            # Only process emails since a certain date if provided
-            if since:
-                date_tuple = email.utils.parsedate_tz(msg["Date"])
-                if date_tuple:
-                    msg_time = email.utils.mktime_tz(date_tuple)
-                    if msg_time < since:
-                        continue
+            
             # Download PDF attachments
             for part in msg.walk():
-                if part.get_content_maintype() == 'multipart':
+                if part.get_content_maintype() == 'multipart' or part.get('Content-Disposition') is None:
                     continue
-                if part.get('Content-Disposition') is None:
-                    continue
+                
                 filename = part.get_filename()
                 if filename and filename.lower().endswith('.pdf'):
                     filepath = download_dir / filename
@@ -306,7 +425,16 @@ def download_beauhurst_pdfs_from_gmail(download_dir, since=None):
                         print(f"↓ Downloading PDF attachment: {filename}")
                         with open(filepath, 'wb') as f:
                             f.write(part.get_payload(decode=True))
+                        # Mark email as read after successful download
+                        mail.store(num, '+FLAGS', '\\Seen')
+                        print(f"✓ Marked email for '{filename}' as read.")
+                    else:
+                        print(f"✓ PDF '{filename}' already exists. Marking email as read.")
+                        mail.store(num, '+FLAGS', '\\Seen')
+
         mail.logout()
+    except imaplib.IMAP4.error as e:
+        print(f"⚠️ IMAP Error: {e}. Please check your Gmail credentials and ensure Less Secure App Access is enabled or use an App Password.")
     except Exception as e:
         print(f"⚠️ Error downloading PDFs from Gmail: {e}")
 
@@ -353,7 +481,7 @@ def extract_report_info(page, source):
                 '.article-content',
                 '.report-content',
                 '.main-content',
-                'article',
+                '.article',
                 '.content-area'
             ]
             
@@ -850,6 +978,9 @@ def download_pdf_from_detail(page, detail_url):
         return
     try:
         page.goto(detail_url, timeout=NAV_TIMEOUT, wait_until="domcontentloaded")
+        if not solve_captcha_if_present(page):
+            print(f"Skipping page due to captcha failure: {detail_url}")
+            return
     except PlaywrightError as e:
         print(f"⚠️ Failed to load {detail_url}: {e}")
         return
@@ -906,9 +1037,13 @@ def download_pdf_from_detail(page, detail_url):
     # If no download link/button, check for HubSpot form and try to fill it
     if page.query_selector("form[id^='hsForm_']") or any(
         iframe.content_frame() and iframe.content_frame().query_selector("form[id^='hsForm_']")
-        for iframe in page.query_selector_all("iframe")
+                for iframe in page.query_selector_all("iframe")
     ):
         print("No download link/button found, but found a form. Attempting to fill the form...")
+        if not solve_captcha_if_present(page):
+            print(f"Skipping form due to captcha failure: {page.url}")
+            return
+        
         if fill_beauhurst_form(page):
             page.wait_for_timeout(4000)
             confirmation_texts = [
@@ -980,7 +1115,7 @@ def scrape_and_download_crunchbase(page):
     for url in urls:
         download_pdf_from_detail(page, url)
 
-def scrape_and_download_beauhurst(page, max_pages=10):
+def scrape_and_download_beauhurst(page, max_pages=20):
     print("=== Beauhurst Reports ===")
     base = "https://www.beauhurst.com"
     for i in range(1, max_pages + 1):
@@ -993,6 +1128,10 @@ def scrape_and_download_beauhurst(page, max_pages=10):
             break
         # More flexible selector, but filter by /research/ and not /author/ or /tag/
         cards = page.query_selector_all("a[href*='/research/']")
+        if not cards:
+            print(f"No report links found on page {i}. Stopping pagination.")
+            break
+            
         report_links = []
         for a in cards:
             href = a.get_attribute('href')
@@ -1009,56 +1148,146 @@ def scrape_and_download_beauhurst(page, max_pages=10):
 
 def scrape_and_download_pitchbook(page):
     print("\n=== PitchBook Reports ===")
-    try:
-        page.context.set_extra_http_headers({
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
-        })
-        page.goto("https://pitchbook.com/news/reports", timeout=NAV_TIMEOUT, wait_until="domcontentloaded")
-    except PlaywrightError as e:
-        print(f"⚠️ Could not load PitchBook listing: {e}")
-        return
+    mapping = load_downloaded_mapping()
+    
+    REPORT_LISTING_URLS = [
+        "https://pitchbook.com/news/reports",
+        "https://pitchbook.com/news/reports?types=analyst-note",
+        "https://pitchbook.com/news/reports?topics=industry-and-technology-research",
+        "https://pitchbook.com/news/reports?types=market-update,snapshot"
+    ]
+    
+    all_detail_urls = set()
 
-    try:
-        page.wait_for_selector(".report-center__feature, .report-center__list", timeout=30000)
-    except PlaywrightError:
-        print("⚠️ Report list did not load in time")
-        return
+    for listing_url in REPORT_LISTING_URLS:
+        print(f"\n[LOG] Processing listing: {listing_url}")
+        try:
+            page.goto(listing_url, timeout=NAV_TIMEOUT, wait_until="domcontentloaded")
+            page.wait_for_selector("a[href^='/news/reports/']", timeout=30000)
+            
+            # Scroll to load all reports on the page
+            last_height = page.evaluate("document.body.scrollHeight")
+            while True:
+                page.evaluate("window.scrollTo(0, document.body.scrollHeight);")
+                page.wait_for_timeout(2000) # Wait for content to load
+                new_height = page.evaluate("document.body.scrollHeight")
+                if new_height == last_height:
+                    break
+                last_height = new_height
 
-    # Click all 'See all' buttons to load more reports (optional, robust)
-    see_all_buttons = page.query_selector_all("a.btn-primary_teal, a:has-text('See all')")
-    for btn in see_all_buttons:
-        if btn.is_visible() and btn.is_enabled():
-            try:
-                btn.click()
-                page.wait_for_timeout(2000)
-            except Exception:
-                continue
+            links = page.query_selector_all("a[href^='/news/reports/']")
+            for a in links:
+                href = a.get_attribute('href')
+                if href and href != '/news/reports':
+                    full_url = f"https://pitchbook.com{href}"
+                    all_detail_urls.add(full_url)
+        except Exception as e:
+            print(f"⚠️ Could not process listing {listing_url}: {e}")
+            continue
 
-    # Use the broad selector to get all report links
-    links = page.query_selector_all("a[href^='/news/reports/']")
-    detail_urls = set()
-    for a in links:
-        href = a.get_attribute('href')
-        if href and href != '/news/reports':
-            full = f"https://pitchbook.com{href}"
-            detail_urls.add(full)
-
-    print(f"Found {len(detail_urls)} PitchBook reports")
-    for du in detail_urls:
+    print(f"Found a total of {len(all_detail_urls)} unique PitchBook reports across all listings.")
+    for du in all_detail_urls:
         download_pdf_from_detail(page, du)
+
+def scrape_and_download_techcrunch(page, max_clicks=100):
+    print("\n=== TechCrunch News ===")
+    base = "https://techcrunch.com"
+    start_url = f"{base}/latest"
+    
+    # Load existing data to avoid duplicates
+    json_file = Path(__file__).parent / "data" / "techcrunch_downloaded.json"
+    if json_file.exists():
+        with open(json_file, 'r') as f:
+            try:
+                data = json.load(f)
+                seen_urls = set(r.get("url") for r in data.get("reports", []))
+            except json.JSONDecodeError:
+                data = {"reports": []}
+                seen_urls = set()
+    else:
+        data = {"reports": []}
+        seen_urls = set()
+
+    page.goto(start_url, timeout=NAV_TIMEOUT, wait_until="domcontentloaded")
+    accept_cookies(page)
+
+    clicks = 0
+    while clicks < max_clicks:
+        # Wait for either of the two known selectors for article links to appear.
+        page.wait_for_selector('a.post-block__title__link, a.loop-card__title-link', timeout=10000)
+        # Query for all article links that match either selector.
+        articles = page.query_selector_all('a.post-block__title__link, a.loop-card__title-link')
+        new_articles_found_on_page = 0
+
+        for article in articles:
+            url = article.get_attribute('href')
+            if url and url not in seen_urls:
+                new_articles_found_on_page += 1
+                seen_urls.add(url)
+                title = article.inner_text().strip()
+                print(f"Found new article: {title}")
+                
+                # Save the article as a PDF
+                try:
+                    page2 = page.context.new_page()
+                    page2.goto(url, timeout=NAV_TIMEOUT, wait_until="domcontentloaded")
+                    accept_cookies(page2)
+                    
+                    safe_title = re.sub(r'[^\w\s-]', '', title)[:50]
+                    safe_title = re.sub(r'[-\s]+', '_', safe_title).strip('_').lower()
+                    
+                    # Try to save just the main article content for a cleaner PDF
+                    content_selector = "div.article-content"
+                    if page2.query_selector(content_selector):
+                        save_webpage_as_pdf(page2, DOWNLOAD_DIR, safe_title, detail_url=url, selector=content_selector)
+                    else:
+                        save_webpage_as_pdf(page2, DOWNLOAD_DIR, safe_title, detail_url=url)
+                    
+                    page2.close()
+                except Exception as e:
+                    print(f"⚠️ Failed to process and save article {url}: {e}")
+
+        if new_articles_found_on_page == 0 and clicks > 0:
+            print("No new articles found on this page. Stopping.")
+            break
+
+        # Click the "Load More" button to get new articles
+        try:
+            load_more_button = page.query_selector('a.wp-block-query-pagination-next')
+            if load_more_button and load_more_button.is_enabled():
+                print("Clicking 'Load More'...")
+                load_more_button.click()
+                clicks += 1
+                # Wait for the new content to load
+                page.wait_for_timeout(3000) 
+            else:
+                print("No 'Load More' button found. Stopping.")
+                break
+        except Exception as e:
+            print(f"Could not click 'Load More' button: {e}")
+            break
 
 def main():
     with sync_playwright() as pw:
-        browser = pw.chromium.launch(headless=True)
-        context = browser.new_context(accept_downloads=True)
+        user_data_dir = "/tmp/playwright_user_data"
+        env = {
+            "GOOGLE_API_KEY": os.getenv("GOOGLE_API_KEY", "YOUR_GOOGLE_API_KEY_HERE")
+        }
+        context = pw.chromium.launch_persistent_context(user_data_dir, headless=False, accept_downloads=True, env=env)
+        stealth = Stealth()
+        stealth.apply_stealth_sync(context)
         page = context.new_page()
         page.set_default_navigation_timeout(NAV_TIMEOUT)
 
         scrape_and_download_crunchbase(page)
         scrape_and_download_beauhurst(page)
         scrape_and_download_pitchbook(page)
+        scrape_and_download_techcrunch(page)
 
-        browser.close()
+        # Download any reports from email
+        download_beauhurst_pdfs_from_gmail(DOWNLOAD_DIR)
+
+        context.close()
 
 if __name__ == '__main__':
     main()

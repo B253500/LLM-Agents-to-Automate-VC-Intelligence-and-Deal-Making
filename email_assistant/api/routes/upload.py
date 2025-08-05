@@ -2,7 +2,7 @@ from fastapi import APIRouter, UploadFile, File, Form
 from typing import List
 import uuid, os, tempfile, shutil
 
-from memo_api.services import ocr
+from email_assistant.api.services import ocr
 
 router = APIRouter()
 

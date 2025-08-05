@@ -1,0 +1,1 @@
+# This file makes the 'email_assistant' directory a Python package.
