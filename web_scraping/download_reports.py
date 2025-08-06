@@ -1273,7 +1273,17 @@ def main():
         env = {
             "GOOGLE_API_KEY": os.getenv("GOOGLE_API_KEY", "YOUR_GOOGLE_API_KEY_HERE")
         }
-        context = pw.chromium.launch_persistent_context(user_data_dir, headless=False, accept_downloads=True, env=env)
+        browser_args = [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--no-first-run',
+            '--no-zygote',
+            '--single-process',
+            '--disable-gpu'
+        ]
+        context = pw.chromium.launch_persistent_context(user_data_dir, headless=True, accept_downloads=True, env=env, args=browser_args)
         stealth = Stealth()
         stealth.apply_stealth_sync(context)
         page = context.new_page()

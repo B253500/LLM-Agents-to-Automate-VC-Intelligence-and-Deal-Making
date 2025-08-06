@@ -108,56 +108,33 @@ class VCReportAgent:
         return top_docs
 
     def _initialize_agent(self):
-        """Initialize the agent with document processing and retrieval, including table extraction."""
-        documents = []
-        for pdf_file in self.reports_dir.glob("*.pdf"):
-            try:
-                # 1. Extract text as before
-                loader = UnstructuredPDFLoader(str(pdf_file))
-                docs = loader.load()
-                for doc in docs:
-                    doc.metadata["source"] = str(pdf_file.name)
-                documents.extend(docs)
-                print(f"\n\n--- Extracted Chunks from {pdf_file.name} ---\n")
-                for i, doc in enumerate(docs):
-                    print(f"Chunk {i+1} (first 500 chars):\n{doc.page_content[:500]}\n")
-                # 2. Extract tables and add as text chunks
-                with pdfplumber.open(str(pdf_file)) as pdf:
-                    for page_num, page in enumerate(pdf.pages, 1):
-                        tables = page.extract_tables()
-                        for t_idx, table in enumerate(tables, 1):
-                            # Convert table to readable string (CSV-like)
-                            table_str = "\n".join([", ".join([cell if cell is not None else "" for cell in row]) for row in table])
-                            table_doc = Document(
-                                page_content=f"Extracted table from {pdf_file.name}, page {page_num}, table {t_idx}:\n{table_str}",
-                                metadata={"source": str(pdf_file.name), "page": page_num, "type": "table"}
-                            )
-                            documents.append(table_doc)
-                            # Debug print
-                            print(f"[Table] {pdf_file.name} page {page_num} table {t_idx} (first 500 chars):\n{table_str[:500]}\n")
-            except Exception as e:
-                logger.error(f"Error loading or extracting tables from {pdf_file}: {str(e)}")
-                continue
-        if not documents:
-            raise ValueError("No documents found in the report directory")
+        """
+        Initializes the agent by loading the persistent ChromaDB vector store.
+        It no longer builds the database; that is handled by the ingestion script.
+        """
+        db_path = "./chroma_db"
+        if not os.path.exists(db_path) or not os.listdir(db_path):
+            logger.warning(f"ChromaDB not found at {db_path}. The agent will have no knowledge. Please run the ingestion workflow to build the database.")
+            # Create a placeholder in memory so the agent doesn't crash
+            placeholder_doc = Document(page_content="Database not found. Please run the ingestion workflow.", metadata={"source": "system"})
+            self.vector_store = Chroma.from_documents(
+                documents=[placeholder_doc],
+                embedding=self.embeddings
+            )
+        else:
+            logger.info(f"Loading existing vector store from: {db_path}")
+            self.vector_store = Chroma(
+                persist_directory=db_path,
+                embedding_function=self.embeddings
+            )
 
-        # Create vector store
-        self.vector_store = Chroma.from_documents(
-            documents=documents,
-            embedding=self.embeddings,
-            persist_directory="./chroma_db"
-        )
-
-        # Create the QA chain - using a simpler approach
+        # Create the QA chain
         def create_qa_chain():
             def qa_with_context(input_dict):
                 question = input_dict["query"]
-                # Get relevant documents
-                docs = self._get_relevant_documents(question, k=4)  # Reduced from 8 to 4
-                # Combine context
+                docs = self._get_relevant_documents(question, k=4)
                 context = "\n\n".join([doc.page_content for doc in docs])
                 
-                # Create the full prompt
                 full_prompt = f"""You are a VC report analysis expert. Use the following context to answer the question.
 
 For CAGR (Compound Annual Growth Rate) calculations:
@@ -186,7 +163,6 @@ Important:
         
 Answer:"""
                 
-                # Get response from LLM
                 response = self.llm.invoke(full_prompt)
                 return {"result": response.content}
             
@@ -228,7 +204,7 @@ Answer:"""
         try:
             with get_openai_callback() as cb:
                 # Get answer using the simpler QA chain
-        result = self.qa_chain({"query": question})
+                result = self.qa_chain({"query": question})
                 
                 # Clean up any LaTeX math in the answer
                 cleaned_answer = self._clean_math_formulas(result["result"])
@@ -258,7 +234,7 @@ Answer:"""
                             source_info["page"] = doc.metadata["page"]
                         sources.append(source_info)
                 
-        return {
+                return {
                     "answer": cleaned_answer,
                     "sources": sources,
                     "validation": {

@@ -1,0 +1,294 @@
+{
+  "name": "Web Scraper (Binary Method - Corrected)",
+  "nodes": [
+    {
+      "id": "runDaily",
+      "name": "Run Daily",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [-1200, 300],
+      "parameters": {
+        "rule": { "interval": [{ "triggerAtHour": 4 }] }
+      }
+    },
+    {
+      "id": "loadMemory",
+      "name": "Load Memory File",
+      "type": "n8n-nodes-base.dropbox",
+      "typeVersion": 1,
+      "position": [-980, 300],
+      "credentials": { "dropboxOAuth2Api": { "id": "YOUR_DROPBOX_CRED_ID", "name": "Dropbox" } },
+      "continueOnFail": true,
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "download",
+        "path": "/memory/processed.json"
+      }
+    },
+    {
+      "id": "parseMemory",
+      "name": "Parse Memory",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [-780, 300],
+      "parameters": {
+        "functionCode": "let arr=[];\ntry{arr=JSON.parse(Buffer.from($binary.data.data,'base64').toString())}catch{}\nreturn[{json:{processedUrls:arr}}];"
+      }
+    },
+    {
+      "id": "makePages",
+      "name": "Generate Page Numbers",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [-580, 300],
+      "parameters": {
+        "functionCode": "return Array.from({length:3},(_,i)=>({json:{pageNumber:i+1}}));"
+      }
+    },
+    {
+      "id": "pageBatch",
+      "name": "Loop Over Pages",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [-380, 300],
+      "parameters": { "batchSize": 1 }
+    },
+    {
+      "id": "getTC",
+      "name": "Get TechCrunch Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [-180, 30],
+      "parameters": {
+        "url": "={{'https://techcrunch.com/page/' + $json.pageNumber}}",
+        "options": { "response": { "response": "file", "fileName": "page.html" } }
+      }
+    },
+    {
+      "id": "extractTC",
+      "name": "Extract TC Links",
+      "type": "n8n-nodes-base.htmlExtract",
+      "typeVersion": 1,
+      "position": [20, 30],
+      "parameters": {
+        "sourceData": "binary",
+        "binaryPropertyName": "data",
+        "options": { "returnArray": true },
+        "extractionValues": {
+          "values":[
+            { "key":"articleUrl","cssSelector":"h2.post-block__title a","returnValue":"attribute","attribute":"href"},
+            { "key":"articleTitle","cssSelector":"h2.post-block__title a"}
+          ]
+        }
+      }
+    },
+    {
+      "id": "getCB",
+      "name": "Get Crunchbase Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [-180, 140],
+      "parameters": {
+        "url": "={{'https://about.crunchbase.com/research-reports/page/' + $json.pageNumber}}",
+        "options": { "response": { "response": "file", "fileName": "page.html" } }
+      }
+    },
+    {
+      "id": "extractCB",
+      "name": "Extract CB Links",
+      "type": "n8n-nodes-base.htmlExtract",
+      "typeVersion": 1,
+      "position": [20, 140],
+      "parameters": {
+        "sourceData": "binary",
+        "binaryPropertyName": "data",
+        "options": { "returnArray": true },
+        "extractionValues": {
+          "values":[
+            { "key":"articleUrl","cssSelector":"a.post-block__title__link","returnValue":"attribute","attribute":"href"},
+            { "key":"articleTitle","cssSelector":"a.post-block__title__link"}
+          ]
+        }
+      }
+    },
+    {
+      "id": "getPB",
+      "name": "Get PitchBook Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [-180, 250],
+      "parameters": {
+        "url": "={{'https://pitchbook.com/news/reports/page/' + $json.pageNumber}}",
+        "options": { "response": { "response": "file", "fileName": "page.html" } }
+      }
+    },
+    {
+      "id": "extractPB",
+      "name": "Extract PB Links",
+      "type": "n8n-nodes-base.htmlExtract",
+      "typeVersion": 1,
+      "position": [20, 250],
+      "parameters": {
+        "sourceData": "binary",
+        "binaryPropertyName": "data",
+        "options": { "returnArray": true },
+        "extractionValues": {
+          "values":[
+            { "key":"articleUrl","cssSelector":"a[href*='/news/reports/']","returnValue":"attribute","attribute":"href"},
+            { "key":"articleTitle","cssSelector":"a[href*='/news/reports/']"}
+          ]
+        }
+      }
+    },
+    {
+      "id": "getBH",
+      "name": "Get Beauhurst Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [-180, 360],
+      "parameters": {
+        "url": "={{'https://www.beauhurst.com/reports/page/' + $json.pageNumber}}",
+        "options": { "response": { "response": "file", "fileName": "page.html" } }
+      }
+    },
+    {
+      "id": "extractBH",
+      "name": "Extract BH Links",
+      "type": "n8n-nodes-base.htmlExtract",
+      "typeVersion": 1,
+      "position": [20, 360],
+      "parameters": {
+        "sourceData": "binary",
+        "binaryPropertyName": "data",
+        "options": { "returnArray": true },
+        "extractionValues": {
+          "values":[
+            { "key":"articleUrl","cssSelector":"a[href*='/research/']","returnValue":"attribute","attribute":"href"},
+            { "key":"articleTitle","cssSelector":"a[href*='/research/']"}
+          ]
+        }
+      }
+    },
+    {
+      "id": "merge",
+      "name": "Merge All",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 1,
+      "position": [220, 300],
+      "parameters": { "options": {} }
+    },
+    {
+      "id": "batchArticles",
+      "name": "Loop Over Articles",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [420, 300],
+      "parameters": { "batchSize": 1 }
+    },
+    {
+      "id": "isNew",
+      "name": "Is New?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [620, 300],
+      "parameters": {
+        "conditions": {
+          "string":[{
+            "value1":"={{$node['parseMemory'].json.processedUrls}}",
+            "operation":"notContains",
+            "value2":"={{$json.articleUrl}}"
+          }]
+        }
+      }
+    },
+    {
+        "id": "doNothing",
+        "name": "Do Nothing",
+        "type": "n8n-nodes-base.noOp",
+        "typeVersion": 1,
+        "position": [840, 400],
+        "parameters": {}
+    },
+    {
+      "id": "getArticle",
+      "name": "Get Article Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [840, 200],
+      "parameters": {
+        "url": "={{$json.articleUrl}}",
+        "options": { "response": { "response": "file", "fileName": "page.html" } }
+      }
+    },
+    {
+      "id": "saveHTML",
+      "name": "Save HTML",
+      "type": "n8n-nodes-base.dropbox",
+      "typeVersion": 1,
+      "position": [1040, 200],
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "upload",
+        "path": "={{'/scraped_reports/' + $node['batchArticles'].json.articleTitle.replace(/[^a-zA-Z0-9]/g,'_') + '.html'}}",
+        "binaryData": true
+      },
+      "credentials": { "dropboxOAuth2Api": { "id": "YOUR_DROPBOX_CRED_ID", "name": "Dropbox" } }
+    },
+    {
+      "id": "updateMem",
+      "name": "Update Memory Array",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1240, 200],
+      "parameters": {
+        "functionCode": "const mem=$node['parseMemory'].json.processedUrls;\nconst url = $node['batchArticles'].json.articleUrl;\nif (url) { mem.push(url); }\nconst b64=Buffer.from(JSON.stringify(mem)).toString('base64');\nreturn[{binary:{data:{data:b64,mimeType:'application/json'}}}];"
+      }
+    },
+    {
+      "id": "uploadMem",
+      "name": "Save Memory File",
+      "type": "n8n-nodes-base.dropbox",
+      "typeVersion": 1,
+      "position": [1440, 200],
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "upload",
+        "path": "/memory/processed.json",
+        "binaryData": true
+      },
+      "credentials": { "dropboxOAuth2Api": { "id": "YOUR_DROPBOX_CRED_ID", "name": "Dropbox" } }
+    }
+  ],
+  "connections": {
+    "runDaily":{"main":[[{"node":"loadMemory","type":"main","index":0}]]},
+    "loadMemory":{"main":[[{"node":"parseMemory","type":"main","index":0}]]},
+    "parseMemory":{"main":[[{"node":"makePages","type":"main","index":0}]]},
+    "makePages":{"main":[[{"node":"pageBatch","type":"main","index":0}]]},
+    "pageBatch":{"main":[
+      [{"node":"getTC","type":"main","index":0}],
+      [{"node":"getCB","type":"main","index":0}],
+      [{"node":"getPB","type":"main","index":0}],
+      [{"node":"getBH","type":"main","index":0}]
+    ]},
+    "getTC":{"main":[[{"node":"extractTC","type":"main","index":0}]]},
+    "getCB":{"main":[[{"node":"extractCB","type":"main","index":0}]]},
+    "getPB":{"main":[[{"node":"extractPB","type":"main","index":0}]]},
+    "getBH":{"main":[[{"node":"extractBH","type":"main","index":0}]]},
+    "extractTC":{"main":[[{"node":"merge","type":"main","index":0}]]},
+    "extractCB":{"main":[[{"node":"merge","type":"main","index":1}]]},
+    "extractPB":{"main":[[{"node":"merge","type":"main","index":2}]]},
+    "extractBH":{"main":[[{"node":"merge","type":"main","index":3}]]},
+    "merge":{"main":[[{"node":"batchArticles","type":"main","index":0}]]},
+    "batchArticles":{"main":[[{"node":"isNew","type":"main","index":0}]]},
+    "isNew":{
+        "main":[
+            [{"node":"getArticle","type":"main","index":0}],
+            [{"node":"doNothing","type":"main","index":0}]
+        ]
+    },
+    "getArticle":{"main":[[{"node":"saveHTML","type":"main","index":0}]]},
+    "saveHTML":{"main":[[{"node":"updateMem","type":"main","index":0}]]},
+    "updateMem":{"main":[[{"node":"uploadMem","type":"main","index":0}]]}
+  },
+  "meta": { "templateCredsSetupCompleted": true }
+}

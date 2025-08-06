@@ -14,6 +14,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from core.schemas import StartupProfile
+from core.exa_utils import find_linkedin_url_with_exa
 
 # --- LLM Post-Processing Setup ---
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
@@ -30,7 +31,7 @@ Your JSON output must follow this exact structure:
       "name": "Executive Name",
       "role": "Current Role",
       "linkedin": "https://www.linkedin.com/in/username (or null if not found)",
-      "background": "A concise 2-3 sentence professional background. Focus on experience, key achievements, and expertise. Do NOT include any of your own reasoning, meta-comments, or any text other than the background summary."
+      "background": "A detailed 4-5 sentence professional background. Focus on experience, key achievements, and expertise. Do NOT include any of your own reasoning, meta-comments, or any text other than the background summary."
     }
   ]
 }
@@ -177,30 +178,8 @@ def generate_team_section(profile: StartupProfile) -> str:
         if linkedin:
             lines.append(f"LinkedIn: {linkedin}")
         
-        # Use background_summary if available, otherwise use bio
-        if background_summary:
-            # Clean up any remaining AI thinking patterns
-            clean_summary = background_summary
-            thinking_patterns = [
-                r'Let me extract.*?\.',
-                r'Okay, I need to.*?\.',
-                r'First, from.*?\.',
-                r'Based on.*?\.',
-                r'According to.*?\.',
-                r'Key points to include.*?\.',
-                r'So putting this together.*?\.',
-                r'Need to keep it concise.*?\.',
-                r'Make sure to cite.*?\.',
-                r'Check if all info.*?\.',
-                r'Use the most relevant citations.*?\.'
-            ]
-            for pattern in thinking_patterns:
-                clean_summary = re.sub(pattern, '', clean_summary, flags=re.DOTALL | re.IGNORECASE)
-            clean_summary = clean_summary.strip()
-            
-            if clean_summary and len(clean_summary.split()) > 5:
-                lines.append(f"Background: {clean_summary}")
-        elif bio:
+        # Use bio if available, otherwise use background_summary
+        if bio and len(bio.split()) > 5:
             # Clean up bio as well
             clean_bio = bio
             thinking_patterns = [
@@ -222,6 +201,28 @@ def generate_team_section(profile: StartupProfile) -> str:
             
             if clean_bio and len(clean_bio.split()) > 5:
                 lines.append(f"Background: {clean_bio}")
+        elif background_summary:
+            # Clean up any remaining AI thinking patterns
+            clean_summary = background_summary
+            thinking_patterns = [
+                r'Let me extract.*?\.',
+                r'Okay, I need to.*?\.',
+                r'First, from.*?\.',
+                r'Based on.*?\.',
+                r'According to.*?\.',
+                r'Key points to include.*?\.',
+                r'So putting this together.*?\.',
+                r'Need to keep it concise.*?\.',
+                r'Make sure to cite.*?\.',
+                r'Check if all info.*?\.',
+                r'Use the most relevant citations.*?\.'
+            ]
+            for pattern in thinking_patterns:
+                clean_summary = re.sub(pattern, '', clean_summary, flags=re.DOTALL | re.IGNORECASE)
+            clean_summary = clean_summary.strip()
+            
+            if clean_summary and len(clean_summary.split()) > 5:
+                lines.append(f"Background: {clean_summary}")
         
         lines.append("")  # Add spacing between executives
         count += 1
@@ -318,271 +319,28 @@ def ensure_executives_found(profile: StartupProfile) -> StartupProfile:
     return profile
 
 
-def get_linkedin_profile_perplexity(name, company_name=None):
-    """Get LinkedIn profile data using Perplexity search for executive profiling."""
+def get_linkedin_profile_exa(name, company_name=None):
+    """Get LinkedIn profile URL using Exa and then get profile details using Perplexity."""
     from core.perplexity_utils import search_perplexity
-    
-    try:
-        # Search for LinkedIn profile with more specific query
-        query = f"What is the LinkedIn profile URL for {name} at {company_name or ''}? Please provide the direct LinkedIn URL."
-        result = search_perplexity(query)
-        
-        if result:
-            # Extract LinkedIn URL if found (more flexible pattern)
-            linkedin_patterns = [
-                r'https?://[\w./-]*linkedin\.com/in/[\w/_-]+',
-                r'https://www\.linkedin\.com/in/[\w/_-]+',
-                r'https://linkedin\.com/in/[\w/_-]+',
-                r'linkedin\.com/in/[\w/_-]+'
-            ]
-            
-            linkedin_url = None
-            for pattern in linkedin_patterns:
-                linkedin_url_match = re.search(pattern, result)
-                if linkedin_url_match:
-                    linkedin_url = linkedin_url_match.group(0)
-                    # Ensure it starts with https://
-                    if linkedin_url.startswith('linkedin.com'):
-                        linkedin_url = 'https://' + linkedin_url
-                    # Clean up any trailing characters
-                    linkedin_url = re.sub(r'[^\w/._-]+$', '', linkedin_url)
-                    break
-            
-            # If no LinkedIn URL found with patterns, try flexible line-by-line parsing (like old logic)
-            if not linkedin_url:
-                for line in result.split('\n'):
-                    # Try the old logic pattern: name (role): linkedin_url
-                    match = re.match(r"[-•]?\s*(.+?)\s*\((.+?)\):?\s*(https?://[\w./-]+)?", line)
-                    if match:
-                        name_match, role_match, linkedin_match = match.groups()
-                        if linkedin_match and 'linkedin.com/in/' in linkedin_match:
-                            linkedin_url = linkedin_match.strip()
-                            break
-                    
-                    # Fallback: try to extract from lines with LinkedIn URLs
-                    elif 'linkedin.com/in/' in line:
-                        parts = line.split(' - ')
-                        if len(parts) >= 2:
-                            name_role = parts[0].strip()
-                            linkedin_candidates = [p for p in parts if 'linkedin.com/in/' in p]
-                            if linkedin_candidates:
-                                linkedin_url = linkedin_candidates[0].strip()
-                                if not linkedin_url.startswith('http'):
-                                    linkedin_url = 'https://' + linkedin_url
-                                break
-            
-            if linkedin_url:
-                # Get more detailed profile info
-                profile_query = f"{name} {company_name or ''} current role position background experience"
-                profile_result = search_perplexity(profile_query)
-                
-                # Parse the results into structured data
-                profile_data = {
-                    'profile_url': linkedin_url,
-                    'headline': extract_headline(profile_result, name),
-                    'summary': extract_summary(profile_result),
-                    'experiences': extract_experiences(profile_result)
-                }
-                
-                print(f"Perplexity: Found LinkedIn profile for {name}")
-                return profile_data
-            else:
-                # Even if no LinkedIn URL found, try to extract profile data from the search result
-                print(f"Perplexity: No LinkedIn URL found for {name}, but extracting profile data from search result")
-                
-                # Try to generate a LinkedIn URL based on name and company
-                linkedin_url = generate_linkedin_url(name, company_name)
-                
-                profile_data = {
-                    'profile_url': linkedin_url,
-                    'headline': extract_headline(result, name),
-                    'summary': extract_summary(result),
-                    'experiences': extract_experiences(result)
-                }
-                
-                # Only return if we have some meaningful data
-                if profile_data['headline'] or profile_data['summary']:
-                    print(f"Perplexity: Extracted profile data for {name}")
-                    return profile_data
-                else:
-                    print(f"Perplexity: No meaningful profile data found for {name}")
-                    return None
-        else:
-            print(f"Perplexity: No profile data found for {name}")
-            return None
-            
-    except Exception as e:
-        print(f"Perplexity LinkedIn search error for {name}: {e}")
+
+    # Step 1: Use Exa to find the most accurate LinkedIn URL
+    linkedin_url = find_linkedin_url_with_exa(name, company_name)
+
+    if not linkedin_url:
+        print(f"[Exa] No LinkedIn URL found for {name}")
         return None
 
-def generate_linkedin_url(name, company_name=None):
-    """Generate a LinkedIn URL based on name and company."""
-    if not name:
-        return None
-    
-    # Clean the name for URL generation
-    name_clean = re.sub(r'[^\w\s]', '', name).strip()
-    name_parts = name_clean.split()
-    
-    if len(name_parts) >= 2:
-        # Use first and last name
-        first_name = name_parts[0].lower()
-        last_name = name_parts[-1].lower()
-        linkedin_url = f"https://www.linkedin.com/in/{first_name}-{last_name}"
-    else:
-        # Use full name if only one part
-        full_name = name_clean.lower().replace(' ', '-')
-        linkedin_url = f"https://www.linkedin.com/in/{full_name}"
-    
-    return linkedin_url
+    # Step 2: Use Perplexity to get the details from that specific URL
+    profile_query = f"Provide a detailed professional background for the person with this LinkedIn profile: {linkedin_url}. Include their current role, key responsibilities, previous significant roles, and educational background."
+    profile_details = search_perplexity(profile_query)
 
-def extract_headline(text, name):
-    """Extract current headline/role from text."""
+    if profile_details:
+        return {
+            'profile_url': linkedin_url,
+            'summary': profile_details  # The full text from Perplexity
+        }
     
-    # Clean up the text first - remove Perplexity thinking patterns
-    text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
-    text = re.sub(r'Okay,.*?\.', '', text, flags=re.DOTALL)
-    text = re.sub(r'Let me.*?\.', '', text, flags=re.DOTALL)
-    text = re.sub(r'First,.*?\.', '', text, flags=re.DOTALL)
-    
-    # Look for actual role patterns
-    role_patterns = [
-        rf'{name}.*?(CEO|CFO|CTO|Chief|President|Founder|Co-founder|Director|Manager|Deputy|Head)',
-        rf'(CEO|CFO|CTO|Chief|President|Founder|Co-founder|Director|Manager|Deputy|Head).*?{name}',
-        rf'{name}.*?is.*?(CEO|CFO|CTO|Chief|President|Founder|Co-founder|Director|Manager|Deputy|Head)',
-        rf'{name}.*?serves as.*?',
-        rf'{name}.*?currently.*?',
-        rf'currently.*?{name}.*?'
-    ]
-    
-    for pattern in role_patterns:
-        match = re.search(pattern, text, re.IGNORECASE)
-        if match:
-            headline = match.group(0).strip()
-            # Clean up the headline
-            headline = re.sub(rf'^{name}\s+', '', headline)
-            headline = re.sub(rf'{name}\s+', '', headline)
-            if len(headline) > 5 and headline != "at":
-                return headline
-    
-    return ""
-
-def extract_summary(text):
-    """Extract summary/background from text."""
-    
-    # Clean up the text first - remove Perplexity thinking patterns
-    text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
-    text = re.sub(r'Okay,.*?\.', '', text, flags=re.DOTALL)
-    text = re.sub(r'Let me.*?\.', '', text, flags=re.DOTALL)
-    text = re.sub(r'First,.*?\.', '', text, flags=re.DOTALL)
-    text = re.sub(r'Based on.*?', '', text, flags=re.DOTALL)
-    text = re.sub(r'According to.*?', '', text, flags=re.DOTALL)
-    
-    # Look for actual content about the person
-    lines = text.split('\n')
-    summary_lines = []
-    
-    for line in lines:
-        line = line.strip()
-        # Skip lines that are just thinking or navigation
-        if (line and len(line) > 20 and 
-            not line.startswith('http') and
-            not line.startswith('Okay,') and
-            not line.startswith('Let me') and
-            not line.startswith('First,') and
-            not line.startswith('Based on') and
-            not line.startswith('According to') and
-            not 'search result' in line.lower() and
-            not 'indicates that' in line.lower()):
-            
-            summary_lines.append(line)
-            if len(' '.join(summary_lines)) > 300:
-                break
-    
-    summary = ' '.join(summary_lines) if summary_lines else ""
-    
-    # If we still have poor content, try to extract meaningful sentences
-    if not summary or len(summary) < 50:
-        sentences = text.split('.')
-        meaningful_sentences = []
-        for sentence in sentences:
-            sentence = sentence.strip()
-            if (len(sentence) > 30 and 
-                not sentence.startswith('Okay,') and
-                not sentence.startswith('Let me') and
-                not 'search result' in sentence.lower() and
-                not 'indicates that' in sentence.lower()):
-                meaningful_sentences.append(sentence)
-                if len(' '.join(meaningful_sentences)) > 200:
-                    break
-        summary = '. '.join(meaningful_sentences)
-    
-    return summary
-
-def extract_experiences(text):
-    """Extract work experiences from text."""
-    
-    # Clean up the text first
-    text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
-    text = re.sub(r'Okay,.*?\.', '', text, flags=re.DOTALL)
-    text = re.sub(r'Let me.*?\.', '', text, flags=re.DOTALL)
-    
-    experiences = []
-    
-    # Look for actual company and role patterns
-    experience_patterns = [
-        r'(?:previously|formerly|worked|was)\s+(?:at|with|for)\s+([A-Z][a-zA-Z\s&\.]+)',
-        r'([A-Z][a-zA-Z\s&\.]+)\s+(?:as|CEO|CFO|CTO|Chief|Founder|Co-founder)',
-        r'(?:CEO|CFO|CTO|Chief|Founder|Co-founder)\s+(?:at|of)\s+([A-Z][a-zA-Z\s&\.]+)',
-        r'([A-Z][a-zA-Z\s&\.]+)\s+(?:University|College|School)',
-        r'(?:graduated|studied|attended)\s+([A-Z][a-zA-Z\s&\.]+)'
-    ]
-    
-    for pattern in experience_patterns:
-        matches = re.findall(pattern, text, re.IGNORECASE)
-        for match in matches:
-            company = match.strip()
-            # Filter out common non-company words
-            if (len(company) > 3 and 
-                company.lower() not in ['the', 'and', 'or', 'search', 'result', 'first', 'second', 'third'] and
-                not company.lower().startswith('okay') and
-                not company.lower().startswith('let me') and
-                not company.lower().startswith('s a') and
-                not company.lower().startswith('they want') and
-                not company.lower().startswith('to locate') and
-                not company.lower().startswith('to find') and
-                not 'public figure' in company.lower() and
-                not 'linkedin profile' in company.lower() and
-                not 'search results' in company.lower()):
-                
-                # Try to extract role from context
-                role = "Executive"
-                role_patterns = [
-                    rf'{company}.*?(CEO|CFO|CTO|Chief|Founder|Co-founder|Director|Manager)',
-                    rf'(CEO|CFO|CTO|Chief|Founder|Co-founder|Director|Manager).*?{company}'
-                ]
-                
-                for role_pattern in role_patterns:
-                    role_match = re.search(role_pattern, text, re.IGNORECASE)
-                    if role_match:
-                        role = role_match.group(1)
-                        break
-                
-                experiences.append({
-                    'company': company,
-                    'title': role,
-                    'duration': ''
-                })
-    
-    # Remove duplicates and return top 3
-    unique_experiences = []
-    seen_companies = set()
-    for exp in experiences:
-        if exp['company'] not in seen_companies:
-            unique_experiences.append(exp)
-            seen_companies.add(exp['company'])
-    
-    return unique_experiences[:3]
+    return {'profile_url': linkedin_url, 'summary': ''}
 
 
 def format_linkedin_profile(data):
@@ -595,173 +353,74 @@ Summary: {data.get('summary', 'N/A')}
 Current Position: {data.get('occupation', 'N/A')}
 """
 
-def generate_executive_background_summary(name: str, role: str, linkedin_data: dict, company_name: str) -> str:
-    """Generate a concise 4-sentence background summary for an executive."""
+def generate_executive_background_summary(name: str, role: str, company_name: str, linkedin_data: dict = None) -> str:
+    """
+    Generates a high-quality executive background summary by synthesizing web search and LinkedIn data.
+    """
     from core.perplexity_utils import search_perplexity
     
-    # If we have LinkedIn data, use it to generate a summary
-    if linkedin_data:
-        headline = linkedin_data.get('headline', '')
-        summary = linkedin_data.get('summary', '')
-        experience = linkedin_data.get('experiences', [])
-        
-        # Build 4-sentence summary from LinkedIn data
-        sentences = []
-        
-        # Sentence 1: Current role (improved)
-        if headline and len(headline) > 5 and headline != f"{name} at":
-            # Clean up the headline
-            clean_headline = headline.replace(f"{name} ", "").replace(f" {name}", "")
-            if clean_headline and clean_headline != "at":
-                sentences.append(f"{name} is currently {clean_headline}.")
-            else:
-                sentences.append(f"{name} serves as {role} at {company_name}.")
-        else:
-            sentences.append(f"{name} serves as {role} at {company_name}.")
-        
-        # Sentence 2: Previous role (if available)
-        if experience and len(experience) > 0:
-            recent_exp = experience[0] if isinstance(experience, list) else experience
-            if isinstance(recent_exp, dict):
-                company = recent_exp.get('company', '')
-                title = recent_exp.get('title', '')
-                if (company and title and 
-                    company.lower() != company_name.lower() and
-                    company.lower() not in ['search', 'result', 'first', 'second', 'third'] and
-                    not company.lower().startswith('he currently') and
-                    not company.lower().startswith('while the') and
-                    not company.lower().startswith('note that') and
-                    not company.lower().startswith('founder and') and
-                    not company.lower().startswith('sources confirm') and
-                    len(company) > 3):
-                    sentences.append(f"Previously, {name} was {title} at {company}.")
-        
-        # Sentence 3: Education or key background (improved)
-        if summary and len(summary) > 50:
-            # Extract education or key background info
-            education_keywords = ['university', 'college', 'mba', 'phd', 'bachelor', 'master', 'degree', 'graduated', 'studied']
-            if any(keyword in summary.lower() for keyword in education_keywords):
-                # Find education sentence
-                lines = summary.split('.')
-                for line in lines:
-                    if any(keyword in line.lower() for keyword in education_keywords):
-                        clean_line = line.strip()
-                        if len(clean_line) > 20 and not clean_line.startswith('Okay'):
-                            sentences.append(clean_line + ".")
-                            break
-                else:
-                    # If no education found, try to extract meaningful background
-                    meaningful_sentences = []
-                    for line in summary.split('.'):
-                        line = line.strip()
-                        if (len(line) > 30 and 
-                            not line.startswith('Okay') and
-                            not line.startswith('Let me') and
-                            not line.startswith('Even if') and
-                            not line.startswith('To locate') and
-                            not line.startswith('Let\'s start') and
-                            not 'search result' in line.lower() and
-                            not 'privacy policies' in line.lower() and
-                            not 'consent' in line.lower()):
-                            meaningful_sentences.append(line)
-                            if len(meaningful_sentences) >= 1:
-                                break
-                    
-                    if meaningful_sentences:
-                        sentences.append(meaningful_sentences[0] + ".")
-                    else:
-                        sentences.append(f"{name} has extensive experience in the industry.")
-            else:
-                # Try to extract meaningful background from summary
-                meaningful_sentences = []
-                for line in summary.split('.'):
-                    line = line.strip()
-                    if (len(line) > 30 and 
-                        not line.startswith('Okay') and
-                        not line.startswith('Let me') and
-                        not line.startswith('Even if') and
-                        not line.startswith('To locate') and
-                        not line.startswith('Let\'s start') and
-                        not 'search result' in line.lower() and
-                        not 'privacy policies' in line.lower() and
-                        not 'consent' in line.lower()):
-                        meaningful_sentences.append(line)
-                        if len(meaningful_sentences) >= 1:
-                            break
-                
-                if meaningful_sentences:
-                    sentences.append(meaningful_sentences[0] + ".")
-                else:
-                    sentences.append(f"{name} has extensive experience in the industry.")
-        else:
-            sentences.append(f"{name} has extensive experience in the industry.")
-        
-        # Sentence 4: Key achievement or focus (improved)
-        if summary and len(summary) > 100:
-            # Look for achievement-related content
-            achievement_keywords = ['led', 'managed', 'grew', 'increased', 'developed', 'founded', 'co-founded', 'oversaw', 'built']
-            lines = summary.split('.')
-            for line in lines:
-                if any(keyword in line.lower() for keyword in achievement_keywords):
-                    clean_line = line.strip()
-                    if (len(clean_line) > 20 and 
-                        not clean_line.startswith('Okay') and
-                        not 'search result' in clean_line.lower()):
-                        sentences.append(clean_line + ".")
-                        break
-            else:
-                sentences.append(f"{name} focuses on driving growth and innovation at {company_name}.")
-        else:
-            sentences.append(f"{name} focuses on driving growth and innovation at {company_name}.")
-        
-        # Ensure we have exactly 4 sentences
-        while len(sentences) < 4:
-            sentences.append(f"{name} brings valuable expertise to {company_name}.")
-        
-        return " ".join(sentences[:4])
+    print(f"[Bio Generation] Starting robust background generation for {name}.")
+
+    # --- Step 1: Gather all available information ---
+    # We will always perform a general web search to get a broad context.
     
-    # If no LinkedIn data, try web search for concise summary
+    # General web search for a professional background
+    general_query = f"Provide a detailed 3-4 sentence professional background for {name}, the {role} of {company_name}. Focus on key achievements, previous significant roles, and overall experience."
+    general_search_results = search_perplexity(general_query)
+    
+    # Use LinkedIn data if it's available and seems useful
+    linkedin_summary = ""
+    if linkedin_data and linkedin_data.get('summary') and len(linkedin_data.get('summary', '').split()) > 10:
+        linkedin_summary = linkedin_data.get('summary')
+        print(f"[Bio Generation] Found LinkedIn summary for {name}.")
+
+    # --- Step 2: Synthesize and Summarize with an LLM ---
+    # The LLM will act as an analyst, synthesizing the best info from all sources.
+    
+    if not general_search_results and not linkedin_summary:
+        print(f"[Bio Generation] No information found for {name} from any source. Using fallback.")
+        return f"{name} serves as {role} at {company_name}. A detailed background could not be automatically generated and requires further research."
+        
+    synthesis_prompt = f"""
+    You are a senior VC analyst. Your task is to write a concise and professional 4-5 sentence background summary for an executive based on the provided research.
+
+    Executive: {name}
+    Role: {role}
+    Company: {company_name}
+
+    Synthesize the information from the 'General Web Search' and 'LinkedIn Summary' below to create the best possible professional background. Prioritize the most relevant and impressive details.
+
+    Rules:
+    1.  The final summary MUST be a clean, well-written paragraph of 4-5 sentences.
+    2.  Do NOT include any of your own meta-commentary (e.g., "Based on the search...").
+    3.  Do NOT include any junk characters, citations, or incomplete fragments.
+    4.  If the sources are weak or contradictory, use your judgment to produce the most likely and professional summary.
+
+    ---
+    General Web Search Results:
+    {general_search_results or "No general information found."}
+    ---
+    LinkedIn Summary:
+    {linkedin_summary or "No LinkedIn summary available."}
+    ---
+
+    Return ONLY the final, clean, professional background summary.
+    """
+    
     try:
-        query = f"{name} {role} {company_name} background experience education"
-        search_result = search_perplexity(query)
+        final_summary = llm.invoke(synthesis_prompt).content.strip()
         
-        if search_result:
-            # Clean up the search result - remove AI thinking patterns
-            cleaned_result = re.sub(r'<think>.*?</think>', '', search_result, flags=re.DOTALL)
-            cleaned_result = re.sub(r'Based on.*?', '', cleaned_result, flags=re.DOTALL)
-            cleaned_result = re.sub(r'According to.*?', '', cleaned_result, flags=re.DOTALL)
-            cleaned_result = re.sub(r'Okay,.*?\.', '', cleaned_result, flags=re.DOTALL)
-            cleaned_result = re.sub(r'Let me.*?\.', '', cleaned_result, flags=re.DOTALL)
-            cleaned_result = re.sub(r'First,.*?\.', '', cleaned_result, flags=re.DOTALL)
-            cleaned_result = re.sub(r'Now,.*?\.', '', cleaned_result, flags=re.DOTALL)
-            cleaned_result = re.sub(r'I need to.*?\.', '', cleaned_result, flags=re.DOTALL)
-            cleaned_result = re.sub(r'Let\'s.*?\.', '', cleaned_result, flags=re.DOTALL)
+        # --- Final Validation ---
+        if final_summary and len(final_summary.split()) > 15 and "not available" not in final_summary.lower() and "cannot provide" not in final_summary.lower():
+            print(f"[Bio Generation] Successfully generated synthesized bio for {name}.")
+            return final_summary
+        else:
+            print(f"[Bio Generation] LLM synthesis failed or produced a short bio for {name}. Using fallback.")
+            return f"{name} serves as {role} at {company_name}. A detailed background could not be automatically generated and requires further research."
             
-            # Extract meaningful sentences
-            sentences = cleaned_result.split('.')
-            valid_sentences = []
-            for sentence in sentences:
-                sentence = sentence.strip()
-                if (len(sentence) > 20 and 
-                    len(valid_sentences) < 4 and
-                    not sentence.startswith('Okay') and
-                    not sentence.startswith('Let me') and
-                    not sentence.startswith('First,') and
-                    not sentence.startswith('Now,') and
-                    not sentence.startswith('I need to') and
-                    not sentence.startswith('Let\'s') and
-                    not 'search result' in sentence.lower() and
-                    not 'thinking' in sentence.lower() and
-                    not 'analysis' in sentence.lower()):
-                    valid_sentences.append(sentence + ".")
-            
-            if valid_sentences:
-                return " ".join(valid_sentences)
     except Exception as e:
-        print(f"[Background Summary] Error searching for {name}: {e}")
-    
-    # Fallback: return basic 4-sentence summary
-    return f"{name} serves as {role} at {company_name}. {name} has extensive experience in the industry. {name} brings valuable expertise to {company_name}. {name} focuses on driving growth and innovation at {company_name}."
+        print(f"[Bio Generation] An error occurred during LLM synthesis for {name}: {e}")
+        return f"{name} serves as {role} at {company_name}. An error occurred during background generation, and further research is required."
 
 
 def enrich_executives_with_perplexity(company_name, existing_execs):
@@ -925,275 +584,65 @@ def enrich_executives_with_perplexity(company_name, existing_execs):
     
     return execs
 
-def enrich_executive_details_with_perplexity(company_name, executives):
-    """
-    Enrich executive details with LinkedIn URLs and bios using Perplexity.
-    Based on the old logic approach for better quality.
-    """
-    from core.perplexity_utils import search_perplexity
-    
-    enriched = []
-    for exec in executives:
-        name = exec.get('name', '').strip()
-        role = exec.get('role', '').strip()
-        linkedin = exec.get('linkedin', '').strip()
-        bio = exec.get('bio', '').strip()
-        background_summary = exec.get('background_summary', '').strip()
-        
-        # Enrich LinkedIn if missing
-        if not linkedin and name and company_name:
-            query = f"What is the LinkedIn profile URL for {name} at {company_name}?"
-            result = search_perplexity(query)
-            if result and 'linkedin.com/in/' in result:
-                # Find LinkedIn URL in result - try multiple patterns
-                patterns = [
-                    r"https?://[\w./-]*linkedin.com/in/[\w/_-]+",
-                    r"linkedin.com/in/[\w/_-]+",
-                    r"https?://www.linkedin.com/in/[\w/_-]+"
-                ]
-                for pattern in patterns:
-                    match = re.search(pattern, result)
-                    if match:
-                        linkedin = match.group(0)
-                        if not linkedin.startswith('http'):
-                            linkedin = 'https://' + linkedin
-                        break
-                
-                # If still no LinkedIn URL found, try flexible line-by-line parsing
-                if not linkedin:
-                    for line in result.split('\n'):
-                        # Try the old logic pattern: name (role): linkedin_url
-                        match = re.match(r"[-•]?\s*(.+?)\s*\((.+?)\):?\s*(https?://[\w./-]+)?", line)
-                        if match:
-                            name_match, role_match, linkedin_match = match.groups()
-                            if linkedin_match and 'linkedin.com/in/' in linkedin_match:
-                                linkedin = linkedin_match.strip()
-                                break
-                        
-                        # Fallback: try to extract from lines with LinkedIn URLs
-                        elif 'linkedin.com/in/' in line:
-                            parts = line.split(' - ')
-                            if len(parts) >= 2:
-                                name_role = parts[0].strip()
-                                linkedin_candidates = [p for p in parts if 'linkedin.com/in/' in p]
-                                if linkedin_candidates:
-                                    linkedin = linkedin_candidates[0].strip()
-                                    if not linkedin.startswith('http'):
-                                        linkedin = 'https://' + linkedin
-                                    break
-        
-        # Enrich bio if missing or generic using LLM post-processing
-        if (not bio or 'not available' in bio.lower() or 'unknown' in bio.lower() or len(bio.split()) < 15) and name and role and company_name:
-            query = f"Provide a detailed 3-4 sentence professional background for {name}, {role} at {company_name}. Include their previous executive roles, industry experience, board positions, and key achievements."
-            raw_bio_text = search_perplexity(query)
-
-            if raw_bio_text:
-                print(f"[LLM Post-Processing] Cleaning raw bio for {name}...")
-                clean_data = llm_process_raw_bio(raw_bio_text, company_name, name, role)
-                if clean_data:
-                    bio = clean_data.get('background', bio) # Use cleaned background
-                    linkedin = clean_data.get('linkedin', linkedin) # Update linkedin if found
-                    print(f"[LLM Post-Processing] Successfully cleaned bio for {name}.")
-                else:
-                    print(f"[LLM Post-Processing] Failed to clean bio for {name}, using raw text.")
-                    # Fallback to simple regex cleaning if LLM fails
-                    bio = re.sub(r'<think>.*?</think>', '', raw_bio_text, flags=re.DOTALL)
-                    bio = re.sub(r'(First, from result|Result adds that|Result confirms|First, I need to check|Let\'s go through|From , I see that|Okay, I need to write|Me, I see that|Based on the search results|Looking at the information).*?(?=\n|$)', '', bio, flags=re.DOTALL)
-                    bio = re.sub(r'\d+\.\s*[A-Z].*?(?=\n|$)', '', bio, flags=re.MULTILINE)
-                    bio = re.sub(r'\[\d+\]', '', bio)
-                    bio = re.sub(r'\n\s*\n', '\n', bio)
-                    bio = bio.strip()
-        
-        # Generate background summary if missing
-        if not background_summary and name and role and company_name:
-            background_summary = generate_executive_background_summary(name, role, None, company_name)
-        
-        exec['linkedin'] = linkedin
-        exec['bio'] = bio
-        exec['background_summary'] = background_summary
-        enriched.append(exec)
-    
-    return enriched
-
-
 def run_team_chain(profile: StartupProfile) -> StartupProfile:
     """Run team chain to process and validate executive data."""
-    # Check if we already have executives from PDF extraction
     existing_execs = getattr(profile, 'executives', []) or []
-    
     print(f"[Team Chain] Found {len(existing_execs)} executives from PDF extraction")
-    
-    # If we have executives from PDF, use them (don't override with web search)
-    if existing_execs and len(existing_execs) > 0:
-        print("[Team Chain] Using executives from PDF extraction - skipping web search")
-        
-        # Only enrich existing executives with LinkedIn data
-        enriched_execs = []
-        
-        # Sort executives by priority and limit to top 3
-        key_roles = ['founder', 'ceo', 'chief executive officer', 'cfo', 'chief financial officer', 'chairman', 'cto', 'chief technology officer']
-        
-        def get_role_priority(role):
-            role_lower = role.lower()
-            # Special handling for "Chief Executive Officer" vs "Deputy CEO"
-            if 'chief executive officer' in role_lower:
-                return 1  # Highest priority for CEO
-            if 'deputy ceo' in role_lower:
-                return 2  # Lower priority for Deputy CEO
-            # Regular matching for other roles
-            for i, key_role in enumerate(key_roles):
-                if key_role in role_lower:
-                    return i
-            return len(key_roles)  # Lower priority for other roles
-        
-        # Sort and limit to top 3
-        sorted_execs = sorted(existing_execs, key=lambda x: get_role_priority(x.get('role', '')) if isinstance(x, dict) else len(key_roles))
-        top_3_execs = sorted_execs[:3]
-        
-        for i, exec in enumerate(top_3_execs):
-            if isinstance(exec, dict):
-                name = exec.get('name', '')
-                role = exec.get('role', '')
-                
-                if name and name.lower() not in ['unknown', 'n/a', 'none']:
-                    print(f"[Team Chain] Enriching LinkedIn for PDF executive {i+1}: {name} ({role})")
-                    
-                    # Use the improved enrichment approach (based on old logic)
-                    enriched_exec = exec.copy()
-                    
-                    # Enrich with LinkedIn URL and bio using dedicated functions
-                    if not enriched_exec.get('linkedin') and name and profile.name:
-                        query = f"What is the LinkedIn profile URL for {name} at {profile.name}?"
-                        from core.perplexity_utils import search_perplexity
-                        result = search_perplexity(query)
-                        if result and 'linkedin.com/in/' in result:
-                            match = re.search(r"https?://[\w./-]*linkedin.com/in/[\w/_-]+", result)
-                            if match:
-                                enriched_exec['linkedin'] = match.group(0)
-                    
-                    # Generate better bio if missing
-                    if not enriched_exec.get('bio') and name and role and profile.name:
-                        # Use a more structured query to avoid AI thinking patterns
-                        query = f"{name} {role} {profile.name} professional background experience achievements"
-                        from core.perplexity_utils import search_perplexity
-                        result = search_perplexity(query)
-                        if result and len(result.split()) > 8:
-                            # Clean up the bio - remove AI thinking text
-                            bio = result.strip()
-                            # Remove common AI thinking patterns
-                            thinking_patterns = [
-                                r'<think>.*?</think>',
-                                r'Okay, let me.*?\.',
-                                r'Let me analyze.*?\.',
-                                r'Based on.*?\.',
-                                r'According to.*?\.',
-                                r'First, looking at.*?\.',
-                                r'Now, putting this together.*?\.',
-                                r'I need to.*?\.',
-                                r'Let me start by.*?\.',
-                                r'Okay, I need to.*?\.',
-                                r'Let\'s tackle this.*?\.',
-                                r'Let me.*?\.',
-                                r'First,.*?\.',
-                                r'Now,.*?\.'
-                            ]
-                            for pattern in thinking_patterns:
-                                bio = re.sub(pattern, '', bio, flags=re.DOTALL | re.IGNORECASE)
-                            bio = bio.strip()
-                            # If bio is now too short, skip it
-                            if len(bio.split()) < 5:
-                                bio = ''
-                            enriched_exec['bio'] = bio
-                    
-                    # Generate background summary
-                    background_summary = generate_executive_background_summary(name, role, None, profile.name)
-                    enriched_exec['background_summary'] = background_summary
-                    
-                    # Enrich with LinkedIn and bio using the enhanced function
-                    enriched_exec = enrich_executive_details_with_perplexity(profile.name, [enriched_exec])[0]
-                    
-                    enriched_execs.append(enriched_exec)
-                else:
-                    enriched_execs.append(exec)
-            else:
-                enriched_execs.append(exec)
-        
-        # Add any remaining executives without enrichment (beyond top 3)
-        for exec in existing_execs[3:]:
-            enriched_execs.append(exec)
-        
-        # Update profile with enriched executives (keeping PDF data)
-        profile.executives = enriched_execs
-        
-    else:
-        # Only if NO executives found in PDF, then try web search
+
+    if not existing_execs:
         print("[Team Chain] No executives found in PDF - falling back to web search")
         profile = ensure_executives_found(profile)
-        
-        # Process web-found executives
-        execs = getattr(profile, 'executives', []) or []
-        enriched_execs = []
-        
-        # Sort executives by priority and limit to top 3
-        key_roles = ['founder', 'ceo', 'chief executive officer', 'cfo', 'chief financial officer', 'chairman', 'cto', 'chief technology officer']
-        
-        def get_role_priority(role):
-            role_lower = role.lower()
-            # Special handling for "Chief Executive Officer" vs "Deputy CEO"
-            if 'chief executive officer' in role_lower:
-                return 1  # Highest priority for CEO
-            if 'deputy ceo' in role_lower:
-                return 2  # Lower priority for Deputy CEO
-            # Regular matching for other roles
-            for i, key_role in enumerate(key_roles):
-                if key_role in role_lower:
-                    return i
-            return len(key_roles)  # Lower priority for other roles
-        
-        # Sort and limit to top 3
-        sorted_execs = sorted(execs, key=lambda x: get_role_priority(x.get('role', '')) if isinstance(x, dict) else len(key_roles))
-        top_3_execs = sorted_execs[:3]
-        
-        for i, exec in enumerate(top_3_execs):
-            if isinstance(exec, dict):
-                name = exec.get('name', '')
-                role = exec.get('role', '')
-                
-                if name and name.lower() not in ['unknown', 'n/a', 'none']:
-                    print(f"[Team Chain] Enriching LinkedIn for web executive {i+1}: {name} ({role})")
-                    
-                    # Get LinkedIn data using Perplexity (since Proxycurl shut down)
-                    linkedin_data = get_linkedin_profile_perplexity(name, profile.name)
-                    
-                    # Generate background summary
-                    background_summary = generate_executive_background_summary(name, role, linkedin_data, profile.name)
-                    
-                    # Update executive with enriched data
-                    enriched_exec = exec.copy()
-                    enriched_exec['linkedin_data'] = linkedin_data
-                    enriched_exec['background_summary'] = background_summary
-                    
-                    # If we have LinkedIn data, update the LinkedIn URL
-                    if linkedin_data and linkedin_data.get('profile_url'):
-                        enriched_exec['linkedin'] = linkedin_data.get('profile_url')
-                    
-                    enriched_execs.append(enriched_exec)
-                else:
-                    enriched_execs.append(exec)
-            else:
-                enriched_execs.append(exec)
-        
-        # Add any remaining executives without enrichment (beyond top 3)
-        for exec in execs[3:]:
-            enriched_execs.append(exec)
-        
-        # Update profile with enriched executives
-        profile.executives = enriched_execs
+        existing_execs = getattr(profile, 'executives', []) or []
+
+    if not existing_execs:
+        print("[Team Chain] No executives found after web search. Aborting.")
+        return profile
+
+    enriched_execs = []
     
-    # Keep legacy founder LinkedIn data for backward compatibility
-    if profile.founder_name:
-        linkedin_data = get_linkedin_profile_perplexity(profile.founder_name, profile.name)
-        profile.founder_linkedin_data = linkedin_data
-        profile.founder_linkedin_formatted = format_linkedin_profile(linkedin_data)
+    key_roles = ['founder', 'ceo', 'chief executive officer', 'cfo', 'chief financial officer', 'chairman', 'cto', 'chief technology officer']
+    
+    def get_role_priority(role):
+        role_lower = role.lower()
+        if 'chief executive officer' in role_lower: return 1
+        if 'deputy ceo' in role_lower: return 2
+        for i, key_role in enumerate(key_roles):
+            if key_role in role_lower:
+                return i
+        return len(key_roles)
+
+    sorted_execs = sorted(existing_execs, key=lambda x: get_role_priority(x.get('role', '')) if isinstance(x, dict) else len(key_roles))
+    top_3_execs = sorted_execs[:3]
+
+    for i, exec_data in enumerate(top_3_execs):
+        if isinstance(exec_data, dict):
+            name = exec_data.get('name', '')
+            role = exec_data.get('role', '')
+            
+            if name and name.lower() not in ['unknown', 'n/a', 'none']:
+                print(f"[Team Chain] Enriching data for executive {i+1}: {name} ({role})")
+                
+                enriched_exec = exec_data.copy()
+                
+                linkedin_data = get_linkedin_profile_exa(name, profile.name)
+                
+                background_summary = generate_executive_background_summary(name, role, profile.name, linkedin_data)
+                
+                enriched_exec['background_summary'] = background_summary
+                if linkedin_data and linkedin_data.get('profile_url'):
+                    enriched_exec['linkedin'] = linkedin_data.get('profile_url')
+                
+                enriched_exec['bio'] = background_summary
+                
+                enriched_execs.append(enriched_exec)
+            else:
+                enriched_execs.append(exec_data)
+        else:
+            enriched_execs.append(exec_data)
+
+    for exec_data in existing_execs[3:]:
+        enriched_execs.append(exec_data)
+        
+    profile.executives = enriched_execs
     
     return profile

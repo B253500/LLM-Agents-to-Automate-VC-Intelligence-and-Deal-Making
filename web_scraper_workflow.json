@@ -1,0 +1,83 @@
+{
+  "name": "Run Python Web Scraper & Update DB",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 4
+            }
+          ]
+        }
+      },
+      "id": "e9b1d1f1-9c8a-4b9e-9d0a-9e2a3a0c1d1a",
+      "name": "Run Daily",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        820,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "command": "python3 web_scraping/download_reports.py",
+        "options": {
+          "pty": true
+        }
+      },
+      "id": "a9c3d4f3-2f2f-4c5a-8b3a-5d4e1d1a1b1a",
+      "name": "1. Run Web Scraper",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1020,
+        340
+      ],
+      "notes": "Executes the main Python web scraper script to download new reports into a date-stamped folder."
+    },
+    {
+      "parameters": {
+        "command": "python3 build_report_cache.py",
+        "options": {
+          "pty": true
+        }
+      },
+      "id": "b0d4e5f4-3a4b-5c6d-7e8f-9g0h1i2j3k4l",
+      "name": "2. Update Report Database",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1220,
+        340
+      ],
+      "notes": "Runs the ingestion script to find the new folder of reports and add them to the ChromaDB."
+    }
+  ],
+  "connections": {
+    "Run Daily": {
+      "main": [
+        [
+          {
+            "node": "1. Run Web Scraper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1. Run Web Scraper": {
+      "main": [
+        [
+          {
+            "node": "2. Update Report Database",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {}
+}

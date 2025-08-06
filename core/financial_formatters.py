@@ -456,7 +456,7 @@ def format_financial_history_section(profile: StartupProfile) -> str:
     rounds = getattr(profile, 'company_funding_rounds_collection', None) or getattr(profile, 'funding_rounds', None)
     
     if rounds and isinstance(rounds, list):
-        lines.append("**Funding Rounds:**")
+        lines.append("**Funding Rounds (source - coresignal):**")
         lines.append("")
         
         # Cleaning and deduplicating rounds

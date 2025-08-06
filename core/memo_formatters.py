@@ -17,7 +17,11 @@ def format_company_overview_section(profile: StartupProfile) -> str:
     if getattr(profile, 'sector', None):
         lines.append(f"Sector: {profile.sector}")
     if getattr(profile, 'website', None):
-        lines.append(f"Website: {profile.website}")
+        website_url = re.search(r'(https?://[^\s]+)', profile.website)
+        if website_url:
+            lines.append(f"Website: {website_url.group(1)}")
+        else:
+            lines.append(f"Website: {profile.website}")
     if getattr(profile, 'status', None):
         lines.append(f"Status: {profile.status}")
     if getattr(profile, 'size_range', None):

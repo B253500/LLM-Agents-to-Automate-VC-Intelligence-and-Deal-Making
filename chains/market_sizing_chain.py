@@ -106,6 +106,33 @@ def format_market_size(val):
             return f"${val:,.1f}"
 
 
+def format_growth_rate(val):
+    """
+    Formats growth rate values to always include a percentage sign.
+    Removes trailing .0 if it's a whole number.
+    """
+    if val is None:
+        return "unknown"
+    
+    val_str = str(val).strip()
+    
+    # If it already has a %, just return it
+    if val_str.endswith('%'):
+        return val_str
+        
+    try:
+        num = float(val_str)
+        # Check if it's a whole number
+        if num == int(num):
+            return f"{int(num)}%"
+        else:
+            # Format to one decimal place if not whole
+            return f"{num:.1f}%"
+    except (ValueError, TypeError):
+        # If it's not a number, just append %
+        return f"{val_str}%"
+
+
 def ai_extract_market_data(text):
     """AI-powered extraction of any market-related data from text"""
     try:
@@ -276,30 +303,44 @@ def web_search_market_context(company_name, sector):
     return result or ""
 
 SYSTEM = """
-You are a market research analyst for venture capital.
-For the given company and sector, provide a detailed, structured market analysis.
+You are a top-tier VC market research analyst. Your task is to provide a detailed and professional market analysis based on the provided pitch deck context and web search results.
 
-IMPORTANT: Return your analysis in the following JSON format:
+Your response MUST be in this exact JSON format:
 {
-    "TAM": <numeric value in billions or millions>,
-    "SAM": <numeric value in billions or millions>,
-    "SOM": <numeric value in billions or millions>,
-    "TAM_original": "<original string with units from source>",
-    "SAM_original": "<original string with units from source>", 
-    "SOM_original": "<original string with units from source>",
-    "summary": "<narrative market analysis paragraph>",
-    "reasoning": "<explanation of how market sizes were determined>"
+    "market_summary": "A 4-6 sentence professional narrative summarizing the market. Cover market size, growth drivers, key trends, and competitive dynamics. Be specific and quantitative where possible. If data is sparse, note it professionally.",
+    "market_size_analysis": {
+        "TAM": {
+            "value_usd_billions": "Total Addressable Market in billions of US dollars (e.g., 150.5). Use numbers only. If unknown, use null.",
+            "description": "The original TAM figure from the source (e.g., '$150.5B', 'Approx. 2B users'). If unknown, use 'unknown'."
+        },
+        "SAM": {
+            "value_usd_billions": "Serviceable Available Market in billions of US dollars (e.g., 45.0). Use numbers only. If unknown, use null.",
+            "description": "The original SAM figure from the source (e.g., '$45B'). If unknown, use 'unknown'."
+        },
+        "SOM": {
+            "value_usd_billions": "Serviceable Obtainable Market in billions of US dollars (e.g., 4.5). Use numbers only. If unknown, use null.",
+            "description": "The original SOM figure from the source (e.g., '$4.5B'). If unknown, use 'unknown'."
+        }
+    },
+    "growth_metrics": {
+        "CAGR_percent": "Compound Annual Growth Rate as a percentage (e.g., '15.2%'). If unknown, use 'unknown'.",
+        "growth_rate_percent": "Other relevant market growth rates (e.g., 'YoY growth of 20%'). If unknown, use 'unknown'."
+    },
+    "key_drivers": [
+        "A key factor driving market growth.",
+        "Another significant market driver."
+    ],
+    "source_commentary": "A brief commentary on the source and confidence level of the data (e.g., 'Data is from a reliable 2024 market report.' or 'Market size figures are estimated based on industry averages as the pitch deck lacks specifics.')."
 }
 
-Guidelines:
-- Use realistic market size values (TAM should be largest, SAM smaller, SOM smallest)
-- If specific data is unavailable, use reasonable estimates based on the sector
-- TAM should typically be in billions for major sectors
-- SAM should be 10-50% of TAM
-- SOM should be 1-10% of TAM
-- Include original strings with units (e.g., "$160B", "$50M") in the _original fields
-- Provide a narrative summary in the summary field
-- Explain your reasoning in the reasoning field
+CRITICAL INSTRUCTIONS:
+1.  **Prioritize Pitch Deck**: Use figures from the 'Pitch Deck Context' as the highest priority source.
+2.  **Web Search for Gaps**: Use the 'Web Search Context' to fill in gaps where the pitch deck is missing information and to provide the latest market data.
+3.  **Synthesize, Don't Copy**: Do NOT just copy-paste from the context. Synthesize the information into a professional analysis.
+4.  **Quantitative Analysis**: For `value_usd_billions`, provide ONLY a numeric value (e.g., 150.5). For `description`, provide the original string (e.g., "$150.5B").
+5.  **Realistic Estimates**: If you must estimate, ensure TAM > SAM > SOM. State that you are estimating in the `source_commentary`. A common heuristic is SAM as 10-30% of TAM, and SOM as 1-10% of SAM.
+6.  **No Hallucination**: If a value cannot be found or reasonably estimated from the provided context, use `null` for numeric fields and `unknown` for string fields.
+7.  **Professional Tone**: The `market_summary` must be well-written and suitable for a formal investment memo.
 """
 
 PROMPT = ChatPromptTemplate.from_messages([
@@ -307,121 +348,86 @@ PROMPT = ChatPromptTemplate.from_messages([
 ])
 
 
-def run_market_sizing_chain(profile: StartupProfile) -> StartupProfile:
-    context = get_hybrid_context(
-        profile, "market size OR TAM OR SAM OR SOM OR industry", 3, 3
-    )
+def run_market_sizing_chain(profile: StartupProfile, evaluator=None) -> StartupProfile:
+    """
+    Runs the market sizing chain with a focus on high-quality, structured data extraction.
+    1. Extracts market context from the pitch deck.
+    2. Performs a web search to gather the latest market data.
+    3. Uses a powerful LLM prompt to synthesize both sources into a structured JSON.
+    4. Populates the StartupProfile with the clean, validated data.
+    """
+    print("[Market Chain] Starting market sizing analysis...")
+
+    # Step 1: Get smart context from the pitch deck
+    deck_context = ""
+    if hasattr(profile, 'deck_text') and profile.deck_text:
+        deck_context = get_smart_market_context(profile.deck_text)
+        print(f"[Market Chain] Extracted {len(deck_context)} chars of market context from the deck.")
+
+    # Step 2: Always perform a web search for the latest market data
+    print("[Market Chain] Performing web search for market context...")
     web_context = web_search_market_context(profile.name, profile.sector)
-    
-    # NEW: Run comprehensive market extraction (regex + AI) on the context
-    print("[Market Chain] Running comprehensive market extraction...")
-    
-    # Extract from the full context using both regex and AI
-    combined_context = f"{context}\n\n{web_context}"
-    regex_extracted = extract_market_size_from_text(combined_context)
-    ai_extracted = ai_extract_market_data(combined_context)
-    
-    print(f"[Market Chain] Regex extracted: {len(regex_extracted)} fields")
-    print(f"[Market Chain] AI extracted: {len(ai_extracted)} categories")
-    
-    # Update profile with extracted data (prefer AI data, fallback to regex)
-    for key, value in regex_extracted.items():
-        if value and value != "null":
-            # Store as market field
-            field_name = f"market_{key.lower()}"
-            setattr(profile, field_name, value)
-            print(f"[Market Chain] Updated {field_name}={value} (regex)")
-    
-    # Process AI-extracted data (more comprehensive)
-    for category, category_data in ai_extracted.items():
-        if isinstance(category_data, dict):
-            for key, value in category_data.items():
-                if value and value != "null":
-                    # Store as AI-detected field
-                    ai_field = f"ai_detected_{category}_{key}"
-                    setattr(profile, ai_field, value)
-                    print(f"[Market Chain] Stored {ai_field}={value} (AI)")
-        elif value and value != "null":
-            # Store as AI-detected field
-            ai_field = f"ai_detected_{category}"
-            setattr(profile, ai_field, category_data)
-            print(f"[Market Chain] Stored {ai_field}={category_data} (AI)")
-    
+    if web_context:
+        print(f"[Market Chain] Web search found {len(web_context)} chars of additional context.")
+    else:
+        print("[Market Chain] Web search did not return any context.")
+
+    # Step 3: Invoke the LLM with the new, robust prompt
     try:
-        txt = llm.invoke(PROMPT.format(context=context, web_context=web_context)).content.strip()
-        print(f"[Market Chain] LLM raw output: {txt[:200]}...")
-        
-        # Find JSON in the response
-        first, last = txt.find("{"), txt.rfind("}")
-        if first == -1 or last == -1:
-            print("[Market Chain] No JSON found in response")
+        prompt = PROMPT.format(context=deck_context, web_context=web_context)
+        response = llm.invoke(prompt)
+        raw_json = response.content.strip()
+
+        # Track token usage
+        if evaluator and hasattr(response, 'usage'):
+            input_tokens = getattr(response.usage, 'prompt_tokens', 0)
+            output_tokens = getattr(response.usage, 'completion_tokens', 0)
+            evaluator.log_agent_tokens("MARKET SIZING CHAIN", input_tokens, output_tokens, "gpt-4o")
+
+        # Step 4: Parse the JSON and populate the profile
+        json_match = re.search(r'\{.*\}', raw_json, re.DOTALL)
+        if not json_match:
+            print("[Market Chain] Error: No JSON object found in the LLM response.")
             return profile
-            
-        json_str = txt[first : last + 1]
-        
-        # Clean up the JSON string
-        # Remove any newlines and extra whitespace that might break JSON
-        json_str = re.sub(r'\s+', ' ', json_str)
-        json_str = json_str.replace('\n', ' ').replace('\r', ' ')
-        
-        try:
-            data = json.loads(json_str)
-            print(f"[Market Chain] Parsed JSON: {data}")
-            
-            # Validate and set TAM
-            if data.get("TAM") is not None and data.get("TAM", 0) > 0:
-                tam_value = float(data.get("TAM"))
-                # Validate TAM is reasonable (should be in billions for major sectors)
-                if tam_value < 1:  # If less than 1 billion, likely an error
-                    print(f"[Market Sizing] Warning: TAM value {tam_value} seems too small, skipping")
-                else:
-                    profile.TAM = tam_value
-            
-            # Validate and set SAM
-            if data.get("SAM") is not None and data.get("SAM", 0) > 0:
-                sam_value = float(data.get("SAM"))
-                # Validate SAM is reasonable (should be smaller than TAM)
-                if profile.TAM and sam_value >= profile.TAM:
-                    print(f"[Market Sizing] Warning: SAM value {sam_value} is >= TAM {profile.TAM}, skipping")
-                elif sam_value < 0.1:  # If less than 100M, likely an error
-                    print(f"[Market Sizing] Warning: SAM value {sam_value} seems too small, skipping")
-                else:
-                    profile.SAM = sam_value
-            
-            # Validate and set SOM
-            if data.get("SOM") is not None and data.get("SOM", 0) > 0:
-                som_value = float(data.get("SOM"))
-                # Validate SOM is reasonable (should be smaller than SAM)
-                if profile.SAM and som_value >= profile.SAM:
-                    print(f"[Market Sizing] Warning: SOM value {som_value} is >= SAM {profile.SAM}, skipping")
-                elif som_value < 0.01:  # If less than 10M, likely an error
-                    print(f"[Market Sizing] Warning: SOM value {som_value} seems too small, skipping")
-                else:
-                    profile.SOM = som_value
-            
-            if data.get("summary"):
-                profile.market_summary = data.get("summary")
-            # Store original strings and reasoning if present
-            if data.get("TAM_original"):
-                profile.TAM_original = data["TAM_original"]
-            if data.get("SAM_original"):
-                profile.SAM_original = data["SAM_original"]
-            if data.get("SOM_original"):
-                profile.SOM_original = data["SOM_original"]
-            if data.get("reasoning"):
-                profile.market_reasoning = data["reasoning"]
-                
-        except json.JSONDecodeError as e:
-            print(f"[Market Chain JSON Error] {e}")
-            print(f"[Market Chain] Failed JSON string: {json_str}")
-            return profile
-            
+
+        data = json.loads(json_match.group())
+        print("[Market Chain] Successfully parsed JSON from LLM.")
+
+        # Populate profile with high-quality, structured data
+        if data.get("market_summary"):
+            profile.market_summary = data["market_summary"]
+
+        if "market_size_analysis" in data and data["market_size_analysis"]:
+            size_analysis = data["market_size_analysis"]
+            if "TAM" in size_analysis and size_analysis["TAM"]:
+                profile.TAM = size_analysis["TAM"].get("value_usd_billions")
+                profile.TAM_original = size_analysis["TAM"].get("description")
+            if "SAM" in size_analysis and size_analysis["SAM"]:
+                profile.SAM = size_analysis["SAM"].get("value_usd_billions")
+                profile.SAM_original = size_analysis["SAM"].get("description")
+            if "SOM" in size_analysis and size_analysis["SOM"]:
+                profile.SOM = size_analysis["SOM"].get("value_usd_billions")
+                profile.SOM_original = size_analysis["SOM"].get("description")
+
+        if "growth_metrics" in data and data["growth_metrics"]:
+            growth = data["growth_metrics"]
+            profile.cagr = growth.get("CAGR_percent")
+            profile.market_growth_rate = growth.get("growth_rate_percent")
+
+        if data.get("key_drivers"):
+            profile.market_drivers = data["key_drivers"]
+
+        if data.get("source_commentary"):
+            profile.market_reasoning = data["source_commentary"]
+
+        print("[Market Chain] Successfully updated StartupProfile with new market data.")
+
+    except json.JSONDecodeError as e:
+        print(f"[Market Chain] JSON parsing error: {e}")
+        print(f"LLM Raw Output:\n{raw_json}")
     except Exception as e:
-        print(f"[Market Chain Error] {e}")
-        return profile
-        
-    if not profile.startup_id:
-        profile.startup_id = sha1((profile.name or context[:40]).encode()).hexdigest()[:10]
+        print(f"[Market Chain] An unexpected error occurred: {e}")
+
     return profile
 
 def generate_market_size_section(profile: StartupProfile) -> str:
@@ -502,41 +508,89 @@ def generate_market_size_section(profile: StartupProfile) -> str:
         except:
             pass
     
-    def clean_perplexity_response(response):
-        """Clean Perplexity response by removing think tags and internal reasoning."""
+    def clean_perplexity_response(response: str, sector: str) -> str:
+        """
+        Cleans and refines a raw Perplexity response using a multi-step, AI-driven process.
+        """
         if not response:
             return ""
+
+        # --- Step 1: Use an LLM for intelligent, context-aware cleaning ---
+        # This is more robust than simple regex because it understands the content.
+        print(f"[Market Analysis Cleaning] Attempting LLM-based cleaning for '{sector}' sector analysis.")
         
-        # Remove <think> tags and their content
-        cleaned = re.sub(r'<think>.*?</think>', '', response, flags=re.DOTALL)
+        # A specific prompt designed to clean and professionalize the text
+        llm_cleaning_prompt = f"""
+        You are a senior VC analyst. Your task is to take the raw, messy text below from a market research search and transform it into a clean, professional, and coherent paragraph for an investment memo.
+
+        Rules:
+        1.  Remove ALL conversational filler, meta-commentary, and "thinking process" text (e.g., "Based on the search...", "Here is a summary...", "Let me analyze...").
+        2.  Strip out all artifacts, junk characters, citations (e.g., [1], B253500), and incomplete sentences.
+        3.  Rewrite the text into a single, well-structured, and insightful paragraph.
+        4.  Ensure the final text flows logically and is suitable for a professional audience.
+        5.  Do NOT include any of your own analysis; only use the information present in the raw text.
+
+        Raw Text for the '{sector}' sector:
+        ---
+        {response}
+        ---
+
+        Return ONLY the clean, professional paragraph.
+        """
         
-        # Remove thinking process markers (but be more careful)
-        thinking_patterns = [
-            r'Okay, so I need to figure out.*?(?=\n|$)',
-            r'First, looking at.*?(?=\n|$)',
-            r'Let me start by.*?(?=\n|$)',
-            r'I need to analyze.*?(?=\n|$)',
-            r'Let me examine.*?(?=\n|$)',
-            r'Based on my search.*?(?=\n|$)',
-            r'According to the search results.*?(?=\n|$)'
+        try:
+            llm_cleaned_text = llm.invoke(llm_cleaning_prompt).content.strip()
+            
+            # --- Validation of LLM Output ---
+            # Check if the output is substantial and doesn't contain common failure phrases.
+            if llm_cleaned_text and len(llm_cleaned_text.split()) > 20 and "cannot provide" not in llm_cleaned_text.lower() and "don't have enough" not in llm_cleaned_text.lower():
+                print("[Market Analysis Cleaning] LLM-based cleaning successful.")
+                return llm_cleaned_text
+            else:
+                print("[Market Analysis Cleaning] LLM-based cleaning produced a short or invalid response. Falling back to regex.")
+        except Exception as e:
+            print(f"[Market Analysis Cleaning] LLM-based cleaning failed: {e}. Falling back to regex.")
+
+        # --- Step 2: Fallback to aggressive regex cleaning if LLM fails ---
+        # This is a safety net for cases where the LLM might fail or produce poor results.
+        print("[Market Analysis Cleaning] Executing aggressive regex fallback.")
+        
+        # A more comprehensive list of patterns to remove
+        junk_patterns = [
+            r'<think>.*?</think>',
+            r'Okay, let me break this down.*',
+            r'Here is a summary of.*',
+            r'Based on the search results.*',
+            r'I will now generate a summary.*',
+            r'Let me start by.*',
+            r'Here\'s a professional summary.*',
+            r'\[\d+\]',  # Citations like [1]
+            r'B\d{5,}', # Artifacts like B253500
+            r'\([^)]*source[^)]*\)', # (source: ...)
+            r'•', # Bullet points
+            r'^\s*,\s*|^,', # Leading commas
+            r'\n\s*\n', # Extra newlines
         ]
-        
-        for pattern in thinking_patterns:
-            cleaned = re.sub(pattern, '', cleaned, flags=re.DOTALL)
-        
-        # Remove citation markers like [1], [2], etc. (but keep the text)
-        cleaned = re.sub(r'\[\d+\]', '', cleaned)
-        
-        # Clean up extra whitespace and newlines
-        cleaned = re.sub(r'\n\s*\n', '\n', cleaned)
-        cleaned = cleaned.strip()
-        
-        # Remove any remaining single characters that might be artifacts
-        cleaned = re.sub(r'^\s*[a-z]\s+', '', cleaned, flags=re.MULTILINE)
-        cleaned = re.sub(r'^\s*\.\s+', '', cleaned, flags=re.MULTILINE)
-        cleaned = re.sub(r'^\s*,\s+', '', cleaned, flags=re.MULTILINE)
-        
-        return cleaned
+
+        cleaned = response
+        for pattern in junk_patterns:
+            cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE | re.DOTALL)
+
+        # --- Step 3: Reconstruct the paragraph from clean sentences ---
+        # This helps to ensure a coherent final output.
+        sentences = [s.strip() for s in cleaned.split('.') if len(s.strip()) > 20]
+        final_text = ". ".join(sentences)
+        if sentences:
+            final_text += "."
+
+        # --- Step 4: Final validation check ---
+        # Ensure the fallback result is still of reasonable quality.
+        if len(final_text.split()) > 15:
+            print("[Market Analysis Cleaning] Regex fallback cleaning successful.")
+            return final_text.strip()
+        else:
+            print("[Market Analysis Cleaning] All cleaning methods failed to produce a quality result.")
+            return "" # Return empty if all else fails
     
     # --- Perplexity search for market research URLs ---
     market_research_urls = []
@@ -644,25 +698,11 @@ def generate_market_size_section(profile: StartupProfile) -> str:
                             break
                 
                 # Clean the response for LLM processing
-                cleaned_results = clean_perplexity_response(search_results)
+                cleaned_results = clean_perplexity_response(search_results, sector)
                 
-                # Use LLM to summarize the analysis
-                summary_prompt = f"""
-                Based on the following market research for the '{sector}' sector, provide a well-structured, professional analysis covering:
+                # The cleaned_results should now be a professional paragraph
+                sector_analysis = cleaned_results
                 
-                1. Market Overview: Current market size and growth trajectory
-                2. Key Drivers: Main factors driving market growth
-                3. Technology Trends: Important technological developments
-                4. Industry Developments: Notable industry changes and innovations
-                
-                Write in clear, complete sentences. Focus on actionable insights for investment analysis. 
-                Do not include URLs, citations, or incomplete fragments.
-                Ensure the analysis flows logically and is suitable for a professional investment memo.
-                
-                Research Results:
-                {cleaned_results}
-                """
-                sector_analysis = llm.invoke(summary_prompt).content.strip()
         except Exception as e:
             print(f"[Market Analysis] Error during sector analysis: {e}")
     
@@ -796,9 +836,9 @@ AI-Detected Source Attribution: {ai_source_attribution}
     # 3. Growth Metrics
     growth_metrics = []
     if CAGR:
-        growth_metrics.append(f"**CAGR**: {CAGR}%{format_source(CAGR_source)}")
+        growth_metrics.append(f"**CAGR**: {format_growth_rate(CAGR)}{format_source(CAGR_source)}")
     if growth_rate:
-        growth_metrics.append(f"**Growth Rate**: {growth_rate}{format_source(growth_rate_source)}")
+        growth_metrics.append(f"**Growth Rate**: {format_growth_rate(growth_rate)}{format_source(growth_rate_source)}")
     
     if growth_metrics:
         lines.append("**📈 Growth Metrics**")

@@ -1,0 +1,47 @@
+{
+  "name": "Build Report Database",
+  "nodes": [
+    {
+      "parameters": {
+        "command": "python3 build_report_cache.py",
+        "options": {
+          "pty": true
+        }
+      },
+      "id": "e9b1d1f1-9c8a-4b9e-9d0a-9e2a3a0c1d1a",
+      "name": "Run Ingestion Script",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1020,
+        340
+      ],
+      "notes": "This command runs the Python script that scans the 'data/vc_reports' folder and builds the ChromaDB vector store in the 'chroma_db' folder."
+    },
+    {
+      "parameters": {},
+      "id": "a9c3d4f3-2f2f-4c5a-8b3a-5d4e1d1a1b1a",
+      "name": "Start",
+      "type": "n8n-nodes-base.start",
+      "typeVersion": 1,
+      "position": [
+        820,
+        340
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Run Ingestion Script",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {}
+}

@@ -1,0 +1,371 @@
+{
+  "name": "Web Scraper & Dropbox Saver (Regex Version)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 4
+            }
+          ]
+        }
+      },
+      "id": "dfb25267-d0f8-476a-9cac-2169b2b4c2fd",
+      "name": "Run Daily",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1200,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "download",
+        "path": "/memory/processed.json",
+        "options": {}
+      },
+      "id": "223cc052-bf95-45cb-a167-6dd7cdf2bcb1",
+      "name": "Load Memory File",
+      "type": "n8n-nodes-base.dropbox",
+      "typeVersion": 1,
+      "position": [
+        -980,
+        340
+      ],
+      "continueOnFail": true,
+      "credentials": {
+        "dropboxOAuth2Api": {
+          "id": "8yL64PDfO3ewRMlM",
+          "name": "Dropbox account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "let data;\ntry {\n  data = JSON.parse(Buffer.from($binary.data.data, 'base64').toString());\n} catch (error) {\n  data = [];\n}\nreturn [{ json: { processedUrls: data } }];"
+      },
+      "id": "992ea1b1-13c0-4fab-baf9-fa1dd9a47211",
+      "name": "Parse Memory",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -780,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const pages = [];\nfor (let i = 1; i <= 5; i++) {\n  pages.push({ json: { pageNumber: i } });\n}\nreturn pages;"
+      },
+      "id": "34148da0-bb8d-452c-920e-09b00b3cd888",
+      "name": "Generate Page Numbers",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -580,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "d2a7de2f-9769-457c-a1dd-1141cdf9a7ac",
+      "name": "Loop Over Pages",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [
+        -380,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://techcrunch.com/page/' + $json.pageNumber }}",
+        "responseFormat": "string",
+        "options": {}
+      },
+      "id": "b4e5ff44-eceb-4e73-a529-b0253c4be45e",
+      "name": "Get TechCrunch Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        -180,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const html = $json.data;\nconst regex = /<h2 class=\"post-block__title\"><a href=\"([^\"]+)\"[^>]*>([^<]+)<\\/a><\\/h2>/g;\nconst articles = [];\nlet match;\nwhile ((match = regex.exec(html)) !== null) {\n  articles.push({\n    json: {\n      articleTitle: match[2].trim(),\n      articleUrl: match[1],\n    }\n  });\n}\nreturn articles;"
+      },
+      "id": "c7a8b9f1-2d3e-4f5a-6b7c-8d9e0f1a2b3c",
+      "name": "Extract with Regex (TechCrunch)",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        20,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://about.crunchbase.com/research-reports/page/' + $json.pageNumber }}",
+        "responseFormat": "string",
+        "options": {}
+      },
+      "id": "2d2bfcc5-d5fc-4dd3-8452-9c973f44bdc0",
+      "name": "Get Crunchbase Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        -180,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const html = $json.data;\nconst regex = /<a class=\"post-block__title__link\" href=\"([^\"]+)\"[^>]*>([^<]+)<\\/a>/g;\nconst articles = [];\nlet match;\nwhile ((match = regex.exec(html)) !== null) {\n  articles.push({\n    json: {\n      articleTitle: match[2].trim(),\n      articleUrl: match[1],\n    }\n  });\n}\nreturn articles;"
+      },
+      "id": "d8b9c0a2-3e4f-5a6b-7c8d-9e0f1a2b3c4d",
+      "name": "Extract with Regex (Crunchbase)",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        20,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://pitchbook.com/news/page/' + $json.pageNumber }}",
+        "responseFormat": "string",
+        "options": {}
+      },
+      "id": "3943a6dc-f774-42f8-a21a-76b9f067c23b",
+      "name": "Get PitchBook Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        -180,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const html = $json.data;\nconst regex = /<a href=\"(\\/news\\/reports\\/[^\"]+)\"[^>]*>([^<]+)<\\/a>/g;\nconst articles = [];\nlet match;\nwhile ((match = regex.exec(html)) !== null) {\n  if(match[2].trim()) {\n    articles.push({\n      json: {\n        articleTitle: match[2].trim(),\n        articleUrl: 'https://pitchbook.com' + match[1],\n      }\n    });\n  }\n}\nreturn articles;"
+      },
+      "id": "e9c0d1b3-4f5a-6b7c-8d9e-0f1a2b3c4d5e",
+      "name": "Extract with Regex (PitchBook)",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        20,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://www.beauhurst.com/reports/page/' + $json.pageNumber }}",
+        "responseFormat": "string",
+        "options": {}
+      },
+      "id": "83df9d54-1e69-43ef-9938-d4b8876e8265",
+      "name": "Get Beauhurst Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        -180,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const html = $json.data;\nconst regex = /<a href=\"(\\/research\\/[^\"]+)\"[^>]*>([^<]+)<\\/a>/g;\nconst articles = [];\nlet match;\nwhile ((match = regex.exec(html)) !== null) {\n  if(match[2].trim()) {\n    articles.push({\n      json: {\n        articleTitle: match[2].trim(),\n        articleUrl: 'https://www.beauhurst.com' + match[1],\n      }\n    });\n  }\n}\nreturn articles;"
+      },
+      "id": "f0d1e2f4-5a6b-7c8d-9e0f-1a2b3c4d5e6f",
+      "name": "Extract with Regex (Beauhurst)",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        20,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "cd9dd558-fe6f-485e-aed4-813d6c8b8fd1",
+      "name": "Merge All Sources",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 1,
+      "position": [
+        220,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "5b41b9fa-2070-4419-b3e6-55a09222991d",
+      "name": "Loop Over Articles",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [
+        420,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$node['Parse Memory'].json.processedUrls}}",
+              "operation": "notContains",
+              "value2": "={{$json.articleUrl}}"
+            }
+          ]
+        }
+      },
+      "id": "0142a5cf-609f-4c85-8c06-1a8636a80db0",
+      "name": "Is Article New?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        620,
+        340
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "d9885c39-0b71-43db-8424-c1db86fd7d50",
+      "name": "Do Nothing (Already Processed)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        840,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$json.articleUrl}}",
+        "responseFormat": "string",
+        "options": {}
+      },
+      "id": "6c0e6cb0-d8e9-47ce-8c00-98ef08ad5cc9",
+      "name": "Get Article Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        840,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const html = $json.data;\nconst regex = /<(?:div class=\"article-content\"|article|div class=\"post-content\")[^>]*>([\\s\\S]*?)<\\/(?:div|article)>/;\nconst match = regex.exec(html);\n\nconst articleTitle = $node['Loop Over Articles'].json.articleTitle;\nconst articleUrl = $node['Loop Over Articles'].json.articleUrl;\nconst articleContent = match ? match[1] : ''; // Use the captured content or empty string\n\nreturn [{ \n  json: { \n    articleTitle: articleTitle,\n    articleUrl: articleUrl,\n    articleContent: articleContent\n  } \n}];"
+      },
+      "id": "a1b2c3d4-e5f6-a7b8-c9d0-e1f2a3b4c5d6",
+      "name": "Extract Content with Regex",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "upload",
+        "path": "={{'/scraped_reports/' + $json.articleTitle.replace(/[^a-zA-Z0-9]/g, '_') + '.html'}}",
+        "binaryData": false,
+        "inputData": "={{$json.articleContent}}",
+        "options": {}
+      },
+      "id": "d83dfa05-c8b2-4ccc-9b1d-57426301279a",
+      "name": "Save HTML to Dropbox",
+      "type": "n8n-nodes-base.dropbox",
+      "typeVersion": 1,
+      "position": [
+        1240,
+        240
+      ],
+      "credentials": {
+        "dropboxOAuth2Api": {
+          "id": "8yL64PDfO3ewRMlM",
+          "name": "Dropbox account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const memory = $node['Parse Memory'].json.processedUrls;\nmemory.push($node['Loop Over Articles'].json.articleUrl);\nconst bData = Buffer.from(JSON.stringify(memory)).toString('base64');\nreturn [{ binary: { data: bData } }];"
+      },
+      "id": "36760044-6af8-43a1-822d-00bfeb4805c5",
+      "name": "Prepare Memory Upload",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "upload",
+        "path": "/memory/processed.json",
+        "binaryData": true
+      },
+      "id": "001e3d06-2bf6-4f2f-8cd1-51d677ba255f",
+      "name": "Update Memory File",
+      "type": "n8n-nodes-base.dropbox",
+      "typeVersion": 1,
+      "position": [
+        1240,
+        440
+      ],
+      "credentials": {
+        "dropboxOAuth2Api": {
+          "id": "8yL64PDfO3ewRMlM",
+          "name": "Dropbox account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Run Daily": { "main": [[{ "node": "Load Memory File", "type": "main", "index": 0 }]] },
+    "Load Memory File": { "main": [[{ "node": "Parse Memory", "type": "main", "index": 0 }]] },
+    "Parse Memory": { "main": [[{ "node": "Generate Page Numbers", "type": "main", "index": 0 }]] },
+    "Generate Page Numbers": { "main": [[{ "node": "Loop Over Pages", "type": "main", "index": 0 }]] },
+    "Loop Over Pages": { "main": [[{ "node": "Get TechCrunch Page", "type": "main", "index": 0 }], [{ "node": "Get Crunchbase Page", "type": "main", "index": 0 }], [{ "node": "Get PitchBook Page", "type": "main", "index": 0 }], [{ "node": "Get Beauhurst Page", "type": "main", "index": 0 }]] },
+    "Get TechCrunch Page": { "main": [[{ "node": "Extract with Regex (TechCrunch)", "type": "main", "index": 0 }]] },
+    "Extract with Regex (TechCrunch)": { "main": [[{ "node": "Merge All Sources", "type": "main", "index": 0 }]] },
+    "Get Crunchbase Page": { "main": [[{ "node": "Extract with Regex (Crunchbase)", "type": "main", "index": 0 }]] },
+    "Extract with Regex (Crunchbase)": { "main": [[{ "node": "Merge All Sources", "type": "main", "index": 1 }]] },
+    "Get PitchBook Page": { "main": [[{ "node": "Extract with Regex (PitchBook)", "type": "main", "index": 0 }]] },
+    "Extract with Regex (PitchBook)": { "main": [[{ "node": "Merge All Sources", "type": "main", "index": 2 }]] },
+    "Get Beauhurst Page": { "main": [[{ "node": "Extract with Regex (Beauhurst)", "type": "main", "index": 0 }]] },
+    "Extract with Regex (Beauhurst)": { "main": [[{ "node": "Merge All Sources", "type": "main", "index": 3 }]] },
+    "Merge All Sources": { "main": [[{ "node": "Loop Over Articles", "type": "main", "index": 0 }]] },
+    "Loop Over Articles": { "main": [[{ "node": "Is Article New?", "type": "main", "index": 0 }]] },
+    "Is Article New?": { "main": [[{ "node": "Get Article Page", "type": "main", "index": 0 }], [{ "node": "Do Nothing (Already Processed)", "type": "main", "index": 0 }]] },
+    "Get Article Page": { "main": [[{ "node": "Extract Content with Regex", "type": "main", "index": 0 }]] },
+    "Extract Content with Regex": { "main": [[{ "node": "Save HTML to Dropbox", "type": "main", "index": 0 }]]},
+    "Save HTML to Dropbox": { "main": [[{ "node": "Prepare Memory Upload", "type": "main", "index": 0 }]] },
+    "Prepare Memory Upload": { "main": [[{ "node": "Update Memory File", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}

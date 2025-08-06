@@ -1,0 +1,11 @@
+services:
+  n8n:
+    build:
+      context: .
+      dockerfile: n8n/Dockerfile
+    ports:
+      - "5678:5678"
+    volumes:
+      - ./n8n/data:/home/node/.n8n
+    environment:
+      - GENAI_MODELS_N8N_USE_CASE_SPECIFIC_API_KEYS_ONLY=false

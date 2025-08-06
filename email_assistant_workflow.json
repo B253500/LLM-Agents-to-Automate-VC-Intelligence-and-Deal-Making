@@ -1,0 +1,87 @@
+{
+  "name": "Trigger Email Assistant API",
+  "nodes": [
+    {
+      "parameters": {
+        "filePath": "/path/to/your/pitchdeck.pdf"
+      },
+      "id": "e7d1e89e-4b8c-4a34-a13a-a1b635b44a4b",
+      "name": "Read PDF File",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        820,
+        340
+      ],
+      "notes": "IMPORTANT: Replace the placeholder path with the absolute path to a real PDF file on your local machine."
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:5002/generate-memo",
+        "options": {
+          "body": {
+            "__rl": true,
+            "value": "={{$binary.data}}",
+            "mode": "file",
+            "mock": ""
+          },
+          "response": {
+            "response": {
+              "fullResponse": false,
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "b3e098a5-9a8b-4c2d-937b-8c8873d6f1c4",
+      "name": "Call Generate Memo API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1020,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "fileName": "={{$json.fileName}}",
+        "data": "={{$binary.data}}",
+        "options": {}
+      },
+      "id": "a9a2a7a9-2f2f-4c5a-8b3a-5d4e1d1a1b1a",
+      "name": "Save Generated Memo",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 2,
+      "position": [
+        1220,
+        340
+      ],
+      "notes": "This will save the generated memo file to the default n8n folder on your local machine."
+    }
+  ],
+  "connections": {
+    "Read PDF File": {
+      "main": [
+        [
+          {
+            "node": "Call Generate Memo API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Generate Memo API": {
+      "main": [
+        [
+          {
+            "node": "Save Generated Memo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {}
+}
