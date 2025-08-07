@@ -1,37 +1,57 @@
-# Email Assistant Workflow
+# Q&A Email Assistant
 
-This directory contains the intelligent email assistant workflow using n8n automation.
+This service listens for incoming emails, analyzes the questions they contain, and provides answers. It is designed to be triggered by a dedicated n8n workflow that is connected to an email account.
 
-## Components
+### Key Components
+-   **API Server**: `api_server.py` (runs on port 5001)
+-   **Endpoint**: `/analyze`
+-   **Core Logic**: `agents/vc_report_agent.py`
+-   **n8n Workflow**: A workflow on your n8n instance (like `n8n_workflow.json`) configured with an email trigger.
 
-### api/
-API server and endpoints for email assistant functionality.
+### Setup Guide for Q&A Assistant
 
-### n8n/
-n8n workflow data and configurations for email automation.
+#### Step 1: Install Dependencies
+Make sure you have activated your Python virtual environment and installed the necessary packages.
+```bash
+# Activate your virtual environment
+source venv/bin/activate
 
-### Scripts
-- `api_server.py` - API server for email assistant
-- `run_memo.py` - Memo generation script
-- `automate_memo_pipeline.py` - Automation pipeline
-- `analyze_vc_questions.py` - VC questions analysis
-- `extract_text_and_figures.py` - Text and figure extraction
-- `generate_pdf_memo.py` - PDF memo generation
-- `generate_pdf.py` - PDF generation utility
-- `generate_html.py` - HTML generation utility
-- `html_to_pdf.py` - HTML to PDF conversion
-- `html_to_pdf_chrome.py` - Chrome-based PDF conversion
+# Install requirements
+pip install -r requirements.txt
+```
 
-## Usage
+#### Step 2: Configure Environment Variables
+The assistant requires an OpenAI API key to function. Create or update your `.env` file in the project root and add your key:
+```
+OPENAI_API_KEY=sk-your-openai-api-key-here
+```
 
-1. Start the API server: `python api_server.py`
-2. Configure n8n workflows in `n8n/` directory
-3. Use automation scripts for email processing
-4. Generate memos and reports as needed
+#### Step 3: Run the API Server
+Start the dedicated server for the Q&A assistant.
+```bash
+python email_assistant/api_server.py
+```
+The server will start on `http://0.0.0.0:5001`.
 
-## Integration
+#### Step 4: Configure the n8n Workflow
+1.  Log in to your n8n instance on Noumena.
+2.  Create a new workflow.
+3.  **Set up the Trigger**: Use an "Email Read" or similar trigger node and configure it to connect to your desired email account. Set it to trigger whenever a new email arrives.
+4.  **Call the API**: Add an "HTTP Request" node to call the `/analyze` endpoint of your API server.
+    -   **URL**: `http://<your_server_ip>:5001/analyze` (replace `<your_server_ip>` with the public IP of your Noumena server).
+    -   **Method**: `POST`
+    -   **Body**: Send a JSON object containing the question and email ID from the email trigger step.
+        ```json
+        {
+          "question": "{{$json.body.text}}",
+          "email_id": "{{$json.id}}"
+        }
+        ```
+5.  **Send Reply Email**: Add an "Email Send" node to send the answer received from the API back to the original sender.
 
-This workflow integrates with:
-- Email systems for automated processing
-- n8n for workflow automation
-- API endpoints for external access
+### How It Works
+1.  An email is received in the monitored inbox.
+2.  The n8n workflow triggers and extracts the email content.
+3.  n8n sends the content to the `/analyze` endpoint.
+4.  The Flask server uses the `VCReportAgent` to generate an answer.
+5.  n8n receives the answer and sends a reply email.

@@ -1,0 +1,88 @@
+{
+  "name": "web_scrapping_docker",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "id": "7cb32300-0ec9-4539-9a38-e72ba6f38f7b",
+      "name": "Run Daily",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        380,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "command": "python3 web_scraping/download_reports.py"
+      },
+      "id": "58f8f61f-3352-41a0-b3ab-3655cf2fde86",
+      "name": "1. Run Web Scraper",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        580,
+        220
+      ],
+      "notes": "Executes the main Python web scraper script to download new reports into a date-stamped folder."
+    },
+    {
+      "parameters": {
+        "command": "python3 build_report_cache.py"
+      },
+      "id": "0703de0c-370f-4db9-93c5-c0a0243b860b",
+      "name": "2. Update Report Database",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        780,
+        220
+      ],
+      "notes": "Runs the ingestion script to find the new folder of reports and add them to the ChromaDB."
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Run Daily": {
+      "main": [
+        [
+          {
+            "node": "1. Run Web Scraper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1. Run Web Scraper": {
+      "main": [
+        [
+          {
+            "node": "2. Update Report Database",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "7be51eba-14db-4dea-a82c-7583d3a8c5dc",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "500f4046289b6f6aa70ccda9bf8b800c1a4995bffdb319cc8a6709d3d2374ade"
+  },
+  "id": "SM7RWWff4SqtDWiI",
+  "tags": []
+}

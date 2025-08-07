@@ -2,12 +2,10 @@
 FROM python:3.11-slim-bookworm
 
 # Set environment variables
-# Prevents npm from creating a log file in the project directory
 ENV NPM_CONFIG_LOGLEVEL=warn
-# Set the n8n version to install
 ENV N8N_VERSION=1.46.0
 
-# Switch to the root user to install system packages
+# Switch to the root user for all system-level installations
 USER root
 
 # Step 2: Install Node.js, npm, and other necessary system tools
@@ -31,18 +29,23 @@ COPY minimal_requirements.txt ./
 # Step 4: Install your project's Python dependencies
 RUN pip install --no-cache-dir -r minimal_requirements.txt
 
-# Step 5: Install Playwright's browser dependencies
-RUN playwright install --with-deps
+# Step 5: Install Playwright's SYSTEM dependencies as root
+RUN playwright install-deps
 
 # Copy the rest of your project code into the container
 COPY . .
 
-# Create the n8n data directory and set permissions
+# Create the node user that n8n will run as
 RUN useradd --create-home --shell /bin/bash node
-RUN mkdir /home/node/.n8n && chown -R node:node /home/node/.n8n
 
-# Switch to the non-root 'node' user for security
+# Create the n8n data directory and set permissions
+RUN mkdir -p /home/node/.n8n && chown -R node:node /home/node/.n8n
+
+# Switch to the new user
 USER node
+
+# Step 6: Install the BROWSERS themselves as the node user
+RUN playwright install
 
 # Expose the n8n port
 EXPOSE 5678

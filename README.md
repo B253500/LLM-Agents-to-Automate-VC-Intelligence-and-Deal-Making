@@ -68,7 +68,7 @@ You'll need to set up the following API keys in your environment variables:
 | **OpenAI API** | AI analysis and memo generation | ✅ **REQUIRED** | [Setup Guide](#openai-api-setup) |
 | **Perplexity API** | Web search and data enrichment | ✅ **REQUIRED** | [Setup Guide](#perplexity-api-setup) |
 | **Google Cloud Vision** | OCR and image processing | ✅ **REQUIRED** | [Setup Guide](#google-cloud-vision-setup) |
-| **CoreSignal API** | Company data enrichment (fallback) | ❌ Optional | [Setup Guide](#coresignal-api-setup) |
+| **CoreSignal API** | Company data enrichment (fallback)  | [Setup Guide](#coresignal-api-setup) |
 
 ### Installation
 
@@ -88,6 +88,10 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```bash
 pip install -r requirements.txt
 ```
+
+> **Note on Requirement Files:**
+> *   `requirements.txt`: This file is intended for a **full local development setup** where you can manage all dependencies directly, including those that might require additional system libraries (e.g., `pytesseract`).
+> *   `minimal_requirements.txt`: This is a curated subset specifically for the **Docker builds**. It contains only the essential packages needed for the automated workflows, ensuring a lean, stable, and compatible environment inside the containers.
 
 #### 4. Set Up Environment Variables
 
@@ -246,34 +250,43 @@ out/
 └── memo_CompanyName_20250728_143022.html
 ```
 
-### Web Scraping Workflow
+### Automated Workflows (Web Scraper & API)
 
-Automated discovery and download of VC reports:
+The web scraper and the memo generator API are designed to run as automated, persistent services using n8n and Docker. This is the recommended way to run the platform for continuous operation.
 
+#### 1. Build and Run the Docker Containers
+
+The `docker-compose.n8n.yml` file defines all the services. This single command will start:
+- The **n8n Service**: The orchestrator that runs the web scraper workflow.
+- The **Memo Generator API**: A Flask server for on-demand memo generation.
+
+From the project root directory, run:
 ```bash
-# Run comprehensive web scraping
-cd web_scraping
-python download_reports.py
+# Build the images and start the services in the background
+docker-compose -f docker-compose.n8n.yml up --build -d
+```
+*   `--build`: Rebuilds the images if you change the Dockerfile or requirements.
+*   `-d`: Runs the containers in detached mode.
 
-# Or run individual scrapers
-python scripts/download_beauhurst.py
-python scripts/download_pitchbook.py
-python scripts/download_crunchbase.py
+Verify the services are running:
+```bash
+docker-compose -f docker-compose.n8n.yml ps
 ```
 
-### Email Assistant Workflow
+#### 2. Using the Web Scraper Workflow in n8n
 
-Intelligent email automation with n8n integration:
+Once the containers are running, you can access the n8n interface to manage the scraper.
 
-```bash
-# Start n8n Automation Hub
-cd n8n
-docker-compose up -d
+1.  **Access n8n**: Open your browser and go to **[http://localhost:5678](http://localhost:5678)**. Set up your n8n owner account if it's your first time.
 
-# Start Email API Server
-cd email_assistant
-python api_server.py
-```
+2.  **Import the Workflow**: From the n8n dashboard, create a new workflow and import the `web_scraper_workflow.json` file from the project root.
+
+3.  **Activate and Run**:
+    *   **To run automatically every day**: Toggle the workflow to **"Active"** in the top-right. It's scheduled to run at 4 AM daily.
+    *   **To run immediately**: Click **"Execute Workflow"**.
+
+The scraper will now run, and thanks to the persistent volume mapping, it will not re-download reports it has already processed.
+
 
 ## Project Structure
 
@@ -509,7 +522,6 @@ cat web_scraping/results/downloaded_reports.json
 # Clear cache if needed
 rm -rf web_scraping/data/*
 ```
-
 #### Email Assistant
 ```bash
 # Check n8n status
@@ -586,3 +598,4 @@ For questions, issues, or contributions:
 ---
 
 **Made with ❤️ for the VC community**
+

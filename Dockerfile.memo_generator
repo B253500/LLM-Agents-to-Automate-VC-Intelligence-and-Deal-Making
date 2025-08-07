@@ -1,0 +1,21 @@
+# Start from a standard Python base image
+FROM python:3.11-slim-bookworm
+
+# Set the working directory inside the container
+WORKDIR /app
+
+# Copy the requirements file first to leverage Docker's layer caching
+COPY minimal_requirements.txt ./
+
+# Install the Python dependencies
+RUN pip install --no-cache-dir -r minimal_requirements.txt
+
+# Copy the rest of your project code into the container
+COPY . .
+
+# Expose the port the API will run on (e.g., 5002)
+EXPOSE 5002
+
+# Set the command to run the API server when the container starts
+# This assumes your Flask app is started from email_assistant/api/main_email.py
+CMD ["python3", "-m", "email_assistant.api.main_email"]

@@ -14,9 +14,9 @@ import glob
 import random
 import string
 import os
-from twocaptcha import TwoCaptcha
-from anticaptchaofficial.recaptchav2proxyless import *
-from anticaptchaofficial.hcaptchaproxyless import *
+# from twocaptcha import TwoCaptcha
+# from anticaptchaofficial.recaptchav2proxyless import *
+# from anticaptchaofficial.hcaptchaproxyless import *
 
 # --- CONFIGURATION FOR CAPTCHA SERVICES ---
 TWOCAPTCHA_API_KEY = os.getenv("TWOCAPTCHA_API_KEY", "YOUR_2CAPTCHA_API_KEY_HERE")
@@ -34,7 +34,7 @@ DOWNLOAD_TIMEOUT = 120000
 
 # --- CONFIGURATION FOR EMAIL DOWNLOAD ---
 GMAIL_USER = os.getenv("GMAIL_USER", "ak.somnium@gmail.com")
-GMAIL_PASSWORD = os.getenv("GMAIL_PASSWORD", "YOUR_APP_PASSWORD_HERE")  # Use an App Password if 2FA is enabled
+GMAIL_PASSWORD = os.getenv("GMAIL_PASSWORD", "484654Aza") 
 BEAUHURST_EMAIL_DOMAIN = "@beauhurst.com"
 EMAIL_CHECK_INTERVAL = 60  # seconds
 
@@ -138,7 +138,7 @@ def fill_beauhurst_form(page):
             print("Could not find a valid email to use for this form.")
             return False
 
-        # --- Wait for hidden fields to appear after filling the above ---
+        # --- Waits for hidden fields to appear after filling the above ---
         # 4. Job title
         job_title = None
         try:
@@ -173,7 +173,7 @@ def fill_beauhurst_form(page):
                 if value:
                     industry.select_option(value)
                     filled = True
-        # 6. Company, phone, company_size (wait for and fill if visible)
+        # 6. Company, phone, company_size 
         for field_name in ['company', 'phone', 'demo_form_company_size']:
             try:
                 page.wait_for_selector(f"input[name='{field_name}'], select[name='{field_name}']", timeout=1000, state='visible')
@@ -193,7 +193,7 @@ def fill_beauhurst_form(page):
                     value = random_opt.get_attribute('value')
                     sel.select_option(value)
                     filled = True
-        # --- Fill any other visible input or select fields randomly (as before) ---
+        # -Filling any other visible input or select fields randomly 
         all_inputs = form_context.query_selector_all("input[type='text']")
         for inp in all_inputs:
             name = inp.get_attribute('name')
@@ -220,7 +220,7 @@ def fill_beauhurst_form(page):
                             filled = True
                     except Exception:
                         continue
-        # --- Check and tick any visible checkboxes (e.g. marketing consent) ---
+        # Checking and tick any visible checkboxes (e.g. marketing consent)
         checkboxes = form_context.query_selector_all("input[type='checkbox']")
         for cb in checkboxes:
             try:
@@ -245,7 +245,7 @@ def fill_beauhurst_form(page):
             except Exception as e:
                 print(f"Could not check a checkbox: {e}")
                 continue
-        # --- Submit ---
+        # Submit button
         submit_btns = form_context.query_selector_all("input[type='submit'], button[type='submit']")
         submit_btn = None
         for btn in submit_btns:
@@ -280,100 +280,12 @@ def fill_beauhurst_form(page):
 
 def solve_captcha_if_present(page):
     """
-    Detects and solves a reCAPTCHA or hCaptcha.
-    Tries 2Captcha first, then falls back to Anti-Captcha.
+    CAPTCHA solving is disabled.
     """
-    is_2captcha_configured = TWOCAPTCHA_API_KEY != "YOUR_2CAPTCHA_API_KEY_HERE"
-    is_anti_captcha_configured = ANTICAPTCHA_API_KEY != "YOUR_ANTICAPTCHA_API_KEY_HERE"
+    print("CAPTCHA solving is disabled, skipping.")
+    return True
 
-    if not is_2captcha_configured and not is_anti_captcha_configured:
-        print("No captcha service is configured. Skipping captcha solving.")
-        return True
-
-    # --- Find the captcha details first ---
-    site_key = None
-    captcha_type = None
-    
-    # Check for reCAPTCHA
-    recaptcha_iframe = page.query_selector('iframe[src*="api2/anchor"]')
-    if recaptcha_iframe:
-        site_key_match = re.search(r'k=([\w-]+)', recaptcha_iframe.get_attribute('src'))
-        if site_key_match:
-            site_key = site_key_match.group(1)
-            captcha_type = 'recaptcha'
-            print(f"reCAPTCHA detected. Site key: {site_key}")
-
-    # Check for hCaptcha if reCAPTCHA not found
-    if not captcha_type:
-        hcaptcha_element = page.locator('.h-captcha')
-        if hcaptcha_element.count() > 0:
-            site_key = hcaptcha_element.first.get_attribute('data-sitekey')
-            captcha_type = 'hcaptcha'
-            print(f"hCaptcha detected. Site key: {site_key}")
-
-    if not captcha_type:
-        return True # No captcha found
-
-    page_url = page.url
-
-    # --- Attempt 1: 2Captcha ---
-    if is_2captcha_configured:
-        print("Attempting to solve with 2Captcha...")
-        try:
-            solver = TwoCaptcha(TWOCAPTCHA_API_KEY)
-            if captcha_type == 'recaptcha':
-                result = solver.recaptcha(sitekey=site_key, url=page_url)
-            else: # hcaptcha
-                result = solver.hcaptcha(sitekey=site_key, url=page_url)
-            
-            print("2Captcha solved successfully. Submitting solution...")
-            if captcha_type == 'recaptcha':
-                page.evaluate(f"document.getElementById('g-recaptcha-response').innerHTML = '{result['code']}';")
-            else:
-                page.evaluate(f"document.querySelector('[name=\"h-captcha-response\"]').innerHTML = '{result['code']}';")
-                page.evaluate(f"document.querySelector('[name=\"g-recaptcha-response\"]').innerHTML = '{result['code']}';")
-            return True
-        except Exception as e:
-            print(f"⚠️ 2Captcha failed: {e}")
-            # Don't return false yet, try the fallback
-
-    # --- Attempt 2: Anti-Captcha (Fallback) ---
-    if is_anti_captcha_configured:
-        print("Attempting to solve with Anti-Captcha as a fallback...")
-        try:
-            if captcha_type == 'recaptcha':
-                solver = recaptchaV2Proxyless()
-                solver.set_key(ANTICAPTCHA_API_KEY)
-                solver.set_website_url(page_url)
-                solver.set_website_key(site_key)
-                g_response = solver.solve_and_return_solution()
-                if g_response != 0:
-                    print("Anti-Captcha solved successfully.")
-                    page.evaluate(f'document.getElementById("g-recaptcha-response").innerHTML = "{g_response}";')
-                    return True
-                else:
-                    print(f"Anti-Captcha task finished with error: {solver.error_code}")
-            else: # hcaptcha
-                solver = hcaptchaProxyless()
-                solver.set_key(ANTICAPTCHA_API_KEY)
-                solver.set_website_url(page_url)
-                solver.set_website_key(site_key)
-                g_response = solver.solve_and_return_solution()
-                if g_response != 0:
-                    print("Anti-Captcha solved successfully.")
-                    page.evaluate(f'document.querySelector(\'[name="h-captcha-response"]\').innerHTML = "{g_response}";')
-                    page.evaluate(f'document.querySelector(\'[name="g-recaptcha-response"]\').innerHTML = "{g_response}";')
-                    return True
-                else:
-                    print(f"Anti-Captcha task finished with error: {solver.error_code}")
-
-        except Exception as e:
-            print(f"⚠️ Anti-Captcha failed: {e}")
-
-    print("Both 2Captcha and Anti-Captcha failed or were not configured. Skipping page.")
-    return False
-
-# --- EMAIL DOWNLOAD LOGIC ---
+# EMAIL DOWNLOAD LOGIC 
 def download_beauhurst_pdfs_from_gmail(download_dir):
     """Connect to Gmail, find unread Beauhurst report emails, and download attachments."""
     print("\n=== Checking Gmail for Beauhurst Reports ===")
@@ -413,7 +325,7 @@ def download_beauhurst_pdfs_from_gmail(download_dir):
             
             msg = email.message_from_bytes(msg_data[0][1])
             
-            # Download PDF attachments
+            # Downloading PDF attachments
             for part in msg.walk():
                 if part.get_content_maintype() == 'multipart' or part.get('Content-Disposition') is None:
                     continue

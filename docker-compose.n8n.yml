@@ -5,7 +5,23 @@ services:
       dockerfile: n8n/Dockerfile
     ports:
       - "5678:5678"
+    dns:
+      - 8.8.8.8
     volumes:
-      - ./n8n/data:/home/node/.n8n
+      - ./n8n_data:/home/node/.n8n
+      # Mount the project directory so n8n can access the scraper script
+      # and the downloaded data
+      - .:/data
+      - ./web_scraping/data:/data/web_scraping/data
     environment:
       - GENAI_MODELS_N8N_USE_CASE_SPECIFIC_API_KEYS_ONLY=false
+
+  memo_generator:
+    build:
+      context: .
+      dockerfile: Dockerfile.memo_generator
+    ports:
+      - "5002:5002"
+    volumes:
+      # Mount the project directory so the API can access all the code
+      - .:/app

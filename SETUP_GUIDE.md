@@ -15,13 +15,25 @@ This guide provides the exact configuration needed to replicate the investment m
 
 ## 📦 Installation Steps
 
-### 1. Clone the Repository
+This project has two main components with different setup requirements:
+1.  **Investment Memo Generator**: A Python application that analyzes pitch decks and generates investment memos.
+2.  **Web Scraping & n8n**: A Dockerized n8n workflow for automated web scraping tasks.
+
+---
+
+### Part 1: Investment Memo Generator Setup
+
+These steps are for running the core memo generator on your local machine.
+
+#### 1. Clone the Repository
 ```bash
 git clone <your-repo-url>
 cd new-vc-agents
 ```
 
-### 2. Create Virtual Environment
+#### 2. Create Virtual Environment
+A virtual environment is crucial to manage dependencies and avoid conflicts.
+
 ```bash
 # Create virtual environment
 python -m venv venv
@@ -33,24 +45,42 @@ source venv/bin/activate
 # venv\Scripts\activate
 ```
 
-### 3. Install Dependencies
+#### 3. Install Full Requirements
+This will install all necessary packages for the memo generator, including PDF processing, AI/ML libraries, and document creation tools.
 
-**Option A: Minimal Installation (Recommended)**
 ```bash
 # Upgrade pip first
 pip install --upgrade pip
 
-# Install minimal requirements (only what's actually used)
-pip install -r minimal_requirements.txt
+# Install the full set of requirements
+pip install -r requirements.txt
 ```
+**Note**: The `requirements.txt` file contains all packages needed for the memo generator to function fully. For a detailed list of the exact 586 packages used in the original development environment, you can refer to `exact_requirements.txt`, but this is not recommended for a typical setup.
 
-**Option B: Exact Environment (If you need the full conda environment)**
+---
+
+### Part 2: Web Scraping & n8n Docker Setup
+
+This setup is for running the automated web scraping workflows using Docker and n8n. It is isolated from your local Python environment.
+
+#### 1. Docker and Docker Compose
+Ensure you have Docker and Docker Compose installed on your system.
+- [Install Docker](https://docs.docker.com/get-docker/)
+- [Install Docker Compose](https://docs.docker.com/compose/install/)
+
+#### 2. Build and Run the Docker Container
+The n8n services are defined in the `docker-compose.n8n.yml` file. The Dockerfile for n8n (`n8n/Dockerfile`) is configured to use a minimal set of dependencies.
+
 ```bash
-# Install exact requirements (586 packages from your environment)
-pip install -r exact_requirements.txt
+# Build and run the n8n container in detached mode
+docker-compose -f docker-compose.n8n.yml up --build -d
 ```
 
-**Note**: The `minimal_requirements.txt` contains only the packages actually used by the memo generator (~50 packages). The `exact_requirements.txt` contains your entire conda environment (586 packages) and includes many unnecessary dependencies.
+#### 3. Understanding the Minimal Requirements
+The Docker container for n8n uses the `web_scraping/minimal_requirements.txt` file. This file includes only the essential packages for the web scraping and automation tasks, making the Docker image lightweight. **You do not need to install these locally** if you are only using the Dockerized n8n setup.
+
+---
+
 
 ## 🔑 API Keys Configuration
 
@@ -59,22 +89,22 @@ pip install -r exact_requirements.txt
 Create a `.env` file in the project root with the following keys:
 
 ```bash
-# MANDATORY - OpenAI API Key (Required for all LLM operations)
+#  OpenAI API Key (Required for all LLM operations)
 OPENAI_API_KEY=sk-your-openai-api-key-here
 
-# RECOMMENDED - Perplexity API Key (For web search and market research)
+# Perplexity API Key (For web search and market research)
 PERPLEXITY_API_KEY=your-perplexity-api-key-here
 
-# OPTIONAL - CoreSignal API Key (For company data enrichment)
+#  CoreSignal API Key (For company data enrichment)
 CORESIGNAL_API_KEY=your-coresignal-api-key-here
 
-# OPTIONAL - Exa API Key (For semantic search)
+#  Exa API Key (For semantic search)
 EXA_API_KEY=your-exa-api-key-here
 
-# OPTIONAL - ProxyCurl API Key (For LinkedIn data enrichment)
+#  ProxyCurl API Key (For LinkedIn data enrichment)
 PROXYCURL_API_KEY=your-proxcurl-api-key-here
 
-# OPTIONAL - Email Configuration (For n8n integration)
+#  Email Configuration (For n8n integration)
 EMAIL_ADDRESS=your-email@gmail.com
 EMAIL_PASSWORD=your-gmail-app-password
 ```
@@ -109,8 +139,6 @@ EMAIL_PASSWORD=your-gmail-app-password
 # Basic usage
 python main.py data/your-pitch-deck.pdf
 
-# Multiple files
-python main.py data/deck1.pdf data/deck2.pdf
 ```
 
 ### API Server Usage
@@ -244,8 +272,7 @@ The system generates several output files:
 ### Performance Optimization
 
 1. **Enable Caching**: The system automatically caches PDF extractions
-2. **Use GPU**: If available, install CUDA for faster processing
-3. **Batch Processing**: Process multiple files in sequence
+2. **Batch Processing**: Process multiple files in sequence
 
 ## 🔒 Security Notes
 
