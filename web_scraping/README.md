@@ -22,6 +22,42 @@ The scraping process is designed to be incremental and avoid re-downloading exis
 
 This caching mechanism ensures that the workflow is efficient, only ever processing new reports.
 
+## Web Scraping & n8n Docker Setup
+
+This setup is for running the automated web scraping workflows using Docker and n8n. It is isolated from your local Python environment.
+
+#### 1. Docker and Docker Compose
+Ensure you have Docker and Docker Compose installed on your system.
+- [Install Docker](https://docs.docker.com/get-docker/)
+- [Install Docker Compose](https://docs.docker.com/compose/install/)
+
+#### 2. Build and Run the Docker Container
+The n8n services are defined in the `docker-compose.n8n.yml` file. The Dockerfile for n8n (`n8n/Dockerfile`) is configured to use a minimal set of dependencies.
+
+```bash
+# Build and run the n8n container in detached mode
+docker-compose -f docker-compose.n8n.yml up --build -d
+```
+
+### Dependency Management for Docker
+
+The automated web scraping workflow runs inside a custom Docker container orchestrated by `docker-compose`. The dependencies for this isolated environment are managed as follows:
+
+1.  **`web_scraping/minimal_requirements.txt`**: This file is crucial. It contains the lean, specific set of Python packages required for the web scraper to function (e.g., `playwright`, `playwright-stealth`). This ensures the Docker image is as small and efficient as possible. You do not need to install these packages locally if you are only using the Dockerized workflow.
+
+2.  **`n8n/Dockerfile`**: This is the blueprint for building the n8n service container. It contains the instructions that set up the environment. The key steps related to dependencies are:
+    ```dockerfile
+    # 1. Copy the minimal requirements file into the container's temporary directory
+    COPY web_scraping/minimal_requirements.txt /tmp/minimal_requirements.txt
+
+    # 2. Install only those packages using pip
+    RUN pip install --no-cache-dir -r /tmp/minimal_requirements.txt
+    ```
+
+3.  **`docker-compose.n8n.yml`**: This file starts the build process. When you run `docker-compose ... up --build`, it tells Docker to read the `n8n/Dockerfile` and execute the steps above, creating the final, runnable n8n service with all the correct Python packages installed.
+
+This setup ensures that the web scraping environment is consistent, reproducible, and isolated from your local machine's configuration.
+
 ## Usage
 
 This script is **not intended to be run manually**.

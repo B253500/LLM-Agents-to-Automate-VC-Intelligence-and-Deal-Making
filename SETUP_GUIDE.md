@@ -1,4 +1,4 @@
-# Investment Memo Generator - Complete Setup Guide
+# Investment Memo Generator -  Setup Guide
 
 This guide provides the exact configuration needed to replicate the investment memo generator environment.
 
@@ -18,6 +18,7 @@ This guide provides the exact configuration needed to replicate the investment m
 This project has two main components with different setup requirements:
 1.  **Investment Memo Generator**: A Python application that analyzes pitch decks and generates investment memos.
 2.  **Web Scraping & n8n**: A Dockerized n8n workflow for automated web scraping tasks.
+3. **📧 Email Assistant** - Intelligent email automation with n8n integration
 
 ---
 
@@ -28,7 +29,7 @@ These steps are for running the core memo generator on your local machine.
 #### 1. Clone the Repository
 ```bash
 git clone <your-repo-url>
-cd new-vc-agents
+cd LLM-Agents-to-Automate-VC-Intelligence-and-Deal-Making
 ```
 
 #### 2. Create Virtual Environment
@@ -55,7 +56,7 @@ pip install --upgrade pip
 # Install the full set of requirements
 pip install -r requirements.txt
 ```
-**Note**: The `requirements.txt` file contains all packages needed for the memo generator to function fully. For a detailed list of the exact 586 packages used in the original development environment, you can refer to `exact_requirements.txt`, but this is not recommended for a typical setup.
+**Note**: The `requirements.txt` file contains all packages needed for the memo generator to function fully. For a detailed list of the exact 586 packages used in the original development environment, you can refer to `exact_requirements.txt`, but for observation. It was used to detect packages that are not compatible with n8n and/or docker.
 
 ---
 
@@ -137,7 +138,7 @@ EMAIL_PASSWORD=your-gmail-app-password
 ### Command Line Usage
 ```bash
 # Basic usage
-python main.py data/your-pitch-deck.pdf
+python main.py data/your-pitch-deck.pdf (choose one of the existing decks in data directory or download your own)
 
 ```
 
@@ -149,14 +150,6 @@ python -m email_assistant.api.main_email
 # Server will run on http://127.0.0.1:5002
 ```
 
-### Email Assistant Usage
-```bash
-# Generate PDF memo
-python email_assistant/generate_pdf_memo.py data/your-pitch-deck.pdf
-
-# With LLM enhancement
-python email_assistant/generate_pdf_memo.py data/your-pitch-deck.pdf --llm
-```
 
 ## 📁 Project Structure
 

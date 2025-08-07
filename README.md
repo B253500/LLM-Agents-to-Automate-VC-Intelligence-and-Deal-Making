@@ -18,7 +18,9 @@ The system consists of **3 distinct workflows**:
 
 ## Limitations
 
-The memo generator produces a strong draft addressing key investor considerations but serves as a starting point, not a finished product. It covers substantial part of the work, requiring human input for nuance and judgment. The tool may reflect biases in the input and is limited by the underlying AI models. Competitor analysis provides initial insights but should be supplemented with additional research, and market size estimates should include a separate bottoms-up analysis. This tool is for prototype demonstration only.
+The memo generator produces a strong draft addressing key investor considerations but serves as a starting point, not a finished product. It covers substantial part of the work, but requires human input for nuance and judgment. The tool may reflect biases in the input and is limited by the underlying AI models. Competitor analysis provides initial insights but should be supplemented with additional research, and market size estimates should include a separate bottoms-up analysis. This tool is for prototype demonstration only.
+
+The web scrapper is also limited by its own capabilities and modern anti-bot systems could successfully prevent web scrapping and significantly change the performance of the pipeline. Furthermore, target websites from where reports are scraped could employ new technologies and development which also may influence its' scraping capabilities.
 
 ## Features
 
@@ -54,28 +56,35 @@ The memo generator produces a strong draft addressing key investor consideration
 ## Getting Started
 
 ### Prerequisites
-
-- **Python 3.11+**
-- **Docker** (for n8n automation)
+- **Python 3.11.4** (exact version used in development)
+- **Docker & Docker Compose** (for n8n automation)
 - **Git**
+- **System**: macOS (tested on macOS 24.5.0), at least 8GB RAM
+
 
 ### Required API Keys
 
 You'll need to set up the following API keys in your environment variables:
 
-| API Service | Purpose | Required | Setup Instructions |
-|-------------|---------|----------|-------------------|
-| **OpenAI API** | AI analysis and memo generation | ✅ **REQUIRED** | [Setup Guide](#openai-api-setup) |
-| **Perplexity API** | Web search and data enrichment | ✅ **REQUIRED** | [Setup Guide](#perplexity-api-setup) |
-| **Google Cloud Vision** | OCR and image processing | ✅ **REQUIRED** | [Setup Guide](#google-cloud-vision-setup) |
-| **CoreSignal API** | Company data enrichment (fallback)  | [Setup Guide](#coresignal-api-setup) |
+| API Service             | Purpose                                     |
+|-------------------------|---------------------------------------------|
+| **OpenAI API**          | Core AI model for analysis and generation   |
+| **Perplexity API**      | Real-time web search for data enrichment    |
+| **Google API**          | General Google services                     |
+| **Portkey API**         | LLM Gateway and monitoring                  |
+| **Exa API**             | AI-powered search for deep research         |
+| **Proxycurl API**       | LinkedIn and company data enrichment        | (optional)
+| **CoreSignal API**      | Company data enrichment                     |
+| **Anticaptcha API**     | Automated CAPTCHA solving                   |
+| **2Captcha API**        | Alternative automated CAPTCHA solving       | (optional)
+| **Google Cloud Vision** | OCR for scanned documents and images        |
 
 ### Installation
 
 #### 1. Clone the Repository
 ```bash
 git clone <repository-url>
-cd new-vc-agents
+cd nLLM-Agents-to-Automate-VC-Intelligence-and-Deal-Making
 ```
 
 #### 2. Create Virtual Environment
@@ -90,8 +99,10 @@ pip install -r requirements.txt
 ```
 
 > **Note on Requirement Files:**
-> *   `requirements.txt`: This file is intended for a **full local development setup** where you can manage all dependencies directly, including those that might require additional system libraries (e.g., `pytesseract`).
-> *   `minimal_requirements.txt`: This is a curated subset specifically for the **Docker builds**. It contains only the essential packages needed for the automated workflows, ensuring a lean, stable, and compatible environment inside the containers.
+> *   `requirements.txt`: This file is intended for a **full local development setup**.
+> *   `web_scraping/minimal_requirements.txt`: This is a curated subset specifically for the **Docker builds**. It contains only the essential packages needed for the automated workflows.
+> *   `exact_requirements.txt`: Contains the exact 586 packages from the original development environment. It should be used for reference or debugging dependency issues, not for direct installation.
+
 
 #### 4. Set Up Environment Variables
 
@@ -105,30 +116,30 @@ touch .env
 nano .env  # or use your preferred editor
 ```
 
-Add the following to your `.env` file:
+Add the following to your `.env` file. **All variables are required, If otherwise not mentioned explicitly**
 
-```bash
-# === REQUIRED API KEYS ===
+```env
+# === AI & Language Models ===
+OPENAI_API_KEY="your_openai_api_key_here"
+PERPLEXITY_API_KEY="your_perplexity_api_key_here"
+GOOGLE_API_KEY="your_google_api_key_here"
+PORTKEY_API_KEY="your_portkey_api_key_here"
 
-# OpenAI API Key (Required for AI analysis)
-OPENAI_API_KEY=your_openai_api_key_here
+# === Data Enrichment & Scraping ===
+EXA_API_KEY="your_exa_api_key_here"
+PROXYCURL_API_KEY="your_proxycurl_api_key_here" (optional)
+CORESIGNAL_API_KEY="your_coresignal_api_key_here"
 
-# Perplexity API Key (Required for web search)
-PERPLEXITY_API_KEY=your_perplexity_api_key_here
+# === CAPTCHA Solving ===
+ANTICAPTCHA_API_KEY="your_anticaptcha_api_key_here" (optional)
+TWOCAPTCHA_API_KEY="your_twocaptcha_api_key_here"
 
-# Google Cloud Vision (Required for OCR)
-GOOGLE_APPLICATION_CREDENTIALS=cloud-credentials.json
-
-# === OPTIONAL API KEYS ===
-
-# CoreSignal API Key (Optional - used as fallback)
-CORESIGNAL_API_KEY=your_coresignal_api_key_here
-
-# === SYSTEM CONFIGURATION ===
-DEFAULT_MODEL=gpt-4o
-DEFAULT_TEMPERATURE=0.2
-OUTPUT_DIR=out
+# === Configuration ===
+GOOGLE_APPLICATION_CREDENTIALS="cloud-credentials.json"
+CHROMA_DB_DIR="./chroma_db"
 ```
+
+---
 
 ### API Setup Instructions
 
@@ -193,6 +204,7 @@ OUTPUT_DIR=out
    # Ensure it's in the project root
    ls cloud-credentials.json
    ```
+   
 
 6. **Usage**: Used for OCR processing of PDFs and image text extraction
 
@@ -211,23 +223,33 @@ OUTPUT_DIR=out
 
 3. **Usage**: Used as fallback for company data when AI detection fails
 
-### Verify Setup
+---
 
-Test your API key configuration:
-
+### 2. Email Assistant API (Local)
+Run the Flask server for the email assistant Q&A functionality.
 ```bash
-# Test API keys
-python -c "
-import os
-from dotenv import load_dotenv
-load_dotenv()
-print('🔑 API Key Status:')
-print('OpenAI:', '✅ SET' if os.getenv('OPENAI_API_KEY') else '❌ NOT SET')
-print('Perplexity:', '✅ SET' if os.getenv('PERPLEXITY_API_KEY') else '❌ NOT SET')
-print('Google Cloud:', '✅ SET' if os.path.exists('cloud-credentials.json') else '❌ NOT SET')
-print('CoreSignal:', '✅ SET' if os.getenv('CORESIGNAL_API_KEY') else '❌ NOT SET (Optional)')
-"
+# Make sure your venv is activated
+source venv/bin/activate
+
+# Start the API server
+python -m email_assistant.api_server
+
+# Server will run on http://127.0.0.1:5002
 ```
+
+###  Automated Web Scraper (Docker & n8n)
+Once the Docker containers are running, access the n8n interface to manage the automated scraper.
+
+1.  **Access n8n**: Open your browser and go to **[http://localhost:5678](http://localhost:5678)**. Set up your n8n owner account if it's your first time.
+2.  **Import the Workflow**: From the n8n dashboard, create a new workflow and import the `web_scraping/web_scrapping_docker.json` file.
+3.  **Activate and Run**:
+    *   To run automatically every day, toggle the workflow to **"Active"**.
+    *   To run immediately, click **"Execute Workflow"**.
+
+### Service Ports
+-   **n8n Web Interface**: `http://localhost:5678`
+-   **Email API**: `http://localhost:5002`
+
 
 ## Usage
 
@@ -249,6 +271,19 @@ out/
 ├── memo_CompanyName_20250728_143022.pdf
 └── memo_CompanyName_20250728_143022.html
 ```
+
+###  Email Assistant API (Local)
+Run the Flask server for the email assistant Q&A functionality.
+```bash
+# Make sure your venv is activated
+source venv/bin/activate
+
+# Start the API server
+python -m email_assistant.api_server
+
+# Server will run on http://127.0.0.1:5002
+```
+
 
 ### Automated Workflows (Web Scraper & API)
 
@@ -279,10 +314,10 @@ Once the containers are running, you can access the n8n interface to manage the 
 
 1.  **Access n8n**: Open your browser and go to **[http://localhost:5678](http://localhost:5678)**. Set up your n8n owner account if it's your first time.
 
-2.  **Import the Workflow**: From the n8n dashboard, create a new workflow and import the `web_scraper_workflow.json` file from the project root.
+2.  **Import the Workflow**: From the n8n dashboard, create a new workflow and import the `web_scraping/web_scrapping_docker.json` file from the project root.
 
 3.  **Activate and Run**:
-    *   **To run automatically every day**: Toggle the workflow to **"Active"** in the top-right. It's scheduled to run at 4 AM daily.
+    *   **To run automatically every day**: Toggle the workflow to **"Active"** in the top-right. It's scheduled to run at 8 AM daily.
     *   **To run immediately**: Click **"Execute Workflow"**.
 
 The scraper will now run, and thanks to the persistent volume mapping, it will not re-download reports it has already processed.
@@ -291,7 +326,7 @@ The scraper will now run, and thanks to the persistent volume mapping, it will n
 ## Project Structure
 
 ```
-new-vc-agents/
+LLM-Agents-to-Automate-VC-Intelligence-and-Deal-Making/
 ├── 📊 Investment Memo Generation (Core)
 │   ├── main.py                    # Core memo generation orchestrator
 │   ├── agents/                    # AI agents for analysis
