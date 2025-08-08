@@ -5,9 +5,24 @@
 [![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/)
 [![LangChain](https://img.shields.io/badge/LangChain-✓-green.svg)](https://langchain.com/)
 [![OpenAI GPT-4](https://img.shields.io/badge/OpenAI-GPT--4-orange.svg)](https://openai.com/)
+
 ## Overview
 
 The VC Agents platform is a comprehensive AI-powered system for generating investment memos from pitch decks, business plans, and call notes. It provides venture capitalists with detailed analysis including market sizing, competitive intelligence, financial analysis, and risk assessment. For founders, it offers insights into how VCs might evaluate your business and simplifies the process of presenting your company to investors.
+
+## Investment Memo Generator
+Generates a polished investment memo (DOCX + PDF) from a pitch deck or notes. It extracts text, tables, and figures; runs market sizing, competitive, technical, financial, ESG, and risk analyses; then formats the findings into a structured memo with visuals and an evaluation summary.
+
+## Web Scraping
+Continuously discovers and downloads VC reports to keep your research current. It organises files, builds a local cache of extracted text/tables for market deep dives, and runs inside Docker with n8n for scheduled, hands-off operation
+
+## Virtual Email Assistant
+- A single intelligent API that classifies your question and routes to the best tools:
+- Market/segment deep dive: use cached report data first, then web search.
+- Company/Fund: web search + CoreSignal, synthesized by the LLM with citations.
+- Person: LinkedIn-first web search (then general), synthesized into a short bio.
+- Use POST /api/analyze-report with your question; responses include inline sources.
+
 
 The system consists of **3 distinct workflows**:
 1. **📊 Investment Memo Generation** - Core AI-powered memo creation with enhanced data extraction
@@ -18,7 +33,9 @@ The system consists of **3 distinct workflows**:
 
 The memo generator produces a strong draft addressing key investor considerations but serves as a starting point, not a finished product. It covers substantial part of the work, but requires human input for nuance and judgment. The tool may reflect biases in the input and is limited by the underlying AI models. Competitor analysis provides initial insights but should be supplemented with additional research, and market size estimates should include a separate bottoms-up analysis. This tool is for prototype demonstration only.
 
-The web scrapper is also limited by its own capabilities and modern anti-bot systems could successfully prevent web scrapping and significantly change the performance of the pipeline. Furthermore, target websites from where reports are scraped could employ new technologies and development which also may influence its' scraping capabilities.
+The web scrapper is also limited by its own capabilities and modern anti-bot systems could successfully prevent web scrapping and significantly change the performance of the pipeline. Furthermore, target websites from where reports are scraped could employ new technologies (such as CAPTCHAs, dynamic sites, and rate limits) and development which can degrade coverage or break flows. 
+
+The Virtual Email Assistant can misclassify questions (e.g., company vs. fund), sending them to suboptimal tools. Its answers depend on web and Perplexity results, so quality and citations may vary. CoreSignal matching can still miss or mismatch even with domain-first hints. Market answers prioritise the local cache; if data isn’t cached, web fallbacks may diverge from scrapped reports.
 
 ## Features
 
@@ -55,11 +72,18 @@ The web scrapper is also limited by its own capabilities and modern anti-bot sys
 
 ### Prerequisites
 - **Python 3.11.4** (exact version used in development)
-- **Docker & Docker Compose** (for n8n automation)
+- **Docker & Docker Compose** (for n8n automation). Install Docker Desktop, then run n8n with docker-compose from the n8n/ folder
 - **Git**
-- **System**: macOS (tested on macOS 24.5.0), at least 8GB RAM
-
-
+- **System**: macOS (tested on macOS 24.5.0), at least 8GB RAM and up to 10gb free storage
+- **LibreOffice** (required for DOCX → PDF in memo flow)
+- macOS: brew install --cask libreoffice
+- Verify: /Applications/LibreOffice.app/Contents/MacOS/soffice --version
+- If not on PATH: ln -s /Applications/LibreOffice.app/Contents/MacOS/soffice /opt/homebrew/bin/soffice
+- **ngrok** (for a stable public API URL)
+macOS: brew install ngrok/ngrok/ngrok
+Auth: ngrok config add-authtoken <YOUR_AUTHTOKEN>
+Reserved domain (paid): ngrok http --domain=your-assistant.ngrok.app 5002
+  
 ### Required API Keys
 
 You'll need to set up the following API keys in your environment variables:
@@ -71,18 +95,18 @@ You'll need to set up the following API keys in your environment variables:
 | **Google API**          | General Google services                     |
 | **Portkey API**         | LLM Gateway and monitoring                  |
 | **Exa API**             | AI-powered search for deep research         |
-| **Proxycurl API**       | LinkedIn and company data enrichment        | (optional)
+| **Proxycurl API**  (optional)     | LinkedIn and company data enrichment        | 
 | **CoreSignal API**      | Company data enrichment                     |
 | **Anticaptcha API**     | Automated CAPTCHA solving                   |
-| **2Captcha API**        | Alternative automated CAPTCHA solving       | (optional)
+| **2Captcha API** (optional)       | Alternative automated CAPTCHA solving       | 
 | **Google Cloud Vision** | OCR for scanned documents and images        |
 
 ### Installation
 
 #### 1. Clone the Repository
 ```bash
-git clone <repository-url>
-cd nLLM-Agents-to-Automate-VC-Intelligence-and-Deal-Making
+git clone https://github.com/B253500/LLM-Agents-to-Automate-VC-Intelligence-and-Deal-Making
+cd LLM-Agents-to-Automate-VC-Intelligence-and-Deal-Making
 ```
 
 #### 2. Create Virtual Environment
@@ -205,7 +229,6 @@ Please Make sure you Google cloud credentials are created and stored in root dir
    ls cloud-credentials.json
    ```
    
-
 6. **Usage**: Used for OCR processing of PDFs and image text extraction
 
 #### **🔑 CoreSignal API Setup (Optional)**
@@ -238,97 +261,31 @@ python main.py data/sample_pitch_deck.pdf
 # Output will be saved to out/ directory
 ```
 
-### 2. Email Assistant API (Local)
-Run the consolidated Flask server for the email assistant.
-```bash
-# Make sure your venv is activated
-source venv/bin/activate
-
-# Start the API server (consolidated on port 5002)
-python email_assistant/api/main_email.py
-
-# Health:       http://127.0.0.1:5002/health
-# Analyze:      POST http://127.0.0.1:5002/api/analyze-report
-```
-
-###  Automated Web Scraper (Docker & n8n)
-Once the Docker containers are running, access the n8n interface to manage the automated scraper.
-
-1.  **Access n8n**: Open your browser and go to **[http://localhost:5678](http://localhost:5678)**. Set up your n8n owner account if it's your first time.
-2.  **Import the Workflow**: From the n8n dashboard, create a new workflow and import the `web_scraping/web_scrapping_docker.json` file.
-3.  **Activate and Run**:
-    *   To run automatically every day, toggle the workflow to **"Active"**.
-    *   To run immediately, click **"Execute Workflow"**.
-
-### Exposing Your Local API with a Stable URL (ngrok reserved domain)
-If you need a stable public URL for demos (so others don’t need to update the address), use an ngrok reserved domain (paid plan):
-
-1) Install and authenticate
-```bash
-brew install ngrok/ngrok/ngrok
-ngrok config add-authtoken <YOUR_AUTHTOKEN>
-```
-
-2) Reserve a domain in the ngrok dashboard
-- Dashboard → Domains → Reserve a domain (e.g., `your-assistant.ngrok.app`)
-
-3) Run your API and bind the domain
-```bash
-source venv/bin/activate
-python email_assistant/api/main_email.py   # leave running on 5002
-```
-In a second terminal:
-```bash
-ngrok http --domain=your-assistant.ngrok.app 5002
-```
-
-4) Use the stable URL
-- Health: `https://your-assistant.ngrok.app/health`
-- Analyze: `https://your-assistant.ngrok.app/api/analyze-report`
-
-### Service Ports
-- **n8n Web Interface**: `http://localhost:5678`
-- **Email API**: `http://localhost:5002` (local) or your reserved domain (public)
-
-
-## Usage
-
 **Example Output Structure:**
 ```
 out/
 ├── memo_CompanyName_20250728_143022.docx
 ├── memo_CompanyName_20250728_143022.pdf
-└── memo_CompanyName_20250728_143022.html
 ```
-
-###  Email Assistant API (Local)
-Run the Flask server for the email assistant Q&A functionality.
-```bash
-# Make sure your venv is activated
-source venv/bin/activate
-
-# Start the API server
-python -m email_assistant.api_server
-
-# Server will run on http://127.0.0.1:5002
-```
-
 
 ### Automated Workflows (Web Scraper & API)
 
-The web scraper and the memo generator API are designed to run as automated, persistent services using n8n and Docker. This is the recommended way to run the platform for continuous operation.
+Option 1) easy way - from root directory manually run: python web_scraping/download_reports.py
+
+Option 2) The web scraper is designed to run as automated, persistent services using n8n and Docker. This is the recommended way to run the platform for continuous operation.
 
 #### 1. Build and Run the Docker Containers
 
 The `docker-compose.n8n.yml` file defines all the services. This single command will start:
 - The **n8n Service**: The orchestrator that runs the web scraper workflow.
-- The **Memo Generator API**: A Flask server for on-demand memo generation.
 
 From the project root directory, run:
 ```bash
 # Build the images and start the services in the background
 docker-compose -f docker-compose.n8n.yml up --build -d
 ```
+This command will install minimal_requirements.txt that are necessary to run web scraping with n8n workflow on docker.
+
 *   `--build`: Rebuilds the images if you change the Dockerfile or requirements.
 *   `-d`: Runs the containers in detached mode.
 
@@ -351,6 +308,113 @@ Once the containers are running, you can access the n8n interface to manage the 
 
 The scraper will now run, and thanks to the persistent volume mapping, it will not re-download reports it has already processed.
 
+
+### Email assistant (Local API with a Stable URL (ngrok reserved domain))
+Option 1) You can run manually on python scripts with this command: python -c "import os; from dotenv import load_dotenv; load_dotenv(); from agents.vc_report_agent import VCReportAgent; agent=VCReportAgent(os.getenv('OPENAI_API_KEY'),'web_scraping/data/vc_reports'); q='DataRobot company overview'; res=agent.analyze_question_enriched(q); print(res.get('answer','')); print('\nSOURCES:', res.get('sources',[]))"
+
+Here in q="You can ask any other questions, e.g. about any company, person, funds, market and segment deep dive"
+
+Option 2)
+
+If you need a stable public URL for demos (so others don’t need to update the address), use an ngrok reserved domain (paid plan):
+
+1) Install and authenticate
+```bash
+brew install ngrok/ngrok/ngrok
+ngrok config add-authtoken <YOUR_AUTHTOKEN>
+```
+2) Reserve a domain in the ngrok dashboard
+- Dashboard → Domains → Reserve a domain (e.g., `your-assistant.ngrok.app`)
+
+3) Run your API and bind the domain
+```bash
+source venv/bin/activate
+python email_assistant/api/main_email.py   # leave running on 5002
+```
+In a second terminal:
+```bash
+ngrok http --domain=your-assistant.ngrok.app 5002
+```
+
+4) Use the stable URL
+- Health: `https://your-assistant.ngrok.app/health`
+- Analyze: `https://your-assistant.ngrok.app/api/analyze-report`
+
+
+### Service Ports
+- **n8n Web Interface**: `http://localhost:5678`
+- **Email API**: `http://localhost:5002` (local) or your reserved domain (public)
+
+
+Assuming both ports above are running
+
+Open the n8n 
+
+**Import the workflow**
+n8n → Import from File
+Pick virtual email assistant workflow JSON (e.g., email_assistant/virtual assistant.json)
+
+**Configure nodes**
+- Gmail (Trigger): select your Gmail credentials (OAuth or IMAP/SMTP)
+- HTTP Request:
+- Method: POST
+- URL: https://your-assistant.ngrok.app/api/analyze-report (or http://127.0.0.1:5002/api/analyze-report)
+- Headers: Content-Type: application/json
+- Body (JSON): {"question":"{{$json.text || $json.bodyText || $json.html}}"}
+- Gmail (Send):
+- To: {{$json.from}}
+- Subject: Re: {{$json.subject}}
+- Body: include {{$json.answer}} and optionally {{$json.sources}}
+
+Activate and test
+Toggle “Active”, send an email to the monitored inbox, expect a reply with the answer and sources.  
+
+## Usage 
+
+Examples of questions you can use for virtual email assistant to answer
+
+**Market/segment deep dive**
+- What is the Foodtech VC deal activity in 2021?
+- What is gaming VC deal activity for 2021?
+- What’s the top sub-sector of Quantum Computing by number of companies generated?
+- What is the total value of exits in the biotechnology/bio tools space in Q1 2025?
+- List key pharma/biotools early-stage VC deals in Q1 2025.
+- What is key e-commerce early-stage VC deals in Q1 2025?
+- What was Insurtech VC deal activity in Q4 2024?
+- What is the CAGR of median AI early-stage VC deal value from 2020 to 2025?
+- What are the top 3 academic institutions by spinout activity in the UK?
+  
+**Company overviews**
+- Stripe company overview: website, products, customers, industries, founded, headquarters, leadership, latest news.
+- DataRobot company overview: official website first, then products, customers, industries, founded year, HQ, leadership, notable news (past 12 months). Provide inline citations.
+- Snowflake company overview: website, products, customers, industries, founded, HQ, leadership, latest news.
+- Databricks company overview: website, products, customers, industries, founded, HQ, leadership, latest news.
+- Revolut company overview: website, products, customers, industries, founded, HQ, leadership, latest news.
+
+**Fund questions**
+- Sequoia Capital AUM, fund sizes, vintage years, LPs; include strategy, sectors, stages, HQ/offices, partners, notable portfolio, recent deals (past 12 months).
+- Andreessen Horowitz (a16z) AUM, fund sizes, vintages, LPs; include strategy, sectors, stages, partners, notable portfolio, recent deals.
+- Insight Partners fund overview: AUM, fund sizes, vintages, strategy, sectors, stages, notable exits and recent fundraising announcements.
+- Accel fund overview: AUM, fund sizes, vintages, strategy, sectors, stages, notable portfolio and recent deals.
+
+Or any other question that you may come up with.
+
+## Gmail setup OAuth2 
+Google Cloud setup
+- Create a project at https://console.cloud.google.com/
+- APIs & Services → Library → Enable “Gmail API”
+- OAuth consent screen → External (Testing is fine) → add your email as test user
+- Credentials → Create Credentials → OAuth client ID → Web application
+- Authorized redirect URI: https://<your-n8n-host>/rest/oauth2-credential/callback (local: http://localhost:5678/rest/oauth2-credential/callback)
+- Save Client ID and Client Secret
+## n8n credential
+- n8n → Credentials → New → “Google Gmail OAuth2”
+- Paste Client ID and Client Secret
+- Click “Connect OAuth2”, sign in to Gmail, accept scopes
+- Save
+## Use in workflow
+Gmail (Trigger): select the OAuth credential
+Gmail (Send): select the same credential
 
 ## Project Structure
 
@@ -484,7 +548,7 @@ LLM-Agents-to-Automate-VC-Intelligence-and-Deal-Making/
 - **Pitch Deck Chain**: Pitch deck analysis with enhanced data extraction
 - **Risk Assessment Chain**: Risk assessment
 
-### NEW: AI-Powered Data Extraction
+### AI-Powered Data Extraction
 - **Market Data Extraction**: `ai_extract_market_data()` - Comprehensive market data extraction
 - **Financial Data Extraction**: `ai_extract_financial_data()` - Comprehensive financial data extraction
 - **Dynamic Schema Handling**: `extra = "allow"` configuration for flexible field management
@@ -586,17 +650,6 @@ cat web_scraping/results/downloaded_reports.json
 # Clear cache if needed
 rm -rf web_scraping/data/*
 ```
-#### Email Assistant
-```bash
-# Check n8n status
-docker-compose ps
-
-# Check API server
-curl http://localhost:8000/health
-
-# View n8n logs
-docker-compose logs n8n
-```
 
 ### Performance Issues
 - **Memory**: Increase system memory for large PDFs
@@ -639,9 +692,6 @@ print('CoreSignal:', '✅ SET' if os.getenv('CORESIGNAL_API_KEY') else '❌ NOT 
 - **[n8n/README.md](n8n/README.md)**: n8n automation setup
 - **[evaluation_metrics/README.md](evaluation_metrics/README.md)**: Performance tracking
 
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 
