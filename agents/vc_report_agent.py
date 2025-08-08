@@ -80,6 +80,123 @@ class VCReportAgent:
             # Enrichment is optional; base RAG will still function
             self._enrichment_available = False
 
+    def _normalize_domain(self, url: str) -> str:
+        try:
+            if not url:
+                return ""
+            u = url.strip()
+            if u.startswith("http"):
+                # strip protocol
+                u = u.split("//", 1)[-1]
+            # strip path
+            u = u.split("/", 1)[0]
+            # strip query
+            u = u.split("?", 1)[0]
+            # strip www
+            if u.startswith("www."):
+                u = u[4:]
+            return u.lower()
+        except Exception:
+            return ""
+
+    def _extract_domain_from_text(self, text: str) -> str:
+        try:
+            if not text:
+                return ""
+            import re as _re
+            m = _re.search(r"\b([a-z0-9-]+(?:\.[a-z0-9-]+)+)\b", text.lower())
+            if not m:
+                return ""
+            domain = m.group(1)
+            # blacklist common non-official domains
+            blacklist = {"linkedin.com", "x.com", "twitter.com", "facebook.com", "wikipedia.org", "crunchbase.com"}
+            if domain in blacklist:
+                return ""
+            return domain
+        except Exception:
+            return ""
+
+    def _perplexity_get_company_hints(self, name: str) -> Dict[str, str]:
+        """Use Perplexity to fetch LinkedIn company URL and official website domain."""
+        hints: Dict[str, str] = {}
+        if not self._enrichment_available:
+            return hints
+        try:
+            from core.perplexity_utils import search_perplexity as _pplx
+            # LinkedIn company URL
+            li_res = _pplx(f"site:linkedin.com/company {name}", return_url=True, max_tokens=128)
+            if isinstance(li_res, dict):
+                li_url = li_res.get("url") or ""
+                if li_url and "linkedin.com/company" in li_url:
+                    hints["linkedin_url"] = li_url
+            # Gather domain candidates
+            domain_candidates: list[str] = []
+            # Ask directly for official domain
+            dom_res = _pplx(
+                f"What is the official website domain for {name}? Respond with only the domain (e.g., 'stripe.com').",
+                return_url=False,
+                max_tokens=32,
+                temperature=0.0,
+            )
+            if isinstance(dom_res, str):
+                d = self._extract_domain_from_text(dom_res.strip())
+                if d:
+                    domain_candidates.append(d)
+            # If LinkedIn URL is known, ask for the website linked on that page
+            li_url = hints.get("linkedin_url")
+            if li_url:
+                dom_from_li = _pplx(
+                    f"From the LinkedIn company page {li_url}, what is the official website domain? Answer with domain only (e.g., 'stripe.com').",
+                    return_url=False,
+                    max_tokens=32,
+                    temperature=0.0,
+                )
+                if isinstance(dom_from_li, str):
+                    d2 = self._extract_domain_from_text(dom_from_li.strip())
+                    if d2:
+                        domain_candidates.append(d2)
+            # Fallback phrasing
+            if not domain_candidates:
+                dom_res2 = _pplx(
+                    f"official website domain of {name}. Answer with domain only",
+                    return_url=False,
+                    max_tokens=32,
+                    temperature=0.0,
+                )
+                if isinstance(dom_res2, str):
+                    d3 = self._extract_domain_from_text(dom_res2.strip())
+                    if d3:
+                        domain_candidates.append(d3)
+            # Select best domain against company name
+            best = self._select_best_domain(name, domain_candidates)
+            if best:
+                hints["website_domain"] = best
+        except Exception:
+            pass
+        return hints
+
+    def _select_best_domain(self, name: str, domains: list[str]) -> str:
+        if not domains:
+            return ""
+        # Remove obvious social/non-officials and duplicates
+        blacklist = {"linkedin.com", "x.com", "twitter.com", "facebook.com", "wikipedia.org", "crunchbase.com"}
+        cand = [d for d in domains if d and d not in blacklist]
+        if not cand:
+            return ""
+        # Prefer domain that contains normalized name token
+        token = re.sub(r"[^a-z]", "", name.lower())
+        scored: list[tuple[int, str]] = []
+        for d in cand:
+            dn = d.lower()
+            score = 0
+            if token and token in dn:
+                score += 5
+            # shorter is usually better
+            score += max(0, 20 - len(dn))
+            scored.append((score, d))
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return scored[0][1] if scored else ""
+
     def _extract_keywords(self, question: str) -> Set[str]:
         """Extract relevant keywords from the question."""
         # Common VC and sector terms
@@ -432,14 +549,33 @@ Answer:"""
 
         # 2) Company → web + CoreSignal (synthesize with LLM)
         elif task == "company":
+            # Derive LinkedIn/company site via Perplexity first to improve CoreSignal match
+            name_hint = self._extract_candidate_name_or_company(question)
+            hints = self._perplexity_get_company_hints(name_hint or question)
+            web_li_url = hints.get("linkedin_url")
+            website_domain = hints.get("website_domain", "")
+
+            # General web content for synthesis
             web = self.enrich_with_web(question)
             enrichment["web"] = web
             web_ans = (web.get("data") or {}).get("answer", "")
             web_url = (web.get("data") or {}).get("url")
             if web_url:
                 sources.append({"source": web_url, "temporal_valid": True})
+            if web_li_url:
+                sources.append({"source": web_li_url, "temporal_valid": True})
 
-            cs = self.enrich_with_coresignal(question)
+            # Try CoreSignal with website hint if available
+            try:
+                from core.coresignal_utils import get_full_company_data as _cs_get
+                # Prefer website-only search if we have domain; skip name search per request
+                if website_domain:
+                    cs_payload = _cs_get(name_hint or question, website=website_domain)
+                else:
+                    cs_payload = _cs_get(name_hint or question)
+                cs = {"available": True, "data": cs_payload}
+            except Exception as e:
+                cs = {"available": False, "error": str(e)}
             enrichment["coresignal"] = cs
             cs_payload = cs.get("data")
             if cs_payload:
@@ -500,14 +636,30 @@ Answer:"""
 
         # 4) Fund → web then CoreSignal; synthesize with LLM
         elif task == "fund":
+            name_hint = self._extract_candidate_name_or_company(question)
+            hints = self._perplexity_get_company_hints(name_hint or question)
+            web_li_url = hints.get("linkedin_url")
+            website_domain = hints.get("website_domain", "")
+
             web = self.enrich_with_web(question)
             enrichment["web"] = web
             web_ans = (web.get("data") or {}).get("answer", "")
             web_url = (web.get("data") or {}).get("url")
             if web_url:
                 sources.append({"source": web_url, "temporal_valid": True})
+            if web_li_url:
+                sources.append({"source": web_li_url, "temporal_valid": True})
 
-            cs = self.enrich_with_coresignal(question)
+            # Try CoreSignal with website hint if available
+            try:
+                from core.coresignal_utils import get_full_company_data as _cs_get
+                if website_domain:
+                    cs_payload = _cs_get(name_hint or question, website=website_domain)
+                else:
+                    cs_payload = _cs_get(name_hint or question)
+                cs = {"available": True, "data": cs_payload}
+            except Exception as e:
+                cs = {"available": False, "error": str(e)}
             enrichment["coresignal"] = cs
             cs_payload = cs.get("data")
             if cs_payload:

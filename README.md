@@ -226,15 +226,16 @@ CHROMA_DB_DIR="./chroma_db"
 ---
 
 ### 2. Email Assistant API (Local)
-Run the Flask server for the email assistant Q&A functionality.
+Run the consolidated Flask server for the email assistant.
 ```bash
 # Make sure your venv is activated
 source venv/bin/activate
 
-# Start the API server
-python -m email_assistant.api_server
+# Start the API server (consolidated on port 5002)
+python email_assistant/api/main_email.py
 
-# Server will run on http://127.0.0.1:5002
+# Health:       http://127.0.0.1:5002/health
+# Analyze:      POST http://127.0.0.1:5002/api/analyze-report
 ```
 
 ###  Automated Web Scraper (Docker & n8n)
@@ -246,20 +247,35 @@ Once the Docker containers are running, access the n8n interface to manage the a
     *   To run automatically every day, toggle the workflow to **"Active"**.
     *   To run immediately, click **"Execute Workflow"**.
 
-### Exposing Your Local API with ngrok (Optional)
-If you need to expose your local `memo_generator` API to an external service—for example, to connect with a workflow automation platform like [Noumena](https://auto.noumena.space)—you can use ngrok.
+### Exposing Your Local API with a Stable URL (ngrok reserved domain)
+If you need a stable public URL for demos (so others don’t need to update the address), use an ngrok reserved domain (paid plan):
 
-1.  **Install ngrok**: If you don't have it, download and install it from the [official ngrok website](https://ngrok.com/download).
+1) Install and authenticate
+```bash
+brew install ngrok/ngrok/ngrok
+ngrok config add-authtoken <YOUR_AUTHTOKEN>
+```
 
-2.  **Run ngrok**: Open a new terminal window and run the following command to create a public URL for your API:
-    ```bash
-    ngrok http 5002
-    ```
-ngrok will provide you with a public URL that forwards to your local server running on port 5002. You can then use this URL in your external service's configuration.
+2) Reserve a domain in the ngrok dashboard
+- Dashboard → Domains → Reserve a domain (e.g., `your-assistant.ngrok.app`)
+
+3) Run your API and bind the domain
+```bash
+source venv/bin/activate
+python email_assistant/api/main_email.py   # leave running on 5002
+```
+In a second terminal:
+```bash
+ngrok http --domain=your-assistant.ngrok.app 5002
+```
+
+4) Use the stable URL
+- Health: `https://your-assistant.ngrok.app/health`
+- Analyze: `https://your-assistant.ngrok.app/api/analyze-report`
 
 ### Service Ports
--   **n8n Web Interface**: `http://localhost:5678`
--   **Email API**: `http://localhost:5002`
+- **n8n Web Interface**: `http://localhost:5678`
+- **Email API**: `http://localhost:5002` (local) or your reserved domain (public)
 
 
 ## Usage

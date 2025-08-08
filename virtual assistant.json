@@ -1,0 +1,118 @@
+{
+  "name": "virtual assistant",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMonth"
+            }
+          ]
+        },
+        "filters": {}
+      },
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        320,
+        144
+      ],
+      "id": "b1185e5d-a4e4-4756-a73f-6d1cdc5b04d5",
+      "name": "Gmail Trigger1",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "p4g54Z97d9ZkzI6a",
+          "name": "Gmail account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": " https://cd0e2db78b81.ngrok-free.app/api/analyze-report",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ ({ \"question\": $json.snippet }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        560,
+        144
+      ],
+      "id": "83b7d280-5b94-404e-a4be-98a85a86c3cb",
+      "name": "Analyze Report API"
+    },
+    {
+      "parameters": {
+        "sendTo": "=From {{ $('Gmail Trigger1').item.json.From }}",
+        "subject": "=={{ 'Re: ' + ($('Gmail Trigger1').item.json.payload?.headers?.find(h => h.name === 'Subject')?.value || 'LLM analysis') }}",
+        "emailType": "text",
+        "message": "={{ $node[\"Analyze Report API\"].json.answer }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        784,
+        144
+      ],
+      "id": "36510fa9-4c83-40a9-8b2a-959616de380d",
+      "name": "Send a message",
+      "webhookId": "ae4a2cf9-0f85-4f7d-bad3-44f1ec96ab00",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "p4g54Z97d9ZkzI6a",
+          "name": "Gmail account 2"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Gmail Trigger1": {
+      "main": [
+        [
+          {
+            "node": "Analyze Report API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Report API": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "7a5114ac-3f90-4407-add5-bf63601ac8a7",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "fb10dfc65b9c55c9f981bebd43992b1e07b0199ace376de3de5b5a340190cb91"
+  },
+  "id": "RV9n7Nqvm0fLA1AP",
+  "tags": []
+}
