@@ -5,8 +5,6 @@
 [![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/)
 [![LangChain](https://img.shields.io/badge/LangChain-✓-green.svg)](https://langchain.com/)
 [![OpenAI GPT-4](https://img.shields.io/badge/OpenAI-GPT--4-orange.svg)](https://openai.com/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
 ## Overview
 
 The VC Agents platform is a comprehensive AI-powered system for generating investment memos from pitch decks, business plans, and call notes. It provides venture capitalists with detailed analysis including market sizing, competitive intelligence, financial analysis, and risk assessment. For founders, it offers insights into how VCs might evaluate your business and simplifies the process of presenting your company to investors.
