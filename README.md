@@ -225,6 +225,19 @@ CHROMA_DB_DIR="./chroma_db"
 
 ---
 
+## Usage
+
+### Investment Memo Generation
+
+Generate comprehensive investment memos from pitch deck PDFs:
+
+```bash
+# Generate memo from pitch deck
+python main.py data/sample_pitch_deck.pdf
+
+# Output will be saved to out/ directory
+```
+
 ### 2. Email Assistant API (Local)
 Run the consolidated Flask server for the email assistant.
 ```bash
@@ -279,17 +292,6 @@ ngrok http --domain=your-assistant.ngrok.app 5002
 
 
 ## Usage
-
-### Investment Memo Generation
-
-Generate comprehensive investment memos from pitch deck PDFs:
-
-```bash
-# Generate memo from pitch deck
-python main.py data/sample_pitch_deck.pdf
-
-# Output will be saved to out/ directory
-```
 
 **Example Output Structure:**
 ```
