@@ -246,6 +246,17 @@ Once the Docker containers are running, access the n8n interface to manage the a
     *   To run automatically every day, toggle the workflow to **"Active"**.
     *   To run immediately, click **"Execute Workflow"**.
 
+### Exposing Your Local API with ngrok (Optional)
+If you need to expose your local `memo_generator` API to an external service—for example, to connect with a workflow automation platform like [Noumena](https://auto.noumena.space)—you can use ngrok.
+
+1.  **Install ngrok**: If you don't have it, download and install it from the [official ngrok website](https://ngrok.com/download).
+
+2.  **Run ngrok**: Open a new terminal window and run the following command to create a public URL for your API:
+    ```bash
+    ngrok http 5002
+    ```
+ngrok will provide you with a public URL that forwards to your local server running on port 5002. You can then use this URL in your external service's configuration.
+
 ### Service Ports
 -   **n8n Web Interface**: `http://localhost:5678`
 -   **Email API**: `http://localhost:5002`

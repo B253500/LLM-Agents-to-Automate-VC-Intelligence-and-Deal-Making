@@ -22,10 +22,25 @@ def extract_snippet_and_url(perplexity_answer):
         return {"text": perplexity_answer, "url": urls[0]}
     return None
 
-def search_perplexity(query, num_results=3, return_url=False):
+def search_perplexity(
+    query,
+    num_results=3,
+    return_url=False,
+    max_tokens=512,
+    model="sonar-reasoning-pro",
+    temperature=0.7,
+):
     """
     General-purpose Perplexity web search utility. Returns the LLM's answer to the query.
     If return_url=True, returns a dict with 'answer', 'snippet', and 'url' (if found).
+
+    Parameters:
+    - query: str
+    - num_results: int (hint to the model; not strictly enforced)
+    - return_url: bool
+    - max_tokens: int (override default token cap)
+    - model: str (Perplexity model name)
+    - temperature: float
     """
     api_key = os.getenv("PERPLEXITY_API_KEY")
     if not api_key:
@@ -37,13 +52,16 @@ def search_perplexity(query, num_results=3, return_url=False):
         "Content-Type": "application/json"
     }
     data = {
-        "model": "sonar-reasoning-pro",
+        "model": model,
         "messages": [
-            {"role": "system", "content": "You are a helpful research assistant. Answer with up-to-date, factual, and cited information."},
-            {"role": "user", "content": query}
+            {
+                "role": "system",
+                "content": "You are a helpful research assistant. Answer with up-to-date, factual, and cited information.",
+            },
+            {"role": "user", "content": query},
         ],
-        "max_tokens": 512,
-        "temperature": 0.7
+        "max_tokens": max_tokens,
+        "temperature": temperature,
     }
     try:
         response = requests.post(url, headers=headers, json=data)

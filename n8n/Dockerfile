@@ -24,7 +24,7 @@ RUN npm install -g n8n@${N8N_VERSION}
 WORKDIR /data
 
 # Copy your project's requirements file
-COPY minimal_requirements.txt ./
+COPY web_scraping/minimal_requirements.txt ./
 
 # Step 4: Install your project's Python dependencies
 RUN pip install --no-cache-dir -r minimal_requirements.txt
