@@ -138,10 +138,9 @@ TWOCAPTCHA_API_KEY="your_twocaptcha_api_key_here"
 GOOGLE_APPLICATION_CREDENTIALS="cloud-credentials.json"
 CHROMA_DB_DIR="./chroma_db"
 
-Please make sure to ge
+Please Make sure you Google cloud credentials are created and stored in root directory under name cloud-credentials.json
 
 ```
-Make sure you Google cloud credentials are created and stored in root directory under name cloud-credentials.json
 ---
 
 ### API Setup Instructions
