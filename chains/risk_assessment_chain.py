@@ -10,6 +10,8 @@ from hashlib import sha1
 
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
+from typing import Optional
+from core.llm_logging import log_usage_from_message
 from langchain.prompts import ChatPromptTemplate
 
 from core.schemas import StartupProfile
@@ -79,7 +81,7 @@ def deduplicate_and_paraphrase(text, min_phrase_len=3, max_allowed=2):
     return text
 
 
-def run_risk_assessment_chain(profile: StartupProfile) -> StartupProfile:
+def run_risk_assessment_chain(profile: StartupProfile, evaluator: Optional[object] = None) -> StartupProfile:
     # Truncate profile data if it's too large to avoid context length exceeded
     profile_json = profile.model_dump_json()
     if len(profile_json) > 10000:  # If profile is very large, use a summary
@@ -95,7 +97,9 @@ def run_risk_assessment_chain(profile: StartupProfile) -> StartupProfile:
         }
         profile_json = json.dumps(simplified_profile)
     
-    txt = llm.invoke(PROMPT.format(profile=profile_json)).content.strip()
+    resp = llm.invoke(PROMPT.format(profile=profile_json))
+    log_usage_from_message(evaluator, "RISK ASSESSMENT AGENT", resp, model="gpt-4o")
+    txt = resp.content.strip()
     first, last = txt.find("{"), txt.rfind("}")
     if first == -1 or last == -1:
         return profile
@@ -109,11 +113,13 @@ def run_risk_assessment_chain(profile: StartupProfile) -> StartupProfile:
         profile.startup_id = sha1((profile.name or "risk").encode()).hexdigest()[:10]
     return profile
 
-def run_risk_assessment_chain_with_text(full_text: str, profile: StartupProfile) -> StartupProfile:
+def run_risk_assessment_chain_with_text(full_text: str, profile: StartupProfile, evaluator: Optional[object] = None) -> StartupProfile:
     """Run risk assessment using extracted text as context."""
     context = full_text[:5000]  # Truncate if needed for prompt size
     # Use the same prompt but replace the profile with the context
-    txt = llm.invoke(PROMPT.format(profile=context)).content.strip()
+    resp2 = llm.invoke(PROMPT.format(profile=context))
+    log_usage_from_message(evaluator, "RISK ASSESSMENT AGENT", resp2, model="gpt-4o")
+    txt = resp2.content.strip()
     first, last = txt.find("{"), txt.rfind("}")
     if first == -1 or last == -1:
         return profile

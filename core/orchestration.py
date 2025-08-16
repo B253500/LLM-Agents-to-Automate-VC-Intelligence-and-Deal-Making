@@ -237,13 +237,14 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
     deck_agent_output = deck_task.callback()
     print(f"[DEBUG] Profile after deck agent: {profile}")
     if evaluator:
-        evaluator.log_section_end("DECK AGENT", tokens_used=0, model="gpt-4o")
+        deck_tokens = max(1, len(str(deck_agent_output)) // 3)
+        evaluator.log_section_end("DECK AGENT", tokens_used=deck_tokens, model="gpt-4o")
+        evaluator.log_agent_estimated_tokens("DECK AGENT", deck_tokens, "gpt-4o")
 
 
     
     # --- Website enrichment if missing or invalid ---
-    if evaluator:
-        evaluator.log_section_start("WEBSITE ENRICHMENT")
+    # Fold enrichment timing into DECK AGENT (no separate section)
     current_website = getattr(profile, 'website', None)
     
     # Check if current website is valid (not admin URLs, merchant URLs, etc.)
@@ -315,7 +316,7 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
         except Exception as e:
             print(f"[Website Enrichment] Error: {e}")
     
-    # Enhanced CoreSignal enrichment with website
+    # Enhanced CoreSignal enrichment with website (still within deck/enrichment stage)
     if evaluator:
         try:
             from core.coresignal_utils import get_full_company_data
@@ -398,29 +399,144 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
             print(f"[CoreSignal] Error: {e}")
     else:
         print(f"[Website Enrichment] Valid website already set to '{current_website}', skipping enrichment")
+
+    # Technical DD agent timing wrapper
+    if evaluator:
+        evaluator.log_section_start("TECHNICAL DD AGENT")
+    try:
+        # Provide full text for richer analysis
+        if full_text:
+            profile._full_text = full_text
+        tech_agent, tech_task = build_technical_dd_agent(profile, evaluator=evaluator)
+        tech_agent_output = tech_task.callback()
+        # Parse and map into profile (as legacy block did)
+        try:
+            tech_agent_data = json.loads(tech_agent_output)
+            for k, v in tech_agent_data.items():
+                if hasattr(profile, k) and v:
+                    setattr(profile, k, v)
+        except Exception as e:
+            print(f"[Tech DD] Error parsing agent output: {e}")
+        print(f"🔧 After technical DD: Maturity={getattr(profile,'tech_maturity',None)}, Stack={getattr(profile,'tech_stack',None)}")
+    except Exception as e:
+        print(f"[TECHNICAL DD] Error: {e}")
+    finally:
+        if evaluator:
+            est_tokens = max(1, len(str(tech_agent_output)) // 3)
+            evaluator.log_section_end("TECHNICAL DD AGENT", tokens_used=est_tokens, model="gpt-4o")
+            evaluator.log_agent_estimated_tokens("TECHNICAL DD AGENT", est_tokens, "gpt-4o")
+
+    # Market sizing agent timing wrapper
+    if evaluator:
+        evaluator.log_section_start("MARKET SIZING AGENT")
+    try:
+        market_agent, market_task = build_market_sizing_agent(profile, evaluator=evaluator)
+        market_agent_output = market_task.callback()
+        try:
+            market_agent_data = json.loads(market_agent_output)
+            for k, v in market_agent_data.items():
+                if hasattr(profile, k) and v:
+                    setattr(profile, k, v)
+        except Exception:
+            pass
+        print(f"📈 After market sizing: TAM={getattr(profile,'TAM',None)}, SAM={getattr(profile,'SAM',None)}, SOM={getattr(profile,'SOM',None)}")
+    except Exception as e:
+        print(f"[MARKET SIZING] Error: {e}")
+    finally:
+        if evaluator:
+            est_tokens = max(1, len(str(market_agent_output)) // 3)
+            evaluator.log_section_end("MARKET SIZING AGENT", tokens_used=est_tokens, model="gpt-4o")
+            evaluator.log_agent_estimated_tokens("MARKET SIZING AGENT", est_tokens, "gpt-4o")
+
+    # Financial analysis agent timing wrapper
+    if evaluator:
+        evaluator.log_section_start("FINANCIAL ANALYSIS AGENT")
+    try:
+        fin_agent, fin_task = build_financial_analysis_agent(
+            profile,
+            full_text=full_text,
+            tables_text=getattr(profile, "tables_text", None),
+            figures_ocr=getattr(profile, "figures_ocr", None)
+        )
+        fin_agent_output = fin_task.callback()
+        # mapping will follow below using fin_agent_output
+    except Exception as e:
+        print(f"[FINANCIAL] Error: {e}")
+    finally:
+        if evaluator:
+            est_tokens = max(1, len(str(fin_agent_output)) // 3)
+            evaluator.log_section_end("FINANCIAL ANALYSIS AGENT", tokens_used=est_tokens, model="gpt-4o")
+            evaluator.log_agent_estimated_tokens("FINANCIAL ANALYSIS AGENT", est_tokens, "gpt-4o")
+
+    # Competitors agent timing wrapper
+    if evaluator:
+        evaluator.log_section_start("COMPETITORS AGENT")
+    try:
+        comp_agent, comp_task = build_competitive_intel_agent(profile)
+        comp_agent_output = comp_task.callback()
+        # Optionally parse if JSON is returned
+        try:
+            comp_data = json.loads(comp_agent_output)
+            for k, v in comp_data.items():
+                if hasattr(profile, k) and v:
+                    setattr(profile, k, v)
+        except Exception:
+            pass
+    except Exception as e:
+        print(f"[COMPETITORS] Error: {e}")
+    finally:
+        if evaluator:
+            est_tokens = max(1, len(str(comp_agent_output)) // 3)
+            evaluator.log_section_end("COMPETITORS AGENT", tokens_used=est_tokens, model="gpt-4o")
+            evaluator.log_agent_estimated_tokens("COMPETITORS AGENT", est_tokens, "gpt-4o")
+
+    # Founder profiling / Team agent timing wrapper
+    if evaluator:
+        evaluator.log_section_start("TEAM AGENT")
+    try:
+        f_agent, f_task = build_founder_profiling_agent(profile)
+        founder_agent_output = f_task.callback()
+        try:
+            founder_agent_data = json.loads(founder_agent_output)
+            for k, v in founder_agent_data.items():
+                if hasattr(profile, k) and v:
+                    setattr(profile, k, v)
+        except Exception:
+            pass
+        print(f"👤 After founder profiling: Score={getattr(profile,'founder_fit_score',None)}")
+    except Exception as e:
+        print(f"[TEAM] Error: {e}")
+    finally:
+        if evaluator:
+            est_tokens = max(1, len(str(founder_agent_output)) // 3)
+            evaluator.log_section_end("TEAM AGENT", tokens_used=est_tokens, model="gpt-4o")
+            evaluator.log_agent_estimated_tokens("TEAM AGENT", est_tokens, "gpt-4o")
+
+    # Risk assessment agent timing wrapper
+    if evaluator:
+        evaluator.log_section_start("RISK ASSESSMENT AGENT")
+    try:
+        risk_agent, risk_task = build_risk_assessment_agent(profile)
+        risk_agent_output = risk_task.callback()
+        try:
+            risk_agent_data = json.loads(risk_agent_output)
+            for k, v in risk_agent_data.items():
+                if hasattr(profile, k) and v:
+                    setattr(profile, k, v)
+        except Exception:
+            pass
+        print(f"⚠️ After risk assessment: Score={getattr(profile,'risk_score',None)}")
+    except Exception as e:
+        print(f"[RISK] Error: {e}")
+    finally:
+        if evaluator:
+            est_tokens = max(1, len(str(risk_agent_output)) // 3)
+            evaluator.log_section_end("RISK ASSESSMENT AGENT", tokens_used=est_tokens, model="gpt-4o")
+            evaluator.log_agent_estimated_tokens("RISK ASSESSMENT AGENT", est_tokens, "gpt-4o")
     
     if evaluator:
         evaluator.log_section_end("WEBSITE ENRICHMENT", tokens_used=0, model="local")
 
-    # Technical Due Diligence (agent only)
-    if evaluator:
-        evaluator.log_section_start("TECHNICAL DD")
-    # Store full text in profile for technical DD agent to use
-    if full_text:
-        profile._full_text = full_text
-    tech_agent, tech_task = build_technical_dd_agent(profile)
-    tech_agent_output = tech_task.callback()
-    try:
-        tech_agent_data = json.loads(tech_agent_output)
-        for k, v in tech_agent_data.items():
-            if hasattr(profile, k) and v:
-                setattr(profile, k, v)
-    except Exception as e:
-        print(f"[Tech DD] Error parsing agent output: {e}")
-    print(f"🔧 After technical DD: Maturity={profile.tech_maturity}, Stack={profile.tech_stack}")
-    if evaluator:
-        evaluator.log_section_end("TECHNICAL DD", tokens_used=0, model="gpt-4o")
-    
     # --- NEW: Perplexity enrichment for technical details ---
     if not getattr(profile, 'tech_stack', None) or getattr(profile, 'tech_stack', '').lower() in ['n/a', 'not available', 'unknown']:
         try:
@@ -451,30 +567,6 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
         except Exception as e:
             print(f"[Tech DD Perplexity] Error: {e}")
     
-    # Founder Profiling (agent only - consolidated)
-    founder_agent, founder_task = build_founder_profiling_agent(profile)
-    founder_agent_output = founder_task.callback()
-    try:
-        founder_agent_data = json.loads(founder_agent_output)
-        for k, v in founder_agent_data.items():
-            if hasattr(profile, k) and v:
-                setattr(profile, k, v)
-    except Exception:
-        pass
-    print(f"👤 After founder profiling: Score={profile.founder_fit_score}")
-    
-    # Market Sizing (agent only; all logic is now in the agent)
-    market_agent, market_task = build_market_sizing_agent(profile)
-    market_agent_output = market_task.callback()
-    try:
-        market_agent_data = json.loads(market_agent_output)
-        for k, v in market_agent_data.items():
-            if hasattr(profile, k) and v:
-                setattr(profile, k, v)
-    except Exception:
-        pass
-    print(f"📈 After market sizing: TAM={profile.TAM}, SAM={profile.SAM}, SOM={profile.SOM}")
-    
     # --- Aggregate all relevant financial information ---
     def extract_financial_paragraphs(text):
         keywords = ["revenue", "funding", "ebitda", "burn", "runway", "profit", "loss", "investment", "round", "valuation", "gross", "opex", "net", "cash", "amortization", "depreciation"]
@@ -490,14 +582,8 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
         financial_context += "\n\n" + extract_financial_paragraphs(full_text)
     print("\n[Financial Analysis Context]\n" + financial_context[:2000] + ("..." if len(financial_context) > 2000 else ""))
 
-    # --- Financial Analysis (agent only; all logic is now in the agent) ---
-    fin_agent, fin_task = build_financial_analysis_agent(
-        profile,
-        full_text=full_text,
-        tables_text=getattr(profile, "tables_text", None),
-        figures_ocr=getattr(profile, "figures_ocr", None)
-    )
-    fin_agent_output = fin_task.callback()
+    # --- Financial Analysis output already generated above; reuse it here ---
+    # fin_agent_output is produced in the timed FINANCIAL ANALYSIS AGENT block
     try:
         fin_agent_data = json.loads(fin_agent_output)
         for k, v in fin_agent_data.items():
@@ -554,16 +640,7 @@ def run_all_sequential_with_text(full_text: str, profile: StartupProfile, file_p
     
     print("🏆 Competitive intelligence disabled - using AI-generated competitors instead of CoreSignal similar companies")
 
-    # --- Risk Assessment Agent ---
-    risk_agent, risk_task = build_risk_assessment_agent(profile)
-    risk_agent_output = risk_task.callback()
-    try:
-        risk_agent_data = json.loads(risk_agent_output)
-        for k, v in risk_agent_data.items():
-            if hasattr(profile, k) and v:
-                setattr(profile, k, v)
-    except Exception:
-        pass
+    # Risk assessment already executed above in the timed block; reuse populated profile.
     print(f"⚠️ After risk assessment: Score={profile.risk_score}")
 
     return profile 

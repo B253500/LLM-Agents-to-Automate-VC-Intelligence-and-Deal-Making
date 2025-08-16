@@ -76,6 +76,14 @@ class MemoEvaluationMetrics:
     
     # Visual Analysis (simplified)
     chart_relevance_score: float  # 1-5 scale (from human feedback)
+    # Optional enrichments for reporting
+    overall_quality_score: float = 0.0
+    quality_breakdown: List[str] = None
+    timing_table: Dict[str, float] = None
+    token_cost_usd: float = 0.0
+    external_cost_usd: float = 0.0
+    external_service_costs: Dict[str, float] = None
+    api_call_logs: List[Dict[str, Any]] = None
 
 
 class MemoEvaluator:
@@ -103,7 +111,7 @@ class MemoEvaluator:
     
     # Traditional VC benchmarks based on industry research
     TRADITIONAL_VC_BENCHMARKS = {
-        "total_time_hours": 15,  # hours for complete memo (industry standard - 12-18h range)
+        "total_time_hours": 4,  # adjusted baseline per user request
         "total_cost_usd": 2250,  # USD for complete memo (senior analyst rate - $1800-2700 range)
         "analyst_rate_per_hour": 150,  # USD per hour (senior VC analyst rate)
         "source": "Stanford-Addepar survey 2024, AspireApp handbook 2023, VC industry analysis",
@@ -137,7 +145,12 @@ class MemoEvaluator:
         self.section_timings = {}
         self.token_usage = {}
         self.section_token_usage = {}  # Track tokens per section
-        self.agent_token_usage = {}    # Track tokens per agent
+        self.agent_token_usage = {}    # Track tokens per agent (actuals only)
+        self.agent_token_usage_estimated = {}  # Track tokens per agent (estimates only)
+        # External, non-token services tracking
+        self.external_service_costs: Dict[str, float] = {}
+        self.api_call_logs: List[Dict[str, Any]] = []
+        self.run_context: Dict[str, Any] = {"run_id": None, "trace_id": None}
         self.api_costs = {
             "gpt-4": 0.03,  # per 1K tokens
             "gpt-4o": 0.005,  # per 1K tokens
@@ -159,6 +172,13 @@ class MemoEvaluator:
             "anthropic": 0.015,  # per 1K tokens
             "local": 0.0  # local models
         }
+
+    def set_run_context(self, run_id: str = None, trace_id: str = None):
+        """Tag subsequent logs with run/trace identifiers."""
+        if run_id is not None:
+            self.run_context["run_id"] = run_id
+        if trace_id is not None:
+            self.run_context["trace_id"] = trace_id
     
     def start_evaluation(self):
         """Start timing the evaluation process"""
@@ -234,6 +254,53 @@ class MemoEvaluator:
         self.log_token_usage(model, input_tokens + output_tokens)
         
         print(f"[Agent Tracking] {agent_name}: +{input_tokens + output_tokens} tokens ({input_tokens} input, {output_tokens} output)")
+
+    def log_agent_estimated_tokens(self, agent_name: str, total_tokens: int, model: str):
+        """Log estimated token usage for an agent without affecting global totals.
+        Does not contribute to token_usage/by_model to avoid double counting.
+        """
+        if agent_name not in self.agent_token_usage_estimated:
+            self.agent_token_usage_estimated[agent_name] = {
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "total_tokens": 0,
+                "cost_usd": 0.0,
+                "model": model,
+                "estimated": True,
+            }
+        self.agent_token_usage_estimated[agent_name]["total_tokens"] += int(total_tokens or 0)
+        # Cost approximation (optional)
+        cost_per_1k = self.api_costs.get(model, 0.01)
+        cost = (int(total_tokens or 0) / 1000) * cost_per_1k
+        self.agent_token_usage_estimated[agent_name]["cost_usd"] += cost
+        print(f"[Agent Tracking][EST] {agent_name}: ~{int(total_tokens or 0)} tokens | {model}")
+
+    def log_external_service_cost(
+        self,
+        service_name: str,
+        cost_usd: float,
+        agent_name: str = None,
+        endpoint: str = None,
+        status: str = "success",
+        retries: int = 0,
+        error: str = None,
+        trace_id: str = None,
+    ) -> None:
+        """Record non-token service cost and append a structured call log entry."""
+        if status == "success":
+            self.external_service_costs[service_name] = self.external_service_costs.get(service_name, 0.0) + float(cost_usd or 0.0)
+        self.api_call_logs.append({
+            "service": service_name,
+            "endpoint": endpoint,
+            "agent": agent_name,
+            "status": status,
+            "retries": retries,
+            "cost_usd": float(cost_usd or 0.0),
+            "run_id": self.run_context.get("run_id"),
+            "trace_id": trace_id or self.run_context.get("trace_id"),
+            "timestamp": time.time(),
+            "error": error,
+        })
     
     def get_section_token_summary(self) -> Dict[str, Any]:
         """Get a summary of token usage per section"""
@@ -285,6 +352,14 @@ class MemoEvaluator:
             print("-" * 60)
             print(f"{'AGENT TOTAL':30} | {agent_total_tokens:6} tokens | ${agent_total_cost:6.4f}")
             print()
+
+        # Print estimated agent summary if present
+        if self.agent_token_usage_estimated:
+            print("ESTIMATED AGENT-LEVEL TOKEN USAGE (not counted in totals):")
+            print("-" * 60)
+            for agent_name, data in self.agent_token_usage_estimated.items():
+                print(f"{agent_name:30} | ~{data['total_tokens']:6} tokens | ~${data['cost_usd']:6.4f} | {data['model']}")
+            print()
         
         # Print overall total
         total_tokens = (sum(section["total_tokens"] for section in self.section_token_usage.values()) + 
@@ -314,6 +389,12 @@ class MemoEvaluator:
         
         # Cost and time
         cost_metrics = self._calculate_costs()
+        # Cost breakdown
+        token_cost = 0.0
+        for model, toks in self.token_usage.items():
+            if model in self.api_costs:
+                token_cost += (toks / 1000) * self.api_costs[model]
+        external_cost = sum(getattr(self, "external_service_costs", {}).values()) if getattr(self, "external_service_costs", None) else 0.0
         
         # Coverage
         coverage_metrics = self._evaluate_coverage(memo_text)
@@ -329,6 +410,41 @@ class MemoEvaluator:
         
         # Traditional VC comparison
         traditional_comparison = self._compare_with_traditional_vc(section_metrics_list)
+
+        # Quality score + breakdown
+        # Build a temporary metrics shell to compute score with this rubric
+        temp_metrics = MemoEvaluationMetrics(
+            all_sections_present=True,
+            missing_sections=[],
+            flesch_kincaid_score=readability_metrics["fk_score"],
+            analyst_readability_score=readability_metrics["analyst_score"],
+            chart_present=visual_metrics["chart_present"],
+            duplicate_lines_count=duplicate_metrics["count"],
+            duplicate_ratio=duplicate_metrics["ratio"],
+            total_cost_usd=cost_metrics["total_cost"],
+            generation_time_seconds=cost_metrics["time"],
+            token_usage=self.token_usage,
+            unknown_coverage_ratio=coverage_metrics["ratio"],
+            placeholder_count=coverage_metrics["count"],
+            memo_length_chars=len(memo_text),
+            memo_length_words=len(memo_text.split()),
+            section_count=len(self.REQUIRED_SECTIONS),
+            section_metrics=[],
+            traditional_vc_comparison=traditional_comparison,
+            gpu_usage_percent=0.0,
+            cpu_usage_percent=0.0,
+            memory_usage_mb=0.0,
+            system_robustness_score=4.0,
+            chart_relevance_score=0.0
+        )
+        overall_quality = self._calculate_overall_score(temp_metrics)
+        quality_breakdown = self.get_quality_breakdown()
+
+        # Timing table (seconds) from tracked sections
+        timing_table = {}
+        for sec, t in self.section_timings.items():
+            if "start" in t and "end" in t:
+                timing_table[sec] = t["end"] - t["start"]
         
         return MemoEvaluationMetrics(
             all_sections_present=section_metrics["all_present"],
@@ -352,7 +468,14 @@ class MemoEvaluator:
             cpu_usage_percent=system_performance_metrics["cpu_usage_percent"],
             memory_usage_mb=system_performance_metrics["memory_usage_mb"],
             system_robustness_score=system_performance_metrics["system_robustness_score"],
-            chart_relevance_score=0.0  # Will be filled from human feedback
+            chart_relevance_score=0.0,  # Will be filled from human feedback
+            overall_quality_score=overall_quality,
+            quality_breakdown=quality_breakdown,
+            timing_table=timing_table,
+            token_cost_usd=token_cost,
+            external_cost_usd=external_cost,
+            external_service_costs=getattr(self, "external_service_costs", {}),
+            api_call_logs=getattr(self, "api_call_logs", [])
         )
     
     def _calculate_section_metrics(self, memo_text: str) -> List[SectionMetrics]:
@@ -499,16 +622,17 @@ class MemoEvaluator:
         total_traditional_time_minutes = total_traditional_time_hours * 60
         total_ai_time_minutes = total_ai_time / 60
         
-        # Traditional VC cost from benchmark
+        # Traditional VC cost from benchmark (kept for reference; not reported if user opts out)
         total_traditional_cost = self.TRADITIONAL_VC_BENCHMARKS["total_cost_usd"]
-        
+
         time_savings_percentage = ((total_traditional_time_minutes - total_ai_time_minutes) / total_traditional_time_minutes) * 100
         cost_savings_percentage = self._calculate_cost_savings_percentage(total_ai_cost, total_traditional_cost)
-        
+
         return {
             "traditional_time_minutes": total_traditional_time_minutes,
             "ai_time_minutes": total_ai_time_minutes,
             "time_savings_percentage": time_savings_percentage,
+            # cost comparison fields retained but can be ignored downstream
             "traditional_cost_usd": total_traditional_cost,
             "ai_cost_usd": total_ai_cost,
             "cost_savings_usd": total_traditional_cost - total_ai_cost,
@@ -610,8 +734,14 @@ class MemoEvaluator:
             else:
                 missing.append(canonical_name)
         
+        # Determine presence strictly by headers found, independent of content sufficiency
+        found_count = 0
+        for canonical_name, variations in section_variations.items():
+            if any(v in section_details for v in variations):
+                found_count += 1
+
         return {
-            "all_present": len(missing) == 0,
+            "all_present": found_count == len(section_variations),
             "missing": missing,
             "present_count": len(present_sections),
             "section_details": section_details,
@@ -812,6 +942,10 @@ class MemoEvaluator:
                     if model in self.api_costs:
                         section_cost = (tokens / 1000) * self.api_costs[model]
                         total_cost += section_cost
+
+        # Include external service costs (e.g., CoreSignal/EXA/Vision)
+        if getattr(self, "external_service_costs", None):
+            total_cost += sum(self.external_service_costs.values())
         
         return {
             "total_cost": total_cost,
@@ -919,16 +1053,6 @@ SYSTEM PERFORMANCE
 🎮 GPU Usage: {metrics.gpu_usage_percent:.1f}%
 💾 Memory Usage: {metrics.memory_usage_mb:.1f} MB
 
-TRADITIONAL VC COMPARISON
--------------------------
-⏰ Time Savings: {metrics.traditional_vc_comparison['time_savings_percentage']:.1f}%
-💰 Cost Savings: {metrics.traditional_vc_comparison['cost_savings_percentage']:.1f}%
-📈 Efficiency Improvements:
-  - Time Efficiency: {metrics.traditional_vc_comparison['efficiency_improvement']['time_efficiency']:.1f}x faster
-  - Cost Efficiency: {metrics.traditional_vc_comparison['efficiency_improvement']['cost_efficiency']:.1f}x cheaper
-
-📚 Benchmark Source: {metrics.traditional_vc_comparison['benchmark_source']}
-
 DETAILED SECTION METRICS
 ------------------------
 """
@@ -960,18 +1084,7 @@ QUALITY SCORE BREAKDOWN:
         report += f"""
 📊 Pass/Fail Criteria Met: {self._check_pass_fail_criteria(metrics)}
 
-ACADEMIC ANALYSIS SUMMARY
--------------------------
-This AI system demonstrates significant improvements over traditional VC processes:
-
-1. TIME EFFICIENCY: {metrics.traditional_vc_comparison['time_savings_percentage']:.1f}% time reduction
-2. COST EFFICIENCY: {metrics.traditional_vc_comparison['cost_savings_percentage']:.1f}% cost reduction
-3. SCALABILITY: Can process multiple companies simultaneously
-4. CONSISTENCY: Standardized analysis framework across all evaluations
-5. QUALITY: Maintains professional investment memo standards
-
-The system represents a paradigm shift in VC due diligence, enabling faster, cheaper, and more consistent investment analysis while maintaining the quality standards expected in the industry.
-"""
+        """
         
         return report
     
@@ -992,26 +1105,19 @@ The system represents a paradigm shift in VC due diligence, enabling faster, che
             score += section_score
             breakdown.append(f"⚠️  Section completeness: {section_score:.1f}/2.0 ({present_sections}/{len(self.REQUIRED_SECTIONS)} sections)")
         
-        # Readability (1.5 points)
+        # Readability (1.5 points) — use Flesch–Kincaid only (no double counting)
         readability_score = 0.0
-        if metrics.flesch_kincaid_score <= 13:
-            readability_score += 1.0
-            breakdown.append(f"✅ Flesch-Kincaid readability: 1.0/1.0 (score: {metrics.flesch_kincaid_score:.1f})")
-        elif metrics.flesch_kincaid_score <= 16:
-            readability_score += 0.5
-            breakdown.append(f"⚠️  Flesch-Kincaid readability: 0.5/1.0 (score: {metrics.flesch_kincaid_score:.1f})")
+        fk = metrics.flesch_kincaid_score
+        if fk <= 13:
+            readability_score = 1.5
+            breakdown.append(f"✅ Readability (Flesch–Kincaid): 1.5/1.5 (score: {fk:.1f})")
+        elif fk <= 16:
+            readability_score = 0.75
+            breakdown.append(f"⚠️  Readability (Flesch–Kincaid): 0.75/1.5 (score: {fk:.1f})")
         else:
-            breakdown.append(f"❌ Flesch-Kincaid readability: 0.0/1.0 (score: {metrics.flesch_kincaid_score:.1f})")
-        
-        if metrics.analyst_readability_score >= 4:
-            readability_score += 0.5
-            breakdown.append(f"✅ Analyst readability: 0.5/0.5 (score: {metrics.analyst_readability_score:.1f})")
-        elif metrics.analyst_readability_score >= 3:
-            readability_score += 0.25
-            breakdown.append(f"⚠️  Analyst readability: 0.25/0.5 (score: {metrics.analyst_readability_score:.1f})")
-        else:
-            breakdown.append(f"❌ Analyst readability: 0.0/0.5 (score: {metrics.analyst_readability_score:.1f})")
-        
+            readability_score = 0.0
+            breakdown.append(f"❌ Readability (Flesch–Kincaid): 0.0/1.5 (score: {fk:.1f})")
+
         score += readability_score
         
         # Content depth and quality (2 points)

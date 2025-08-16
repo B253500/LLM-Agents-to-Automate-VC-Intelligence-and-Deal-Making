@@ -153,28 +153,75 @@ def run_followup_section_agent(profile: StartupProfile) -> str:
     return run_followup_section_chain(profile)
 
 
-def format_memo(profile: StartupProfile) -> str:
-    """Format the complete investment memo using refactored modules."""
+def format_memo(profile: StartupProfile, evaluator=None) -> str:
+    """Format the complete investment memo using refactored modules.
+    If an evaluator is provided, wrap synthesis agents with timing to avoid double runs elsewhere.
+    """
     current_date = datetime.now().strftime("%B %d, %Y")
+
+    # Synthesis agents with optional timing wrappers
+    if evaluator:
+        evaluator.log_section_start("BUSINESS MODEL AGENT")
+    from chains.memo_synthesis_chain import run_business_model_chain
+    bm_text = run_business_model_chain(profile, evaluator=evaluator)
+    if evaluator:
+        bm_tokens = max(1, len(bm_text) // 3)
+        evaluator.log_section_end("BUSINESS MODEL AGENT", tokens_used=bm_tokens, model="gpt-4o")
+        evaluator.log_agent_estimated_tokens("BUSINESS MODEL AGENT", bm_tokens, "gpt-4o")
+
+    if evaluator:
+        evaluator.log_section_start("PRODUCT AGENT")
+    prod_text = run_product_description_agent(profile)
+    if evaluator:
+        prod_tokens = max(1, len(prod_text) // 3)
+        evaluator.log_section_end("PRODUCT AGENT", tokens_used=prod_tokens, model="gpt-4o")
+        evaluator.log_agent_estimated_tokens("PRODUCT AGENT", prod_tokens, "gpt-4o")
+
+    if evaluator:
+        evaluator.log_section_start("ESG AGENT")
+    from chains.memo_synthesis_chain import run_esg_section_chain
+    esg_text = run_esg_section_chain(profile, evaluator=evaluator)
+    if evaluator:
+        esg_tokens = max(1, len(esg_text) // 3)
+        evaluator.log_section_end("ESG AGENT", tokens_used=esg_tokens, model="gpt-4o")
+        evaluator.log_agent_estimated_tokens("ESG AGENT", esg_tokens, "gpt-4o")
+
+    if evaluator:
+        evaluator.log_section_start("EXIT AGENT")
+    from chains.memo_synthesis_chain import run_exit_strategies_chain
+    exit_text = run_exit_strategies_chain(profile, evaluator=evaluator)
+    if evaluator:
+        exit_tokens = max(1, len(exit_text) // 3)
+        evaluator.log_section_end("EXIT AGENT", tokens_used=exit_tokens, model="gpt-4o")
+        evaluator.log_agent_estimated_tokens("EXIT AGENT", exit_tokens, "gpt-4o")
+
+    if evaluator:
+        evaluator.log_section_start("FOLLOW-UP AGENT")
+    from chains.memo_synthesis_chain import run_followup_section_chain
+    follow_text = run_followup_section_chain(profile, evaluator=evaluator)
+    if evaluator:
+        follow_tokens = max(1, len(follow_text) // 3)
+        evaluator.log_section_end("FOLLOW-UP AGENT", tokens_used=follow_tokens, model="gpt-4o")
+        evaluator.log_agent_estimated_tokens("FOLLOW-UP AGENT", follow_tokens, "gpt-4o")
 
     memo_body = f"""
 1. DETAILED SUMMARY
-{clean_memo_section(run_detailed_summary_chain(profile))}
+{clean_memo_section(run_detailed_summary_chain(profile, evaluator))}
 
 2. COMPANY OVERVIEW
 {clean_memo_section(format_company_overview_section(profile))}
 
 3. PROBLEM STATEMENT
-{clean_memo_section(run_problem_statement_chain(profile))}
+{clean_memo_section(run_problem_statement_chain(profile, evaluator))}
     
 4. SOLUTION OVERVIEW
-{clean_memo_section(run_solution_overview_chain(profile))}
+{clean_memo_section(run_solution_overview_chain(profile, evaluator))}
     
 5. PRODUCT/SERVICE DESCRIPTION
-{clean_memo_section(run_product_description_agent(profile))}
+{clean_memo_section(prod_text)}
     
 6. MARKET SIZE & ANALYSIS
-{clean_memo_section(generate_market_size_section(profile))}
+{clean_memo_section(generate_market_size_section(profile, evaluator))}
 {clean_memo_section(getattr(profile, 'sector', ''))}
 
 7. COMPETITORS
@@ -182,7 +229,7 @@ def format_memo(profile: StartupProfile) -> str:
 {clean_memo_section(getattr(profile, 'competitive_summary', ''))}
 
 8. BUSINESS MODEL
-{clean_memo_section(run_business_model_agent(profile))}
+{clean_memo_section(bm_text)}
 
 9. TECHNICAL DUE DILIGENCE
 {clean_memo_section(format_technical_dd_section(profile))}
@@ -196,19 +243,19 @@ def format_memo(profile: StartupProfile) -> str:
 {clean_memo_section(generate_team_section(profile))}
 
 12. ESG CONSIDERATIONS
-{clean_memo_section(run_esg_section_agent(profile))}
+{clean_memo_section(esg_text)}
 
 13. RISKS
 {clean_memo_section(run_risks_section_agent(profile))}
 
 14. INVESTMENT & EXIT STRATEGIES
-{clean_memo_section(run_exit_strategies_agent(profile))}
+{clean_memo_section(exit_text)}
 
 15. COUNTERFACTUAL ANALYSIS: WHAT IF WE DON'T INVEST?
 {clean_memo_section(generate_counterfactual_section(profile))}
 
 16. FOLLOW-UP QUESTIONS & NEXT STEPS
-{clean_memo_section(run_followup_section_agent(profile))}
+{clean_memo_section(follow_text)}
 """
     discussion = generate_discussion_section(memo_body)
     return deduplicate_memo(f"{memo_body}\n17. AI DISCUSSION AND COMMENTARY\n{clean_discussion_section(discussion)}\n\n---\nGenerated by VC Analysis System on {current_date}\nData Sources: Company documents, market research, competitive intelligence, technical analysis\nAnalysis Framework: Multi-agent AI system with specialized domain expertise\n")
@@ -223,37 +270,42 @@ def main():
     for file_path in file_paths:
         print(f"Extracting text and structured data from: {file_path}")
         
-        # --- Caching logic ---
+        # Initialize evaluation tracker early to capture extraction timing as a separate bucket
+        from evaluation_metrics.core.evaluation_metrics import MemoEvaluator
+        evaluator = MemoEvaluator()
+        evaluator.start_evaluation()
+
+        # --- Extraction & caching (timed) ---
+        evaluator.log_section_start("EXTRACTION")
         extracted = load_from_cache(file_path)
         if extracted is None:
             try:
                 extracted = extract_text(file_path, return_structured=True)
-                
                 # Validate extraction quality
                 quality_report = validate_extraction_quality(extracted)
-                
                 if quality_report["recommendation"] == "reprocess":
                     print(f"⚠️ [Quality Check] Extraction quality low (score: {quality_report['quality_score']})")
                     print(f"⚠️ [Quality Check] Missing: {quality_report['missing_critical']}")
                     print("⚠️ [Quality Check] Consider reprocessing with different extraction method")
                 else:
                     print(f"✅ [Quality Check] Extraction quality acceptable (score: {quality_report['quality_score']})")
-                
                 save_to_cache(file_path, extracted)
                 print(f"[CACHE] Saved extraction for {file_path}")
             except Exception as e:
                 print(f"Error extracting {file_path}: {e}")
+                evaluator.log_section_end("EXTRACTION", tokens_used=0, model="local")
                 continue
         else:
             print(f"[CACHE] Loaded extraction for {file_path}")
-        
+        evaluator.log_section_end("EXTRACTION", tokens_used=0, model="local")
+
         text = extracted["text"]
         tables = extracted["tables"]
         figures = extracted["figures"]
-        
+
         clear_collection()
         profile = StartupProfile()
-        
+
         # Adding structured data to profile if available (AFTER profile creation)
         structured_data = extracted.get("structured_data", {})
         if structured_data:
@@ -287,12 +339,7 @@ def main():
                         setattr(profile, source_field, "enhanced_extraction")
                     print(f"[Structured Data] Set {profile_key} = {value}")
         
-        # Initialising evaluation tracker with real-time tracking
-        from evaluation_metrics.core.evaluation_metrics import MemoEvaluator
-        evaluator = MemoEvaluator()
-        evaluator.start_evaluation()
-        
-        # Tracking the main analysis pipeline with real timing
+        # Tracking the full pipeline with real timing
         evaluator.log_section_start("COMPLETE ANALYSIS PIPELINE")
         start_time = time.time()
         
@@ -303,19 +350,15 @@ def main():
             print("[DEBUG] Profile has no structured_data")
         
         # Add timing for each major step
-        evaluator.log_section_start("PITCH DECK EXTRACTION")
+        evaluator.log_section_start("ORCHESTRATION")
         profile = run_all_sequential_with_text(text, profile, file_path, evaluator)
         print(f"[DEBUG] Profile after orchestration: {profile}")
         if profile is None:
             print("[ERROR] Profile is None after orchestration!")
             return
-        evaluator.log_section_end("PITCH DECK EXTRACTION", tokens_used=0, model="local")
+        evaluator.log_section_end("ORCHESTRATION", tokens_used=0, model="local")
         
         pipeline_time = time.time() - start_time
-        
-        # Estimating tokens based on text length and processing time
-        estimated_tokens = min(len(text) // 2, 8000)  # Conservative estimate
-        evaluator.log_section_end("COMPLETE ANALYSIS PIPELINE", tokens_used=estimated_tokens, model="gpt-4o-mini")
         
         # Populating structured data
         if profile is None:
@@ -348,7 +391,8 @@ def main():
         # Tracking memo generation with real timing
         evaluator.log_section_start("MEMO GENERATION")
         memo_start_time = time.time()
-        memo_text = format_memo(profile)
+        # Build final memo with internal agent timing to avoid double execution
+        memo_text = format_memo(profile, evaluator)
         memo_time = time.time() - memo_start_time
         
         # Estimating tokens for memo generation based on content length
@@ -371,6 +415,10 @@ def main():
         save_memo_with_template(memo_text, profile, docx_path)
         convert_docx_to_pdf(docx_path)
         evaluator.log_section_end("DOCUMENT CREATION", tokens_used=0, model="local")
+
+        # Close the full pipeline timer here (covers extraction → memo → document)
+        estimated_tokens = min(len(text) // 2, 8000)  # Conservative estimate
+        evaluator.log_section_end("COMPLETE ANALYSIS PIPELINE", tokens_used=estimated_tokens, model="gpt-4o-mini")
         
         # Evaluating the complete memo (using tracked data)
         print("\n🔍 Evaluating memo quality and performance...")
@@ -397,6 +445,22 @@ def main():
             print("⚠️ pandas not available - skipping Excel output")
         except Exception as e:
             print(f"⚠️ Error generating Excel output: {e}")
+
+        # Simple evaluation export (new directory)
+        try:
+            from evaluation_metrics.core.simple_memo_evaluator import evaluate_simple_memo
+            simple_dir = "memo_evaluation_results"
+            simple_path = evaluate_simple_memo(
+                memo_text=memo_text,
+                output_dir=simple_dir,
+                pdf_name=Path(file_path).stem,
+                evaluator=evaluator,
+                profile=profile,
+                existing_metrics=metrics
+            )
+            print(f"🧾 Simple evaluation saved to: {simple_path}")
+        except Exception as e:
+            print(f"⚠️ Simple evaluator failed: {e}")
 
 
 if __name__ == "__main__":

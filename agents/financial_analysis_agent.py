@@ -5,12 +5,13 @@ from pathlib import Path
 
 from core.schemas import StartupProfile
 from chains.financial_analysis_chain import run_financial_analysis_chain
+from typing import Optional
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 llm = ChatOpenAI(model="gpt-4o", temperature=0.2)
 
 
-def build_financial_analysis_agent(profile: StartupProfile, full_text: str = "", tables_text: str = "", figures_ocr: str = "", trace_id=None):
+def build_financial_analysis_agent(profile: StartupProfile, full_text: str = "", tables_text: str = "", figures_ocr: str = "", trace_id=None, evaluator: Optional[object] = None):
     fa = Agent(
         role="Financial analyst",
         goal="Extract comprehensive financial metrics including revenue, profitability, growth, business model, and operational data using both regex patterns and AI-powered detection.",
@@ -41,7 +42,7 @@ def build_financial_analysis_agent(profile: StartupProfile, full_text: str = "",
         
         # Call the chain with the comprehensive context - let the chain handle all extraction
         print("[Financial Analysis] Running comprehensive financial analysis chain...")
-        updated = run_financial_analysis_chain(profile, financial_context=financial_context)
+        updated = run_financial_analysis_chain(profile, financial_context=financial_context, evaluator=evaluator)
         return updated.model_dump_json(indent=2)
 
     task = Task(

@@ -11,7 +11,46 @@ COMPANY_MAPPING = {
     "lunchbox": {"company_id": 98122914, "name": "Lunchbox"},  # Correct ID from GUI
     "snapchat": {"company_id": 3980663, "name": "Snapchat, Inc."},  # Correct ID from GUI
     "shopify": {"company_id": 29392321, "name": "SHOPIFY (USA) INC."},  # Correct ID from GUI
+    # Added mappings provided by user
+    "coinbase": {"company_id": 56407612, "name": "Coinbase, Inc."},
+    "crunchbase": {"company_id": 1634413, "name": "Crunchbase"},
+    "equity bee": {"company_id": 11708743, "name": "EquityBee"},
+    "peloton": {"company_id": 10747243, "name": "Peloton"},
+    "twine": {"company_id": 2860522, "name": "Twine"},
+    # New mappings (user-provided)
+    "airbnb": {"company_id": 98250174, "name": "Airbnb"},
+    "aircall": {"company_id": 94700504, "name": "Aircall"},
+    "almanac": {"company_id": 27892793, "name": "Almanac"},
+    "capacity": {"company_id": 11910484, "name": "Capacity"},
+    "databook": {"company_id": 11045609, "name": "DataBook"},
+    "castle": {"company_id": 10134864, "name": "Castle"},
+    "oscar health": {"company_id": 6044422, "name": "Oscar Health"},
+    "oscar": {"company_id": 6044422, "name": "Oscar Health"},
+    "kong": {"company_id": 11650204, "name": "Kong Inc."},
+    "kong inc.": {"company_id": 11650204, "name": "Kong Inc."},
+    "pendo": {"company_id": 7607159, "name": "Pendo.io"},
+    "pendo-io": {"company_id": 7607159, "name": "Pendo.io"},
+    "store.ai": {"company_id": 32035457, "name": "Store.ai"},
+    "storeai": {"company_id": 32035457, "name": "Store.ai"},
+    "tagmonkey": {"company_id": 2513003, "name": "TagMonkey"},
+    "mixpanel": {"company_id": 5513025, "name": "Mixpanel"},
+    "videopeel": {"company_id": 12105208, "name": "VideoPeel"},
+    "winnie": {"company_id": 9752392, "name": "Winnie"},
+    "zestful": {"company_id": 10636978, "name": "Zestful"},
 }
+
+# Global CoreSignal request budget per process (acts as per-memo cap in single-run workflows)
+CORESIGNAL_MAX_CALLS = int(os.getenv("CORESIGNAL_MAX_CALLS", "3"))
+_CORESIGNAL_CALLS_USED = 0
+
+def _consume_budget() -> bool:
+    """Returns True if a CoreSignal API call may proceed; False if budget exhausted."""
+    global _CORESIGNAL_CALLS_USED
+    if _CORESIGNAL_CALLS_USED >= CORESIGNAL_MAX_CALLS:
+        print(f"[CoreSignal] Call budget exhausted ({_CORESIGNAL_CALLS_USED}/{CORESIGNAL_MAX_CALLS}). Skipping.")
+        return False
+    _CORESIGNAL_CALLS_USED += 1
+    return True
 
 def get_company_id_from_mapping(search_name: str):
     """Get company ID from mapping if available"""
@@ -45,6 +84,8 @@ def get_headers():
     }
 
 def _es_search(url: str, body: dict):
+    if not _consume_budget():
+        return []
     headers = get_headers()
     r = requests.post(url, json=body, headers=headers, timeout=30)
     if r.status_code == 422:
@@ -69,6 +110,8 @@ def _es_search(url: str, body: dict):
         return []
 
 def _collect(url: str, company_id: int, fields=None):
+    if not _consume_budget():
+        return None
     headers = get_headers()
     full_url = f"{url}/{company_id}"
     if fields:
@@ -358,7 +401,7 @@ def get_full_company_data(name_or_domain: str, fields=None, website=None):
         # Try multiple matches instead of just the best one
         from difflib import SequenceMatcher
         best_matches = []
-        for hit in hits[:5]:  # Try top 5 matches
+        for hit in hits[:1]:  # Limit to the top match to reduce API calls
             if isinstance(hit, dict) and "company_id" in hit:
                 cid = hit.get("company_id")
                 if cid:

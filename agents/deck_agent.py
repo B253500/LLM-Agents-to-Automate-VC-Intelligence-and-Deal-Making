@@ -8,6 +8,7 @@ from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
 from pathlib import Path
 from chains.pitch_deck_chain import run_pitch_deck_chain_with_text
+from typing import Optional
 from core.visual_utils import extract_images_from_pdf, filter_graphs_and_tables
 from core.download_utils import extract_text_from_image
 import pdfplumber
@@ -16,7 +17,7 @@ load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 llm = ChatOpenAI(model="gpt-4o", temperature=0.2)
 
 
-def build_deck_agent(pdf_path: str, existing_profile=None, trace_id=None):
+def build_deck_agent(pdf_path: str, existing_profile=None, trace_id=None, evaluator: Optional[object] = None):
     analyst = Agent(
         role="Pitch-deck analyst",
         goal="Extract basic metadata and key insights from a startup pitch deck PDF.",
@@ -35,7 +36,7 @@ def build_deck_agent(pdf_path: str, existing_profile=None, trace_id=None):
         # Use the full text version for better context
         from core.download_utils import extract_text_from_pdf
         full_text = extract_text_from_pdf(pdf_path)
-        profile = run_pitch_deck_chain_with_text(full_text, profile=existing_profile, pdf_path=pdf_path)
+        profile = run_pitch_deck_chain_with_text(full_text, profile=existing_profile, pdf_path=pdf_path, evaluator=evaluator)
         # --- Visual enrichment: extract images and run OCR ---
         try:
             image_paths = extract_images_from_pdf(pdf_path, "extraction_cache")

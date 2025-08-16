@@ -9,6 +9,7 @@ import re
 from hashlib import sha1
 from core.hybrid_context import get_hybrid_context
 from core.perplexity_utils import search_perplexity
+from typing import Optional
 from pathlib import Path
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
@@ -85,7 +86,7 @@ def extract_technical_data_from_text(text):
     
     return tech_data
 
-def build_market_sizing_agent(profile: StartupProfile, trace_id=None):
+def build_market_sizing_agent(profile: StartupProfile, trace_id=None, evaluator: Optional[object] = None):
     analyst = Agent(
         role="Market size Research Analyst",
         goal="Research and analyze the market size TAM of AI subsegment markets focusing on specialized market sizes and growth rates.",
@@ -103,7 +104,7 @@ def build_market_sizing_agent(profile: StartupProfile, trace_id=None):
         from chains.market_sizing_chain import run_market_sizing_chain
         
         print("[Market Sizing] Running comprehensive market sizing chain...")
-        updated_profile = run_market_sizing_chain(profile)
+        updated_profile = run_market_sizing_chain(profile, evaluator=evaluator)
         return updated_profile.model_dump_json(indent=2)
 
     task = Task(

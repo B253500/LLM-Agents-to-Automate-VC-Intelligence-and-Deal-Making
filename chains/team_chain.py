@@ -160,6 +160,36 @@ def generate_team_section(profile: StartupProfile) -> str:
     # Limit to top 3 executives
     unique_execs = unique_execs[:3]
     
+    # Lazy enrichment for missing LinkedIn/background before rendering
+    try:
+        for i, exec in enumerate(unique_execs):
+            name = exec.get('name', '').strip()
+            role = exec.get('role', '').strip()
+            if not name or not role:
+                continue
+            # Backfill LinkedIn if missing
+            if not exec.get('linkedin') and company_name:
+                try:
+                    li_data = get_linkedin_profile_exa(name, company_name)
+                    if isinstance(li_data, dict) and li_data.get('profile_url'):
+                        exec['linkedin'] = li_data['profile_url']
+                        # Optionally take summary as background when bio missing
+                        if not exec.get('background_summary') and li_data.get('summary') and len(li_data.get('summary','').split()) > 10:
+                            exec['background_summary'] = li_data['summary']
+                except Exception:
+                    pass
+            # Backfill background if still missing
+            if (not exec.get('bio') or len(exec.get('bio','').split()) < 10) and not exec.get('background_summary'):
+                try:
+                    bg = generate_executive_background_summary(name, role, company_name)
+                    if bg and len(bg.split()) > 10:
+                        exec['background_summary'] = bg
+                        exec['bio'] = bg
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
     # Generate team section
     count = 0
     for exec in unique_execs:

@@ -1,8 +1,11 @@
 import json
 from hashlib import sha1
+import re
 from pathlib import Path
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
+from typing import Optional
+from core.llm_logging import log_usage_from_message
 from langchain.prompts import ChatPromptTemplate
 from core.schemas import StartupProfile, Competitor
 from core.hybrid_context import get_hybrid_context
@@ -39,10 +42,12 @@ PROMPT = ChatPromptTemplate.from_messages([
     ("system", SYSTEM), ("human", "Sector context:\n{context}\nWeb search context:\n{web_context}\n")
 ])
 
-def run_competitive_intel_chain_with_text(full_text: str, profile: StartupProfile) -> StartupProfile:
+def run_competitive_intel_chain_with_text(full_text: str, profile: StartupProfile, evaluator: Optional[object] = None) -> StartupProfile:
     context = full_text[:5000]
     web_context = web_search_competitive_context(profile.name, profile.sector)
-    txt = llm.invoke(PROMPT.format(context=context, web_context=web_context)).content.strip()
+    resp = llm.invoke(PROMPT.format(context=context, web_context=web_context))
+    log_usage_from_message(evaluator, "COMPETITORS AGENT", resp, model="gpt-4o")
+    txt = resp.content.strip()
     first, last = txt.find("{"), txt.rfind("}")
     if first == -1 or last == -1:
         return profile
@@ -63,7 +68,7 @@ def run_competitive_intel_chain_with_text(full_text: str, profile: StartupProfil
         profile.startup_id = sha1((profile.name or context[:40]).encode()).hexdigest()[:10]
     return profile
 
-def run_competitive_intel_chain(profile: StartupProfile, comprehensive_context: str = "") -> StartupProfile:
+def run_competitive_intel_chain(profile: StartupProfile, comprehensive_context: str = "", evaluator: Optional[object] = None) -> StartupProfile:
     # Use comprehensive context if provided, otherwise build from profile fields
     if comprehensive_context and comprehensive_context.strip():
         context = comprehensive_context
@@ -78,7 +83,9 @@ Product: {getattr(profile, 'tech_stack', '')}
     # Get web search context for competitive analysis
     web_context = web_search_competitive_context(profile.name, profile.sector)
     
-    txt = llm.invoke(PROMPT.format(context=context, web_context=web_context)).content.strip()
+    resp2 = llm.invoke(PROMPT.format(context=context, web_context=web_context))
+    log_usage_from_message(evaluator, "COMPETITORS AGENT", resp2, model="gpt-4o")
+    txt = resp2.content.strip()
     first, last = txt.find("{"), txt.rfind("}")
     if first == -1 or last == -1:
         return profile

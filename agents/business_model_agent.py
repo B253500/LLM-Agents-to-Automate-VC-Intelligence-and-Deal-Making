@@ -10,12 +10,13 @@ from pathlib import Path
 
 from core.schemas import StartupProfile
 from chains.memo_synthesis_chain import run_business_model_chain
+from typing import Optional
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 llm = ChatOpenAI(model="gpt-4o", temperature=0.2)
 
 
-def build_business_model_agent(profile: StartupProfile, trace_id=None):
+def build_business_model_agent(profile: StartupProfile, trace_id=None, evaluator: Optional[object] = None):
     """Build the business model analysis agent."""
     analyst = Agent(
         role="Business Model Analyst",
@@ -35,7 +36,7 @@ def build_business_model_agent(profile: StartupProfile, trace_id=None):
     def _callback(*_) -> str:
         """Callback function that calls the business model chain."""
         # Run business model analysis using the chain
-        result = run_business_model_chain(profile)
+        result = run_business_model_chain(profile, evaluator=evaluator)
         return result
 
     task = Task(

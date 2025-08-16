@@ -4,12 +4,13 @@ from dotenv import load_dotenv
 from pathlib import Path
 from core.schemas import StartupProfile
 from chains.technical_dd_chain import run_technical_dd_chain, run_technical_dd_chain_with_text
+from typing import Optional
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 llm = ChatOpenAI(model="gpt-4o", temperature=0.2)
 
 
-def build_technical_dd_agent(profile: StartupProfile, trace_id=None):
+def build_technical_dd_agent(profile: StartupProfile, trace_id=None, evaluator: Optional[object] = None):
     ctto = Agent(
         role="Technical due-diligence lead",
         goal="Assess technical maturity, product moat, and technology risks of the startup.",
@@ -35,7 +36,7 @@ def build_technical_dd_agent(profile: StartupProfile, trace_id=None):
             full_text = get_hybrid_context(profile, "technical analysis OR energy density OR cycle life OR battery technology OR technical specifications OR patents OR product roadmap OR manufacturing OR testing", use_reports=False)
         
         # Use the comprehensive context for technical analysis
-        updated = run_technical_dd_chain_with_text(full_text, profile)
+        updated = run_technical_dd_chain_with_text(full_text, profile, evaluator=evaluator)
         return updated.model_dump_json(indent=2)
 
     task = Task(

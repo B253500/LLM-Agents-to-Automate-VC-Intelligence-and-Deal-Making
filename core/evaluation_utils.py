@@ -24,10 +24,9 @@ def generate_excel_output(metrics, company_name: str, timestamp: str, output_dir
                     "Generation Time (minutes)",
                     "Total Tokens",
                     "Total Cost (USD)",
-                    "Quality Score (/10)",
-                    "Time Savings vs Traditional VC (%)",
-                    "Cost Savings vs Traditional VC (%)",
-                    "Efficiency Improvement (x)",
+                    "Overall Quality Score (/10)",
+                    "Token Cost (USD)",
+                    "External Cost (USD)",
                     "Sections Present",
                     "Readability Score"
                 ],
@@ -36,10 +35,9 @@ def generate_excel_output(metrics, company_name: str, timestamp: str, output_dir
                     f"{metrics.generation_time_seconds / 60:.2f}",
                     f"{sum(metrics.token_usage.values()):,}",
                     f"${metrics.total_cost_usd:.4f}",
-                    f"{metrics.analyst_readability_score:.1f}",
-                    f"{metrics.traditional_vc_comparison['time_savings_percentage']:.1f}%",
-                    f"{metrics.traditional_vc_comparison['cost_savings_percentage']:.1f}%",
-                    f"{metrics.traditional_vc_comparison['efficiency_improvement']['time_efficiency']:.1f}x",
+                    f"{getattr(metrics, 'overall_quality_score', 0.0):.1f}",
+                    f"${getattr(metrics, 'token_cost_usd', 0.0):.4f}",
+                    f"${getattr(metrics, 'external_cost_usd', 0.0):.4f}",
                     f"{metrics.section_count}/17",
                     f"{metrics.flesch_kincaid_score:.1f}"
                 ]
@@ -48,37 +46,22 @@ def generate_excel_output(metrics, company_name: str, timestamp: str, output_dir
             summary_df = pd.DataFrame(summary_data)
             summary_df.to_excel(writer, sheet_name="Summary", index=False)
             
-            # Traditional VC comparison sheet
-            vc_comp = metrics.traditional_vc_comparison
-            comparison_data = {
+            # Cost breakdown sheet
+            cost_data = {
                 "Metric": [
-                    "Traditional VC Time (minutes)",
-                    "AI System Time (minutes)",
-                    "Time Savings (minutes)",
-                    "Time Savings (%)",
-                    "Traditional VC Cost (USD)",
-                    "AI System Cost (USD)",
-                    "Cost Savings (USD)",
-                    "Cost Savings (%)",
-                    "Time Efficiency (x)",
-                    "Cost Efficiency (x)"
+                    "Total Cost (USD)",
+                    "Token Cost (USD)",
+                    "External Cost (USD)"
                 ],
                 "Value": [
-                    vc_comp["traditional_time_minutes"],
-                    vc_comp["ai_time_minutes"],
-                    vc_comp["traditional_time_minutes"] - vc_comp["ai_time_minutes"],
-                    f"{vc_comp['time_savings_percentage']:.1f}%",
-                    f"${vc_comp['traditional_cost_usd']:.2f}",
-                    f"${vc_comp['ai_cost_usd']:.4f}",
-                    f"${vc_comp['cost_savings_usd']:.2f}",
-                    f"{vc_comp['cost_savings_percentage']:.1f}%",
-                    f"{vc_comp['efficiency_improvement']['time_efficiency']:.1f}x",
-                    f"{vc_comp['efficiency_improvement']['cost_efficiency']:.1f}x"
+                    getattr(metrics, 'total_cost_usd', 0.0),
+                    getattr(metrics, 'token_cost_usd', 0.0),
+                    getattr(metrics, 'external_cost_usd', 0.0)
                 ]
             }
-            
-            comparison_df = pd.DataFrame(comparison_data)
-            comparison_df.to_excel(writer, sheet_name="VC Comparison", index=False)
+
+            cost_df = pd.DataFrame(cost_data)
+            cost_df.to_excel(writer, sheet_name="Cost Breakdown", index=False)
             
             # Performance metrics sheet
             performance_data = {

@@ -61,36 +61,39 @@ class MemoGenerationTracker:
         
         # Save comprehensive metrics JSON
         metrics_file = f"{output_dir}/detailed_metrics_{pdf_name}_{timestamp}.json"
-        
+
+        total_tokens = sum(metrics.token_usage.values()) if getattr(metrics, "token_usage", None) else 0
+
         metrics_data = {
             "memo_info": {
                 "pdf_name": pdf_name,
                 "generation_timestamp": timestamp,
                 "total_runtime_seconds": metrics.generation_time_seconds,
                 "total_cost_usd": metrics.total_cost_usd,
-                "total_tokens": sum(metrics.token_usage.values()),
+                "token_cost_usd": getattr(metrics, "token_cost_usd", 0.0),
+                "external_cost_usd": getattr(metrics, "external_cost_usd", 0.0),
+                "total_tokens": total_tokens,
                 "section_count": metrics.section_count
             },
             "quality_metrics": {
                 "all_sections_present": metrics.all_sections_present,
                 "missing_sections": metrics.missing_sections,
-                "product_quality_score": metrics.product_quality_score,
-                "competitors_quality_score": metrics.competitors_quality_score,
-                "risks_quality_score": metrics.risks_quality_score,
-                "factual_accuracy_score": metrics.factual_accuracy_score,
-                "formatting_score": metrics.formatting_score,
                 "flesch_kincaid_score": metrics.flesch_kincaid_score,
-                "analyst_readability_score": metrics.analyst_readability_score,
-                "overall_quality_score": self.evaluator._calculate_overall_score(metrics)
+                "overall_quality_score": getattr(metrics, "overall_quality_score", self.evaluator._calculate_overall_score(metrics)),
+                "quality_breakdown": getattr(metrics, "quality_breakdown", []),
+                "chart_present": getattr(metrics, "chart_present", False),
+                "duplicate_ratio": getattr(metrics, "duplicate_ratio", 0.0)
             },
             "performance_metrics": {
-                "token_usage_by_model": metrics.token_usage,
-                "cost_breakdown": {
-                    model: (tokens / 1000) * self.evaluator.api_costs.get(model, 0.03)
-                    for model, tokens in metrics.token_usage.items()
+                "token_usage_by_model": getattr(metrics, "token_usage", {}),
+                "timing_table": getattr(metrics, "timing_table", {}),
+                "system": {
+                    "cpu_usage_percent": metrics.cpu_usage_percent,
+                    "gpu_usage_percent": metrics.gpu_usage_percent,
+                    "memory_usage_mb": metrics.memory_usage_mb,
+                    "system_robustness_score": metrics.system_robustness_score
                 }
             },
-            "traditional_vc_comparison": metrics.traditional_vc_comparison,
             "section_metrics": [
                 {
                     "section_name": sm.section_name,
@@ -99,23 +102,15 @@ class MemoGenerationTracker:
                     "cost_usd": sm.cost_usd,
                     "content_length_chars": sm.content_length_chars,
                     "content_length_words": sm.content_length_words,
-                    "quality_score": sm.quality_score,
-                    "traditional_time_minutes": self.evaluator.TRADITIONAL_VC_TIMES.get(sm.section_name, 0),
-                    "time_savings_percentage": ((self.evaluator.TRADITIONAL_VC_TIMES.get(sm.section_name, 0) - (sm.runtime_seconds / 60)) / max(0.1, self.evaluator.TRADITIONAL_VC_TIMES.get(sm.section_name, 0))) * 100
+                    "quality_score": sm.quality_score
                 }
                 for sm in metrics.section_metrics
             ],
-            "academic_analysis": {
-                "time_efficiency_improvement": metrics.traditional_vc_comparison['efficiency_improvement']['time_efficiency'],
-                "cost_efficiency_improvement": metrics.traditional_vc_comparison['efficiency_improvement']['cost_efficiency'],
-                "total_time_savings_minutes": metrics.traditional_vc_comparison['time_savings_minutes'],
-                "total_cost_savings_usd": metrics.traditional_vc_comparison['cost_savings_usd'],
-                "roi_analysis": {
-                    "traditional_cost_per_memo": metrics.traditional_vc_comparison['traditional_cost_usd'],
-                    "ai_cost_per_memo": metrics.traditional_vc_comparison['ai_cost_usd'],
-                    "cost_savings_percentage": metrics.traditional_vc_comparison['cost_savings_percentage'],
-                    "break_even_memos": metrics.traditional_vc_comparison['traditional_cost_usd'] / max(0.01, metrics.traditional_vc_comparison['ai_cost_usd'])
-                }
+            "cost_breakdown": {
+                "token_cost_usd": getattr(metrics, "token_cost_usd", 0.0),
+                "external_cost_usd": getattr(metrics, "external_cost_usd", 0.0),
+                "external_service_costs": getattr(metrics, "external_service_costs", {}),
+                "api_call_logs": getattr(metrics, "api_call_logs", [])
             }
         }
         
@@ -131,40 +126,65 @@ def create_academic_summary(metrics_file: str, output_dir: str):
     
     with open(metrics_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
+
+    # Backward compatibility: support raw dataclass JSON (no memo_info block)
+    if 'memo_info' not in data:
+        total_tokens = sum(data.get('token_usage', {}).values()) if data.get('token_usage') else 0
+        data = {
+            "memo_info": {
+                "pdf_name": Path(metrics_file).stem,
+                "generation_timestamp": data.get('generation_time_seconds'),
+                "total_runtime_seconds": data.get('generation_time_seconds', 0.0),
+                "total_cost_usd": data.get('total_cost_usd', 0.0),
+                "token_cost_usd": data.get('token_cost_usd', 0.0),
+                "external_cost_usd": data.get('external_cost_usd', 0.0),
+                "total_tokens": total_tokens,
+                "section_count": data.get('section_count', 0)
+            },
+            "quality_metrics": {
+                "all_sections_present": data.get('all_sections_present', False),
+                "missing_sections": data.get('missing_sections', []),
+                "flesch_kincaid_score": data.get('flesch_kincaid_score', 0.0),
+                "overall_quality_score": data.get('overall_quality_score', None),
+                "quality_breakdown": data.get('quality_breakdown', []),
+                "chart_present": data.get('chart_present', False),
+                "duplicate_ratio": data.get('duplicate_ratio', 0.0)
+            },
+            "performance_metrics": {
+                "token_usage_by_model": data.get('token_usage', {}),
+                "timing_table": data.get('timing_table', {}),
+                "system": {
+                    "cpu_usage_percent": data.get('cpu_usage_percent', 0.0),
+                    "gpu_usage_percent": data.get('gpu_usage_percent', 0.0),
+                    "memory_usage_mb": data.get('memory_usage_mb', 0.0),
+                    "system_robustness_score": data.get('system_robustness_score', 0.0)
+                }
+            },
+            "section_metrics": data.get('section_metrics', []),
+            "cost_breakdown": {
+                "token_cost_usd": data.get('token_cost_usd', 0.0),
+                "external_cost_usd": data.get('external_cost_usd', 0.0),
+                "external_service_costs": data.get('external_service_costs', {}),
+                "api_call_logs": data.get('api_call_logs', [])
+            }
+        }
     
     summary_file = f"{output_dir}/academic_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
     
-    summary = f"""# AI-Powered Investment Memo Generation: Academic Analysis
+    summary = f"""## Key Performance Snapshot
 
-## Executive Summary
-
-This analysis demonstrates the quantitative improvements achieved by implementing an AI-powered investment memo generation system compared to traditional venture capital due diligence processes.
-
-## Key Performance Indicators
-
-### Time Efficiency
-- **Traditional VC Process**: {data['traditional_vc_comparison']['traditional_time_minutes']:.1f} minutes per memo
-- **AI-Powered System**: {data['traditional_vc_comparison']['ai_time_minutes']:.1f} minutes per memo
-- **Time Savings**: {data['traditional_vc_comparison']['time_savings_percentage']:.1f}% reduction
-- **Efficiency Improvement**: {data['traditional_vc_comparison']['efficiency_improvement']['time_efficiency']:.1f}x faster
-
-### Cost Efficiency
-- **Traditional VC Cost**: ${data['traditional_vc_comparison']['traditional_cost_usd']:.2f} per memo
-- **AI System Cost**: ${data['traditional_vc_comparison']['ai_cost_usd']:.4f} per memo
-- **Cost Savings**: {data['traditional_vc_comparison']['cost_savings_percentage']:.1f}% reduction
-- **Cost Efficiency**: {data['traditional_vc_comparison']['efficiency_improvement']['cost_efficiency']:.1f}x cheaper
-
-### Quality Metrics
-- **Section Completeness**: {data['all_sections_present']}
-- **Overall Quality Score**: {data.get('overall_quality_score', 'N/A')}
-- **Readability**: Flesch-Kincaid Grade {data['flesch_kincaid_score']:.1f}
-- **Chart Present**: {'Yes' if data['chart_present'] else 'No'}
-- **Duplicate Content**: {data['duplicate_ratio']:.2%}
+- **Generation Time (minutes)**: {data['memo_info']['total_runtime_seconds']/60:.2f}
+- **Total Cost (USD)**: ${data['memo_info']['total_cost_usd']:.4f}
+- **Token Cost (USD)**: ${data['memo_info'].get('token_cost_usd', 0.0):.4f}
+- **External Cost (USD)**: ${data['memo_info'].get('external_cost_usd', 0.0):.4f}
+- **All Sections Present**: {data['quality_metrics']['all_sections_present']}
+- **Flesch–Kincaid Grade**: {data['quality_metrics']['flesch_kincaid_score']:.1f}
+- **Overall Quality Score (/10)**: {data['quality_metrics'].get('overall_quality_score', 'N/A')}
 
 ## Section-by-Section Analysis
 
-| Section | Traditional Time (min) | AI Time (min) | Time Savings (%) | Cost (USD) |
-|---------|----------------------|---------------|------------------|------------|
+| Section | AI Time (min) | Cost (USD) |
+|---------|---------------|------------|
 """
     
     for section in data['section_metrics']:
@@ -185,61 +205,17 @@ This analysis demonstrates the quantitative improvements achieved by implementin
             runtime_seconds = section.runtime_seconds
             cost_usd = section.cost_usd
             
-        summary += f"| {section_name} | N/A | {runtime_seconds/60:.1f} | N/A | ${cost_usd:.4f} |\n"
+        summary += f"| {section_name} | {runtime_seconds/60:.1f} | ${cost_usd:.4f} |\n"
     
-    summary += f"""
-## ROI Analysis
+    # Optional: show per-service external costs
+    if 'cost_breakdown' in data:
+        services = data['cost_breakdown'].get('external_service_costs', {}) or {}
+        if services:
+            summary += "\n### External Service Costs\n"
+            for svc, amt in services.items():
+                summary += f"- {svc}: ${amt:.4f}\n"
 
-### Break-Even Analysis
-- **Traditional Cost per Memo**: ${data['traditional_vc_comparison']['traditional_cost_usd']:.2f}
-- **AI Cost per Memo**: ${data['traditional_vc_comparison']['ai_cost_usd']:.4f}
-- **Cost Savings**: ${data['traditional_vc_comparison']['cost_savings_usd']:.2f} per memo
-
-### Scalability Benefits
-- **Concurrent Processing**: Multiple companies can be analyzed simultaneously
-- **24/7 Availability**: No human resource constraints
-- **Consistency**: Standardized analysis framework across all evaluations
-
-## Academic Implications
-
-### Research Contributions
-1. **Quantitative Validation**: First systematic comparison of AI vs. traditional VC processes
-2. **Efficiency Metrics**: Established benchmarks for VC due diligence automation
-3. **Cost-Benefit Analysis**: Demonstrated ROI for AI implementation in VC
-
-### Industry Impact
-1. **Process Innovation**: Paradigm shift in VC due diligence methodology
-2. **Accessibility**: Lower barriers to entry for smaller VC firms
-3. **Quality Standardization**: Consistent analysis framework across the industry
-
-## Methodology
-
-### Traditional VC Time Estimates
-Based on industry research and interviews with senior VC analysts:
-- Market analysis: 60 minutes (requires extensive research)
-- Technical due diligence: 90 minutes (requires technical expertise)
-- Financial analysis: 75 minutes (requires financial modeling)
-- Competitive analysis: 40 minutes (requires market research)
-
-### AI System Metrics
-- **Token Usage Tracking**: Real-time monitoring of API consumption
-- **Cost Calculation**: Based on OpenAI pricing (2024 rates)
-- **Quality Assessment**: Automated evaluation using established metrics
-
-## Conclusion
-
-The AI-powered investment memo generation system demonstrates significant improvements over traditional VC processes:
-
-1. **75%+ time reduction** in memo generation
-2. **90%+ cost reduction** per memo
-3. **Maintained quality standards** with professional-grade output
-4. **Enhanced scalability** for portfolio management
-
-This represents a fundamental shift in VC operations, enabling faster, cheaper, and more consistent investment analysis while maintaining the quality standards expected in the industry.
-
----
-*Analysis generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*
-"""
+    summary += f"\n---\nGenerated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
     
     with open(summary_file, 'w', encoding='utf-8') as f:
         f.write(summary)

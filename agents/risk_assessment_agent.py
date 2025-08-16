@@ -6,6 +6,7 @@ import re
 
 from core.schemas import StartupProfile
 from chains.risk_assessment_chain import run_risk_assessment_chain
+from typing import Optional
 from chains.memo_synthesis_chain import run_risks_section_chain
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
@@ -148,7 +149,7 @@ def generate_counterfactual_section(profile: StartupProfile) -> str:
         return f"[Counterfactual section could not be generated: {e}]"
 
 
-def build_risk_assessment_agent(profile: StartupProfile, trace_id=None):
+def build_risk_assessment_agent(profile: StartupProfile, trace_id=None, evaluator: Optional[object] = None):
     officer = Agent(
         role="Risk-assessment officer",
         goal="Identify red-flags, compute risk score, and assess overall risk profile of the startup.",
@@ -162,7 +163,7 @@ def build_risk_assessment_agent(profile: StartupProfile, trace_id=None):
 
     def _callback(*_):
         # Run risk assessment with profile data
-        updated = run_risk_assessment_chain(profile)
+        updated = run_risk_assessment_chain(profile, evaluator=evaluator)
         return updated.model_dump_json(indent=2)
 
     task = Task(

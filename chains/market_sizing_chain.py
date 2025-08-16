@@ -4,6 +4,8 @@ from hashlib import sha1
 from pathlib import Path
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
+from typing import Optional
+from core.llm_logging import log_usage_from_message
 from langchain.prompts import ChatPromptTemplate
 
 from core.schemas import StartupProfile
@@ -348,7 +350,7 @@ PROMPT = ChatPromptTemplate.from_messages([
 ])
 
 
-def run_market_sizing_chain(profile: StartupProfile, evaluator=None) -> StartupProfile:
+def run_market_sizing_chain(profile: StartupProfile, evaluator: Optional[object] = None) -> StartupProfile:
     """
     Runs the market sizing chain with a focus on high-quality, structured data extraction.
     1. Extracts market context from the pitch deck.
@@ -376,13 +378,8 @@ def run_market_sizing_chain(profile: StartupProfile, evaluator=None) -> StartupP
     try:
         prompt = PROMPT.format(context=deck_context, web_context=web_context)
         response = llm.invoke(prompt)
+        log_usage_from_message(evaluator, "MARKET SIZING AGENT", response, model="gpt-4o")
         raw_json = response.content.strip()
-
-        # Track token usage
-        if evaluator and hasattr(response, 'usage'):
-            input_tokens = getattr(response.usage, 'prompt_tokens', 0)
-            output_tokens = getattr(response.usage, 'completion_tokens', 0)
-            evaluator.log_agent_tokens("MARKET SIZING CHAIN", input_tokens, output_tokens, "gpt-4o")
 
         # Step 4: Parse the JSON and populate the profile
         json_match = re.search(r'\{.*\}', raw_json, re.DOTALL)
@@ -430,7 +427,7 @@ def run_market_sizing_chain(profile: StartupProfile, evaluator=None) -> StartupP
 
     return profile
 
-def generate_market_size_section(profile: StartupProfile) -> str:
+def generate_market_size_section(profile: StartupProfile, evaluator: Optional[object] = None) -> str:
     """Generate the market size section with improved structure and formatting."""
     # Import formatting function from chain
     from chains.market_sizing_chain import format_market_size
@@ -746,7 +743,9 @@ AI-Detected Growth Metrics: {ai_growth_metrics}
 AI-Detected Competitive Data: {ai_competitive_data}
 AI-Detected Source Attribution: {ai_source_attribution}
 """
-    market_discussion = llm.invoke(prompt).content.strip()
+    resp_disc = llm.invoke(prompt)
+    log_usage_from_message(evaluator, "MARKET SIZING AGENT", resp_disc, model="gpt-4o")
+    market_discussion = resp_disc.content.strip()
     
     def format_source(source):
         if not source:

@@ -4,6 +4,7 @@ from langchain.tools import Tool
 from crewai_tools import EXASearchTool
 from core.schemas import StartupProfile
 from chains.competitive_intel_chain import run_competitive_intel_chain
+from typing import Optional
 from core.perplexity_utils import search_perplexity
 from dotenv import load_dotenv
 import os
@@ -28,7 +29,7 @@ llm = ChatOpenAI(model="gpt-4o", temperature=0.2)
 
 # Competitive landscape generation moved to chains/competitive_intel_chain.py
 
-def build_competitive_intel_agent(profile: StartupProfile, trace_id=None):
+def build_competitive_intel_agent(profile: StartupProfile, trace_id=None, evaluator: Optional[object] = None):
     scout = Agent(
         role="AI Startup Intelligence Specialist",
         goal="Identify and analyze relevant AI startups within specific AI subsegment markets.",
@@ -50,7 +51,7 @@ def build_competitive_intel_agent(profile: StartupProfile, trace_id=None):
         comprehensive_context = get_hybrid_context(profile, "competitive analysis competitors", use_reports=False)
         
         print("[Competitive Intel] Running comprehensive competitive intelligence chain...")
-        updated = run_competitive_intel_chain(profile, comprehensive_context)
+        updated = run_competitive_intel_chain(profile, comprehensive_context, evaluator=evaluator)
         return updated.model_dump_json(indent=2)
 
     task = Task(

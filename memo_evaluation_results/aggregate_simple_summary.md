@@ -1,0 +1,51 @@
+# Aggregate Summary (simple metrics)
+
+Runs aggregated: 10
+- Timing (overall) — median: 580.8s, IQR: 85.2s
+- Timing by agent (median, IQR in seconds):
+  - COMPLETE ANALYSIS PIPELINE: 580.8s (IQR 85.2s)
+  - DECK AGENT: 65.4s (IQR 41.6s)
+  - TECHNICAL DD AGENT: 18.2s (IQR 3.0s)
+  - TEAM AGENT: 124.8s (IQR 34.6s)
+  - MARKET SIZING AGENT: 25.3s (IQR 7.2s)
+  - FINANCIAL ANALYSIS AGENT: 64.3s (IQR 11.4s)
+  - COMPETITORS AGENT: 28.9s (IQR 2.6s)
+  - RISK ASSESSMENT AGENT: 3.3s (IQR 1.1s)
+  - BUSINESS MODEL AGENT: 7.6s (IQR 1.4s)
+  - PRODUCT AGENT: 5.3s (IQR 2.4s)
+  - ESG AGENT: 4.1s (IQR 0.7s)
+  - EXIT AGENT: 4.7s (IQR 1.4s)
+  - FOLLOW-UP AGENT: 5.8s (IQR 1.7s)
+- Derived runtimes (median, IQR in seconds):
+  - total_agent_runtime: 378.3s (IQR 61.7s)
+  - analysis_agent_runtime: 348.3s (IQR 62.6s)
+  - synthesis_agent_runtime: 29.3s (IQR 3.5s)
+  - extraction_runtime: 0.0s (IQR 0.0s)
+  - visuals_runtime: 0.0s (IQR 0.3s)
+  - document_creation_runtime: 4.8s (IQR 0.4s)
+  - other_processes_runtime: 204.8s (IQR 30.1s)
+- Words (total) — median: 3454, IQR: 258
+- Duplicate ratio — median: 0.000, IQR: 0.004
+- Duplicate count — median: 0, IQR: 1
+- Unknowns (outside risks) — median: 1, IQR: 2
+- Unknowns (including risks) — median: 2, IQR: 2
+- Visuals (Mermaid) presence: 100.0% of runs
+- other_processes_runtime includes: orchestration overhead, context building, enrichment outside agent wrappers, and memo/post-processing.
+- Section checks pass rates:
+  - AI DISCUSSION AND COMMENTARY: 100.0%
+  - BUSINESS MODEL: 100.0%
+  - COMPANY OVERVIEW: 70.0%
+  - COMPETITORS: 100.0%
+  - COUNTERFACTUAL ANALYSIS: 100.0%
+  - DETAILED SUMMARY: 100.0%
+  - ESG CONSIDERATIONS: 100.0%
+  - FINANCIAL ANALYSIS: 60.0%
+  - FOLLOW-UP QUESTIONS: 100.0%
+  - INVESTMENT & EXIT STRATEGIES: 100.0%
+  - MARKET SIZE & ANALYSIS: 90.0%
+  - PROBLEM STATEMENT: 100.0%
+  - PRODUCT/SERVICE DESCRIPTION: 100.0%
+  - RISKS: 100.0%
+  - SOLUTION OVERVIEW: 100.0%
+  - TEAM & MANAGEMENT: 60.0%
+  - TECHNICAL DUE DILIGENCE: 100.0%

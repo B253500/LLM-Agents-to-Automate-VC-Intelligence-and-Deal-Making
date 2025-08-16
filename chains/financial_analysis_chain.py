@@ -10,6 +10,8 @@ import re
 
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
+from typing import Optional
+from core.llm_logging import log_usage_from_message
 from langchain.prompts import ChatPromptTemplate
 
 from core.schemas import StartupProfile
@@ -443,7 +445,7 @@ def get_smart_financial_context(text):
     # Limit to 10k chars total for efficiency
     return combined_context[:10000]
 
-def ai_extract_financial_data(text):
+def ai_extract_financial_data(text, evaluator: Optional[object] = None):
     """AI-powered extraction of ANY financial data from text"""
     try:
         from config import Config
@@ -534,7 +536,9 @@ Text to analyze:
 {get_smart_financial_context(text)}  # Smart context selection for financial data
 """
         
-        response = llm.invoke(prompt).content.strip()
+        resp = llm.invoke(prompt)
+        log_usage_from_message(evaluator, "FINANCIAL ANALYSIS AGENT", resp, model="gpt-4o")
+        response = resp.content.strip()
         
         # Parse the JSON response
         import json
@@ -744,7 +748,7 @@ def value_in_text(value, text):
         return value_str in text.replace(",", "")
     return str(value) in text
 
-def run_financial_analysis_chain(profile: StartupProfile, financial_context: str = "") -> StartupProfile:
+def run_financial_analysis_chain(profile: StartupProfile, financial_context: str = "", evaluator: Optional[object] = None) -> StartupProfile:
     # If financial_context is provided, use it; otherwise, build from profile fields
     if financial_context and financial_context.strip():
         context = financial_context
@@ -950,7 +954,9 @@ Crunchbase Funding Data:
     combined_context = f"{context}\n\n{crunchbase_data}\n\n{web_search_data}"
     
     # Optionally, add more fields as needed
-    txt = llm.invoke(PROMPT.format(context=context, web_context=combined_context)).content.strip()
+    resp_main = llm.invoke(PROMPT.format(context=context, web_context=combined_context))
+    log_usage_from_message(evaluator, "FINANCIAL ANALYSIS AGENT", resp_main, model="gpt-4o")
+    txt = resp_main.content.strip()
     print("[Financial Chain] LLM raw output:", txt)
     
     # NEW: Run comprehensive financial extraction (regex + AI) on the context
@@ -958,7 +964,7 @@ Crunchbase Funding Data:
     
     # Extract from the full context using both regex and AI
     regex_extracted = extract_financials_from_text(combined_context)
-    ai_extracted = ai_extract_financial_data(combined_context)
+    ai_extracted = ai_extract_financial_data(combined_context, evaluator=evaluator)
     
     print(f"[Financial Chain] Regex extracted: {len(regex_extracted)} fields")
     print(f"[Financial Chain] AI extracted: {len(ai_extracted)} categories")

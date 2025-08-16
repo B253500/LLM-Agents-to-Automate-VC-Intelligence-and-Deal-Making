@@ -4,6 +4,8 @@ from hashlib import sha1
 from pathlib import Path
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
+from typing import Optional
+from core.llm_logging import log_usage_from_message
 from langchain.prompts import ChatPromptTemplate
 
 from core.schemas import StartupProfile
@@ -311,7 +313,7 @@ def extract_technical_specs_from_text(text: str) -> dict:
     return specs
 
 
-def run_technical_dd_chain(profile: StartupProfile) -> StartupProfile:
+def run_technical_dd_chain(profile: StartupProfile, evaluator: Optional[object] = None) -> StartupProfile:
     # Comprehensive context extraction to capture all valuable technical information
     context = get_hybrid_context(
         profile, "patents OR patent portfolio OR intellectual property OR IP OR product roadmap OR development timeline OR technical milestones OR technology stack OR product development OR technical specifications OR performance metrics OR energy density OR cycle life OR charging speed OR temperature range OR safety features OR materials OR dimensions OR capabilities OR battery chemistry OR cell design OR manufacturing OR testing OR certification", 5, 3
@@ -387,7 +389,9 @@ def run_technical_dd_chain(profile: StartupProfile) -> StartupProfile:
     try:
         # Clean the context to avoid formatting issues
         clean_context = context.replace('"', "'").replace('\n', ' ').strip()
-        txt = llm.invoke(PROMPT.format(context=clean_context)).content.strip()
+        resp = llm.invoke(PROMPT.format(context=clean_context))
+        log_usage_from_message(evaluator, "TECHNICAL DD AGENT", resp, model="gpt-4o")
+        txt = resp.content.strip()
         data = clean_llm_output(txt)
         
         if data:
@@ -459,7 +463,7 @@ def run_technical_dd_chain(profile: StartupProfile) -> StartupProfile:
     return profile
 
 
-def run_technical_dd_chain_with_text(full_text: str, profile: StartupProfile) -> StartupProfile:
+def run_technical_dd_chain_with_text(full_text: str, profile: StartupProfile, evaluator: Optional[object] = None) -> StartupProfile:
     """Run technical due diligence using extracted text as context."""
     # Use comprehensive text to capture all valuable technical information
     # Use smart technical context instead of first 15k chars
@@ -550,7 +554,9 @@ def run_technical_dd_chain_with_text(full_text: str, profile: StartupProfile) ->
     try:
         # Clean the context to avoid formatting issues and escape curly braces
         clean_context = context.replace('"', "'").replace('\n', ' ').replace('{', '{{').replace('}', '}}').strip()
-        txt = llm.invoke(PROMPT.format(context=clean_context)).content.strip()
+        resp = llm.invoke(PROMPT.format(context=clean_context))
+        log_usage_from_message(evaluator, "TECHNICAL DD AGENT", resp, model="gpt-4o")
+        txt = resp.content.strip()
         data = clean_llm_output(txt)
         
         if data:

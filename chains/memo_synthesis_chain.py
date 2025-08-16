@@ -1,9 +1,13 @@
 from langchain_openai import ChatOpenAI
+from typing import Optional
+from core.llm_logging import log_usage_from_message
+from typing import Optional
+from core.llm_logging import log_usage_from_message
 from core.schemas import StartupProfile
 from core.text_cleaners import clean_blank_bullets
 import re
 
-def run_detailed_summary_chain(profile: StartupProfile) -> str:
+def run_detailed_summary_chain(profile: StartupProfile, evaluator: Optional[object] = None) -> str:
     """Generate detailed summary for the memo."""
     llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
     prompt = f"""
@@ -21,6 +25,7 @@ def run_detailed_summary_chain(profile: StartupProfile) -> str:
     Stage: {getattr(profile, 'funding_stage', '')}
     """
     response = llm.invoke(prompt)
+    log_usage_from_message(evaluator, "DETAILED SUMMARY", response, model="gpt-4o")
     content = response.content.strip() if hasattr(response, 'content') else str(response)
     
     # Remove any headers that might have been generated
@@ -39,7 +44,7 @@ def run_detailed_summary_chain(profile: StartupProfile) -> str:
     
     return content
 
-def run_problem_statement_chain(profile: StartupProfile) -> str:
+def run_problem_statement_chain(profile: StartupProfile, evaluator: Optional[object] = None) -> str:
     """Generate problem statement for the memo."""
     llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
     prompt = f"""
@@ -65,6 +70,7 @@ Business Model: {getattr(profile, 'business_model', '')}
 Go-to-Market: {getattr(profile, 'go_to_market', '')}
 """
     response = llm.invoke(prompt)
+    log_usage_from_message(evaluator, "PROBLEM STATEMENT", response, model="gpt-4o")
     content = response.content.strip() if hasattr(response, 'content') else str(response)
     
     # Remove any headers that might have been generated
@@ -83,7 +89,7 @@ Go-to-Market: {getattr(profile, 'go_to_market', '')}
     
     return content
 
-def run_solution_overview_chain(profile: StartupProfile) -> str:
+def run_solution_overview_chain(profile: StartupProfile, evaluator: Optional[object] = None) -> str:
     """Generate solution overview for the memo."""
     llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
     prompt = f"""
@@ -105,6 +111,7 @@ Product: {getattr(profile, 'product_description', '')}
 Stage: {getattr(profile, 'funding_stage', '')}
 """
     response = llm.invoke(prompt)
+    log_usage_from_message(evaluator, "SOLUTION OVERVIEW", response, model="gpt-4o")
     content = response.content.strip() if hasattr(response, 'content') else str(response)
     
     # Remove any headers that might have been generated
@@ -123,7 +130,7 @@ Stage: {getattr(profile, 'funding_stage', '')}
     
     return content
 
-def run_business_model_chain(profile: StartupProfile) -> str:
+def run_business_model_chain(profile: StartupProfile, evaluator: Optional[object] = None) -> str:
     """Generate business model section for the memo."""
     llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
     prompt = f"""
@@ -166,8 +173,9 @@ Go-to-Market: {getattr(profile, 'go_to_market', '')}
 Revenue Streams: {getattr(profile, 'revenue_streams', '')}
 Partners: {getattr(profile, 'partners', '')}
 """
-    response = llm.invoke(prompt)
-    raw = response.content.strip() if hasattr(response, 'content') else str(response)
+    resp = llm.invoke(prompt)
+    log_usage_from_message(evaluator, "BUSINESS MODEL AGENT", resp, model="gpt-4o")
+    raw = resp.content.strip() if hasattr(resp, 'content') else str(resp)
     print(f"[Business Model LLM Output]\n{raw}\n")
     # Post-process: ensure Mermaid diagram is preserved and clearly separated
     mermaid_match = re.search(r'(```mermaid[\s\S]+?```)', raw)
@@ -269,7 +277,7 @@ Partners: {getattr(profile, 'partners', '')}
     
     return raw
 
-def run_risks_section_chain(profile: StartupProfile) -> str:
+def run_risks_section_chain(profile: StartupProfile, evaluator: Optional[object] = None) -> str:
     """Generate risks section for the memo."""
     llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
     prompt = f"""
@@ -308,6 +316,7 @@ Competitive: {getattr(profile, 'top_competitors', '')}
 Regulatory: {getattr(profile, 'regulatory', '')}
 """
     response = llm.invoke(prompt)
+    log_usage_from_message(evaluator, "RISKS SECTION", response, model="gpt-4o")
     raw = response.content.strip() if hasattr(response, 'content') else str(response)
     
     # Convert markdown headers to bold formatting
@@ -392,7 +401,7 @@ def run_team_section_chain(profile: StartupProfile) -> str:
     
     return '\n'.join(lines) if lines else 'Team and management information not available.'
 
-def run_esg_section_chain(profile: StartupProfile) -> str:
+def run_esg_section_chain(profile: StartupProfile, evaluator: Optional[object] = None) -> str:
     """Generate ESG section for the memo."""
     llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
     prompt = f"""
@@ -415,8 +424,9 @@ Governance: {getattr(profile, 'governance', '')}
 Controversies: {getattr(profile, 'esg_controversies', '')}
 Certifications: {getattr(profile, 'esg_certifications', '')}
 """
-    response = llm.invoke(prompt)
-    raw = response.content.strip() if hasattr(response, 'content') else str(response)
+    resp = llm.invoke(prompt)
+    log_usage_from_message(evaluator, "ESG AGENT", resp, model="gpt-4o")
+    raw = resp.content.strip() if hasattr(resp, 'content') else str(resp)
     
     # Remove any bold headers that might have been generated
     raw = re.sub(r'\*\*Environmental:\*\*', 'Environmental', raw)
@@ -433,7 +443,7 @@ Certifications: {getattr(profile, 'esg_certifications', '')}
     
     return raw
 
-def run_analyst_commentary_chain(profile: StartupProfile) -> str:
+def run_analyst_commentary_chain(profile: StartupProfile, evaluator: Optional[object] = None) -> str:
     """Generate analyst commentary for the memo."""
     llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
     prompt = f"""
@@ -471,6 +481,7 @@ ESG: {getattr(profile, 'esg_summary', '')}
 Risks: {getattr(profile, 'risk_flags', '')}
 """
     response = llm.invoke(prompt)
+    log_usage_from_message(evaluator, "AI DISCUSSION AND COMMENTARY", response, model="gpt-4o")
     text = response.content.strip() if hasattr(response, 'content') else str(response)
     
     # Fix headers that might be bullet points instead of bold
@@ -493,7 +504,7 @@ Risks: {getattr(profile, 'risk_flags', '')}
     
     return clean_blank_bullets(text)
 
-def run_exit_strategies_chain(profile: StartupProfile) -> str:
+def run_exit_strategies_chain(profile: StartupProfile, evaluator: Optional[object] = None) -> str:
     """Generate exit strategies section for the memo."""
     llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
     prompt = f"""
@@ -513,8 +524,9 @@ Partnerships: {getattr(profile, 'partners', '')}
 Technology: {getattr(profile, 'tech_maturity', '')}
 Competitive: {getattr(profile, 'top_competitors', '')}
 """
-    response = llm.invoke(prompt)
-    raw = response.content.strip() if hasattr(response, 'content') else str(response)
+    resp = llm.invoke(prompt)
+    log_usage_from_message(evaluator, "EXIT AGENT", resp, model="gpt-4o")
+    raw = resp.content.strip() if hasattr(resp, 'content') else str(resp)
     
     # Remove any bold headers that might have been generated
     raw = re.sub(r'\*\*Investment & Exit Strategies:\*\*', '', raw)
@@ -531,7 +543,7 @@ Competitive: {getattr(profile, 'top_competitors', '')}
     
     return raw
 
-def run_followup_section_chain(profile: StartupProfile) -> str:
+def run_followup_section_chain(profile: StartupProfile, evaluator: Optional[object] = None) -> str:
     """Generate follow-up section for the memo."""
     llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
     prompt = f"""
@@ -560,8 +572,9 @@ Financials: {getattr(profile, 'financials', '')}
 Competitive: {getattr(profile, 'top_competitors', '')}
 Regulatory: {getattr(profile, 'regulatory', '')}
 """
-    response = llm.invoke(prompt)
-    raw = response.content.strip() if hasattr(response, 'content') else str(response)
+    resp = llm.invoke(prompt)
+    log_usage_from_message(evaluator, "FOLLOW-UP AGENT", resp, model="gpt-4o")
+    raw = resp.content.strip() if hasattr(resp, 'content') else str(resp)
     
     # Fix headers that might be bullet points instead of bold
     raw = re.sub(r'^•\s*Technology Validation & IP$', r'**Technology Validation & IP**', raw, flags=re.MULTILINE)
