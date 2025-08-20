@@ -14,8 +14,12 @@ import io
 
 # Local imports
 import sys
-sys.path.append(str(Path(__file__).parent.parent / "email_assistant" / "api" / "services"))
-from ocr import process_pdfs as ocr_process_pdfs
+# Make OCR optional: avoid importing credentials-demanding module at import time
+try:
+    sys.path.append(str(Path(__file__).parent.parent / "email_assistant" / "api" / "services"))
+    from ocr import process_pdfs as ocr_process_pdfs  # type: ignore
+except Exception:
+    ocr_process_pdfs = None
 from core.visual_utils import extract_images_from_pdf
 
 DOWNLOAD_DIR = Path(__file__).parent.parent / "data" / "vc_reports"
@@ -121,6 +125,9 @@ def extract_text_from_pdf(pdf_path, return_structured=False):
     Returns:
         str or dict: Extracted text, or dict with text/tables/figures.
     """
+    if ocr_process_pdfs is None:
+        print("[OCR] Skipping OCR: cloud OCR module not available (no credentials). Returning empty result.")
+        return {"text": "", "tables": [], "figures": []} if return_structured else ""
     print(f"[OCR] Extracting all text from {pdf_path} using Google Cloud Vision...")
     result = asyncio.run(ocr_process_pdfs([pdf_path]))
     if return_structured:
@@ -213,14 +220,17 @@ def enhanced_pdf_extraction(pdf_path, return_structured=False):
     
     # 3. OCR for any missing/scanned content
     if not results["text"] or len(results["text"]) < 1000:
-        print("[Enhanced Extraction] Text too short, running OCR...")
-        try:
-            ocr_result = asyncio.run(ocr_process_pdfs([pdf_path]))
-            results["text"] += "\n\n" + ocr_result["text"]
-            results["figures"] = ocr_result.get("figures", [])
-            print(f"[Enhanced Extraction] OCR added {len(ocr_result['text'])} characters")
-        except Exception as e:
-            print(f"[Enhanced Extraction] OCR failed: {e}")
+        if ocr_process_pdfs is None:
+            print("[Enhanced Extraction] Skipping OCR (not available)")
+        else:
+            print("[Enhanced Extraction] Text too short, running OCR...")
+            try:
+                ocr_result = asyncio.run(ocr_process_pdfs([pdf_path]))
+                results["text"] += "\n\n" + ocr_result["text"]
+                results["figures"] = ocr_result.get("figures", [])
+                print(f"[Enhanced Extraction] OCR added {len(ocr_result['text'])} characters")
+            except Exception as e:
+                print(f"[Enhanced Extraction] OCR failed: {e}")
     
     # 4. Image/chart extraction and OCR
     try:

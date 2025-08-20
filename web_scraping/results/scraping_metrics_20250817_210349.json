@@ -1,0 +1,73 @@
+{
+  "sessions": [
+    {
+      "scraper_name": "Crunchbase",
+      "success_rate": 100.0,
+      "average_response_time": 0,
+      "total_requests": 1,
+      "successful_requests": 1,
+      "failed_requests": 0,
+      "rate_limit_hits": 0,
+      "parsing_errors": 0,
+      "data_quality_score": 0.8,
+      "session_duration": 5.763523817062378,
+      "cpu_avg_percent": 18.983333333333334,
+      "cpu_max_percent": 26.9,
+      "mem_avg_mb": 50.161458333333336,
+      "mem_max_mb": 52.828125,
+      "data_extracted": 1
+    },
+    {
+      "scraper_name": "Beauhurst",
+      "success_rate": 100.0,
+      "average_response_time": 0,
+      "total_requests": 1,
+      "successful_requests": 1,
+      "failed_requests": 0,
+      "rate_limit_hits": 0,
+      "parsing_errors": 0,
+      "data_quality_score": 0.9,
+      "session_duration": 0.00675201416015625,
+      "cpu_avg_percent": 23.6,
+      "cpu_max_percent": 23.6,
+      "mem_avg_mb": 46.921875,
+      "mem_max_mb": 46.921875,
+      "data_extracted": 1
+    },
+    {
+      "scraper_name": "PitchBook",
+      "success_rate": 100.0,
+      "average_response_time": 0,
+      "total_requests": 1,
+      "successful_requests": 1,
+      "failed_requests": 0,
+      "rate_limit_hits": 0,
+      "parsing_errors": 0,
+      "data_quality_score": 0.85,
+      "session_duration": 0.010705232620239258,
+      "cpu_avg_percent": 20.3,
+      "cpu_max_percent": 20.3,
+      "mem_avg_mb": 46.921875,
+      "mem_max_mb": 46.921875,
+      "data_extracted": 1
+    },
+    {
+      "scraper_name": "TechCrunch",
+      "success_rate": 0.0,
+      "average_response_time": 0,
+      "total_requests": 1,
+      "successful_requests": 0,
+      "failed_requests": 1,
+      "rate_limit_hits": 0,
+      "parsing_errors": 0,
+      "data_quality_score": 0,
+      "session_duration": 0.004273176193237305,
+      "cpu_avg_percent": 15.5,
+      "cpu_max_percent": 15.5,
+      "mem_avg_mb": 46.96875,
+      "mem_max_mb": 46.96875,
+      "data_extracted": 0
+    }
+  ],
+  "generated_at": "2025-08-17T21:03:49.788724"
+}

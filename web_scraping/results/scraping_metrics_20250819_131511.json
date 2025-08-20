@@ -1,0 +1,22 @@
+{
+  "sessions": [
+    {
+      "scraper_name": "PitchBookNewsSearch",
+      "success_rate": 100.0,
+      "average_response_time": 0,
+      "total_requests": 100,
+      "successful_requests": 100,
+      "failed_requests": 0,
+      "rate_limit_hits": 0,
+      "parsing_errors": 0,
+      "data_quality_score": 0.7,
+      "session_duration": 2370.1928458213806,
+      "cpu_avg_percent": 16.920271993200217,
+      "cpu_max_percent": 100.0,
+      "mem_avg_mb": 49.218208802592436,
+      "mem_max_mb": 333.953125,
+      "data_extracted": 1
+    }
+  ],
+  "generated_at": "2025-08-19T13:15:11.980232"
+}

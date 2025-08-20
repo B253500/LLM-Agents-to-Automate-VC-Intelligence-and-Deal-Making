@@ -1,12 +1,21 @@
 import sys
 import os
+# Add both parent (web_scraping) and project root so `core` resolves like old logic
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 import re
 import random
 import string
 from pathlib import Path
+import platform
 from playwright.sync_api import sync_playwright, Error as PlaywrightError
 from core.download_utils import DOWNLOAD_DIR, NAV_TIMEOUT, load_downloaded_mapping, save_downloaded_mapping, _fetch_and_save, save_webpage_as_pdf
+
+# Optional metrics hook (set by metrics runner)
+_METRICS = None
+def set_metrics(metrics):
+    global _METRICS
+    _METRICS = metrics
 
 # --- Robust Beauhurst-specific scraping logic ---
 def fill_beauhurst_form(page):
@@ -113,6 +122,12 @@ def fill_beauhurst_form(page):
         return False
 
 def download_pdf_from_detail(page, detail_url):
+    # Count an attempt per detail page visited
+    try:
+        if _METRICS:
+            _METRICS.inc_attempt()
+    except Exception:
+        pass
     mapping = load_downloaded_mapping()
     if detail_url in mapping:
         mapped_val = mapping[detail_url]
@@ -152,6 +167,11 @@ def download_pdf_from_detail(page, detail_url):
                 href = page.url.rstrip('/') + href
             print(f"↓ Downloading PDF: {href}")
             _fetch_and_save(page, href, detail_url)
+            try:
+                if _METRICS:
+                    _METRICS.inc_direct_saved()
+            except Exception:
+                pass
             return True
         button = page.query_selector('a:has-text("Download"), button:has-text("Download")')
         if button and button.is_visible():
@@ -159,6 +179,11 @@ def download_pdf_from_detail(page, detail_url):
             if href and href.lower().endswith('.pdf'):
                 print(f"↓ Downloading PDF: {href}")
                 _fetch_and_save(page, href, detail_url)
+                try:
+                    if _METRICS:
+                        _METRICS.inc_direct_saved()
+                except Exception:
+                    pass
                 return True
             else:
                 try:
@@ -171,6 +196,11 @@ def download_pdf_from_detail(page, detail_url):
                     print(f"↓ Downloaded Beauhurst PDF: {target}")
                     mapping[detail_url] = fname
                     save_downloaded_mapping(mapping)
+                    try:
+                        if _METRICS:
+                            _METRICS.inc_direct_saved()
+                    except Exception:
+                        pass
                     return True
                 except Exception as e:
                     print(f"⚠️ Download button click failed: {e}")
@@ -196,9 +226,19 @@ def download_pdf_from_detail(page, detail_url):
                 print("Form submitted: confirmation message detected. Report will be sent by email. Skipping download.")
                 mapping[detail_url] = 'email_sent'
                 save_downloaded_mapping(mapping)
+                try:
+                    if _METRICS:
+                        _METRICS.inc_email_sent()
+                except Exception:
+                    pass
                 return
             print("Form filled, report appears to be revealed on page. Saving as PDF.")
             save_webpage_as_pdf(page, DOWNLOAD_DIR, safe_title, detail_url)
+            try:
+                if _METRICS:
+                    _METRICS.inc_fallback_saved()
+            except Exception:
+                pass
             return
     print("No download link/button or downloadable form found, saving page as PDF and logging HTML for debugging.")
     with open("debug_beauhurst_page.html", "w", encoding="utf-8") as f:
@@ -206,6 +246,11 @@ def download_pdf_from_detail(page, detail_url):
     save_webpage_as_pdf(page, DOWNLOAD_DIR, safe_title, detail_url)
     mapping[detail_url] = pdf_path.name
     save_downloaded_mapping(mapping)
+    try:
+        if _METRICS:
+            _METRICS.inc_fallback_saved()
+    except Exception:
+        pass
 
 def scrape_and_download_beauhurst(page, max_pages=21):
     print("=== Beauhurst Reports ===")
@@ -239,9 +284,41 @@ def scrape_and_download_beauhurst(page, max_pages=21):
 
 if __name__ == "__main__":
     with sync_playwright() as pw:
-        browser = pw.chromium.launch(headless=True)
-        context = browser.new_context(accept_downloads=True)
+        # Launch like the stable runner to avoid macOS headless crashes
+        if platform.system() == "Darwin":
+            try:
+                browser = pw.chromium.launch(channel="chrome", headless=False)
+                context = browser.new_context(accept_downloads=True)
+            except Exception:
+                # Fallback to bundled Chromium persistent context
+                user_data_dir = "/tmp/playwright_user_data"
+                context = pw.chromium.launch_persistent_context(user_data_dir, headless=False, accept_downloads=True)
+        else:
+            # Non-macOS: persistent headless context with safe flags
+            user_data_dir = "/tmp/playwright_user_data"
+            browser_args = [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-accelerated-2d-canvas',
+                '--no-first-run',
+                '--no-zygote',
+                '--single-process',
+                '--disable-gpu'
+            ]
+            context = pw.chromium.launch_persistent_context(user_data_dir, headless=True, accept_downloads=True, args=browser_args)
+
         page = context.new_page()
+        # Match older behavior: desktop UA helps avoid odd render paths
+        try:
+            page.context.set_extra_http_headers({
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+            })
+        except Exception:
+            pass
         page.set_default_navigation_timeout(NAV_TIMEOUT)
         scrape_and_download_beauhurst(page)
-        browser.close() 
+        try:
+            context.close()
+        except Exception:
+            pass

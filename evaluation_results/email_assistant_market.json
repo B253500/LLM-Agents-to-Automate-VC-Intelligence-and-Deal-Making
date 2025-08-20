@@ -1,0 +1,113 @@
+{
+  "total": 10,
+  "accuracy": 1.0,
+  "macro_f1": 1.0,
+  "latency_s": {
+    "p50": 3.999,
+    "p90": 23.204
+  },
+  "error_count": 0,
+  "numeric_claims": {
+    "total": 10,
+    "with_citation": 0,
+    "rate": 0.0
+  },
+  "sources_presence_rate": 1.0,
+  "confusion_matrix": {
+    "market_deep_dive": {
+      "market_deep_dive": 10
+    }
+  },
+  "examples": [
+    {
+      "question": "What is the Foodtech VC deal activity in 2021?",
+      "gold_label": "market_deep_dive",
+      "pred_label": "market_deep_dive",
+      "latency_s": 4.127,
+      "has_numeric": true,
+      "citation_compliant": false,
+      "num_sources": 30
+    },
+    {
+      "question": "What is gaming VC deal activity for 2021?",
+      "gold_label": "market_deep_dive",
+      "pred_label": "market_deep_dive",
+      "latency_s": 1.764,
+      "has_numeric": true,
+      "citation_compliant": false,
+      "num_sources": 30
+    },
+    {
+      "question": "What\u2019s the top sub-sector of Quantum Computing by number of companies generated?",
+      "gold_label": "market_deep_dive",
+      "pred_label": "market_deep_dive",
+      "latency_s": 2.231,
+      "has_numeric": true,
+      "citation_compliant": false,
+      "num_sources": 30
+    },
+    {
+      "question": "What is the total value of exits in the biotechnology/bio tools space in Q1 2025?",
+      "gold_label": "market_deep_dive",
+      "pred_label": "market_deep_dive",
+      "latency_s": 2.12,
+      "has_numeric": true,
+      "citation_compliant": false,
+      "num_sources": 30
+    },
+    {
+      "question": "List key pharma/biotools early-stage VC deals in Q1 2025.",
+      "gold_label": "market_deep_dive",
+      "pred_label": "market_deep_dive",
+      "latency_s": 20.503,
+      "has_numeric": true,
+      "citation_compliant": false,
+      "num_sources": 30
+    },
+    {
+      "question": "What is key e-commerce early-stage VC deals in Q1 2025?",
+      "gold_label": "market_deep_dive",
+      "pred_label": "market_deep_dive",
+      "latency_s": 23.504,
+      "has_numeric": true,
+      "citation_compliant": false,
+      "num_sources": 30
+    },
+    {
+      "question": "What was Insurtech VC deal activity in Q4 2024?",
+      "gold_label": "market_deep_dive",
+      "pred_label": "market_deep_dive",
+      "latency_s": 4.201,
+      "has_numeric": true,
+      "citation_compliant": false,
+      "num_sources": 30
+    },
+    {
+      "question": "What is the CAGR of median AI early-stage VC deal value from 2020 to 2025?",
+      "gold_label": "market_deep_dive",
+      "pred_label": "market_deep_dive",
+      "latency_s": 3.871,
+      "has_numeric": true,
+      "citation_compliant": false,
+      "num_sources": 30
+    },
+    {
+      "question": "What are the top 3 academic institutions by spinout activity in the UK?",
+      "gold_label": "market_deep_dive",
+      "pred_label": "market_deep_dive",
+      "latency_s": 3.314,
+      "has_numeric": true,
+      "citation_compliant": false,
+      "num_sources": 30
+    },
+    {
+      "question": "What was the global Insurtech deal activity and median pre-money valuation in Q1 2025? Include any notable trends or CAGR if referenced.",
+      "gold_label": "market_deep_dive",
+      "pred_label": "market_deep_dive",
+      "latency_s": 8.789,
+      "has_numeric": true,
+      "citation_compliant": false,
+      "num_sources": 30
+    }
+  ]
+}

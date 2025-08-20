@@ -1,0 +1,22 @@
+{
+  "sessions": [
+    {
+      "scraper_name": "PitchBook",
+      "success_rate": 50.0,
+      "average_response_time": 0,
+      "total_requests": 2,
+      "successful_requests": 1,
+      "failed_requests": 1,
+      "rate_limit_hits": 0,
+      "parsing_errors": 0,
+      "data_quality_score": 0.85,
+      "session_duration": 244.47814011573792,
+      "cpu_avg_percent": 15.937037037037028,
+      "cpu_max_percent": 88.8,
+      "mem_avg_mb": 30.274080504115226,
+      "mem_max_mb": 46.46875,
+      "data_extracted": 1
+    }
+  ],
+  "generated_at": "2025-08-19T11:37:23.499637"
+}

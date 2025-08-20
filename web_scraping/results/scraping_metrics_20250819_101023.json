@@ -1,0 +1,56 @@
+{
+  "sessions": [
+    {
+      "scraper_name": "PitchBook",
+      "success_rate": 100.0,
+      "average_response_time": 0,
+      "total_requests": 1,
+      "successful_requests": 1,
+      "failed_requests": 0,
+      "rate_limit_hits": 0,
+      "parsing_errors": 0,
+      "data_quality_score": 0.85,
+      "session_duration": 259.74821305274963,
+      "cpu_avg_percent": 11.454457364341087,
+      "cpu_max_percent": 75.7,
+      "mem_avg_mb": 35.64416787790697,
+      "mem_max_mb": 50.265625,
+      "data_extracted": 1
+    },
+    {
+      "scraper_name": "PitchBookNews",
+      "success_rate": 100.0,
+      "average_response_time": 0,
+      "total_requests": 10,
+      "successful_requests": 10,
+      "failed_requests": 0,
+      "rate_limit_hits": 0,
+      "parsing_errors": 0,
+      "data_quality_score": 0.7,
+      "session_duration": 241.13114023208618,
+      "cpu_avg_percent": 17.053556485355646,
+      "cpu_max_percent": 81.1,
+      "mem_avg_mb": 58.26575575313807,
+      "mem_max_mb": 112.40625,
+      "data_extracted": 1
+    },
+    {
+      "scraper_name": "PitchBookNewsSearch",
+      "success_rate": 100.0,
+      "average_response_time": 0,
+      "total_requests": 100,
+      "successful_requests": 100,
+      "failed_requests": 0,
+      "rate_limit_hits": 0,
+      "parsing_errors": 0,
+      "data_quality_score": 0.7,
+      "session_duration": 2431.677686214447,
+      "cpu_avg_percent": 12.14921163668667,
+      "cpu_max_percent": 98.4,
+      "mem_avg_mb": 66.48321605041083,
+      "mem_max_mb": 290.359375,
+      "data_extracted": 1
+    }
+  ],
+  "generated_at": "2025-08-19T10:10:23.964395"
+}

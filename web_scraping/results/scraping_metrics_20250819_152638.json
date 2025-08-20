@@ -1,0 +1,53 @@
+{
+  "sessions": [
+    {
+      "scraper_name": "Crunchbase",
+      "success_rate": 100.0,
+      "average_response_time": 0,
+      "total_requests": 8,
+      "successful_requests": 8,
+      "failed_requests": 0,
+      "rate_limit_hits": 0,
+      "parsing_errors": 0,
+      "data_quality_score": 0.8,
+      "session_duration": 157.5881929397583,
+      "cpu_avg_percent": 24.1178913738019,
+      "cpu_max_percent": 97.8,
+      "mem_avg_mb": 70.39901158146965,
+      "mem_max_mb": 565.15625,
+      "data_extracted": 1,
+      "attempts": 0,
+      "direct_saved": 0,
+      "fallback_saved": 0,
+      "email_sent": 0,
+      "fail": 0,
+      "cf_hits": 0,
+      "timeouts": 0
+    },
+    {
+      "scraper_name": "CrunchbaseNews",
+      "success_rate": 100.0,
+      "average_response_time": 0,
+      "total_requests": 100,
+      "successful_requests": 100,
+      "failed_requests": 0,
+      "rate_limit_hits": 0,
+      "parsing_errors": 0,
+      "data_quality_score": 0.75,
+      "session_duration": 1357.5656061172485,
+      "cpu_avg_percent": 20.807132243684997,
+      "cpu_max_percent": 98.6,
+      "mem_avg_mb": 35.00751067979198,
+      "mem_max_mb": 92.15625,
+      "data_extracted": 1,
+      "attempts": 0,
+      "direct_saved": 0,
+      "fallback_saved": 0,
+      "email_sent": 0,
+      "fail": 0,
+      "cf_hits": 0,
+      "timeouts": 0
+    }
+  ],
+  "generated_at": "2025-08-19T15:26:38.314252"
+}

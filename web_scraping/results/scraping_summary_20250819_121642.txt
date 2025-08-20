@@ -1,0 +1,7 @@
+SCRAPING SUMMARY
+Success Rate: 99.0%
+Total Requests: 102
+Failed Requests: 1
+Rate Limit Hits: 0
+Avg Response Time: 0.00s
+Avg Data Quality: 0.75

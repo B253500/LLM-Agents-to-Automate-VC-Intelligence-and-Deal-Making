@@ -1,0 +1,317 @@
+{
+  "run_info": {
+    "timestamp": "20250817_020839",
+    "pdf_name": "tagmonkey",
+    "total_words": 3287
+  },
+  "timing": {
+    "COMPLETE ANALYSIS PIPELINE": 355.2027020454407,
+    "DECK AGENT": 52.793007135391235,
+    "TECHNICAL DD AGENT": 7.602928876876831,
+    "TEAM AGENT": 31.334834814071655,
+    "MARKET SIZING AGENT": 25.269590139389038,
+    "FINANCIAL ANALYSIS AGENT": 36.841721057891846,
+    "COMPETITORS AGENT": 19.99126386642456,
+    "RISK ASSESSMENT AGENT": 2.4592840671539307,
+    "BUSINESS MODEL AGENT": 5.150267839431763,
+    "PRODUCT AGENT": 3.7264108657836914,
+    "ESG AGENT": 3.3824477195739746,
+    "EXIT AGENT": 5.281914949417114,
+    "FOLLOW-UP AGENT": 5.347941160202026,
+    "total_agent_runtime": 199.18161249160767,
+    "unattributed_time": 156.021089553833,
+    "analysis_agent_runtime": 176.2926299571991,
+    "synthesis_agent_runtime": 22.88898253440857,
+    "visuals_runtime": 0.023613929748535156,
+    "document_creation_runtime": 4.0949249267578125,
+    "extraction_runtime": 47.79506587982178,
+    "other_processes_runtime": 104.10748481750488
+  },
+  "tokens": {
+    "by_agent": {
+      "TECHNICAL DD AGENT": {
+        "input_tokens": 1693,
+        "output_tokens": 461,
+        "total_tokens": 2154,
+        "cost_usd": 0.01077,
+        "model": "gpt-4o"
+      },
+      "BUSINESS MODEL AGENT": {
+        "input_tokens": 463,
+        "output_tokens": 390,
+        "total_tokens": 853,
+        "cost_usd": 0.004265,
+        "model": "gpt-4o"
+      },
+      "ESG AGENT": {
+        "input_tokens": 190,
+        "output_tokens": 128,
+        "total_tokens": 318,
+        "cost_usd": 0.00159,
+        "model": "gpt-4o"
+      },
+      "EXIT AGENT": {
+        "input_tokens": 206,
+        "output_tokens": 144,
+        "total_tokens": 350,
+        "cost_usd": 0.0017499999999999998,
+        "model": "gpt-4o"
+      },
+      "FOLLOW-UP AGENT": {
+        "input_tokens": 310,
+        "output_tokens": 365,
+        "total_tokens": 675,
+        "cost_usd": 0.0033750000000000004,
+        "model": "gpt-4o"
+      },
+      "DETAILED SUMMARY": {
+        "input_tokens": 153,
+        "output_tokens": 115,
+        "total_tokens": 268,
+        "cost_usd": 0.00134,
+        "model": "gpt-4o"
+      },
+      "PROBLEM STATEMENT": {
+        "input_tokens": 221,
+        "output_tokens": 116,
+        "total_tokens": 337,
+        "cost_usd": 0.001685,
+        "model": "gpt-4o"
+      },
+      "SOLUTION OVERVIEW": {
+        "input_tokens": 178,
+        "output_tokens": 117,
+        "total_tokens": 295,
+        "cost_usd": 0.001475,
+        "model": "gpt-4o"
+      },
+      "MARKET SIZING AGENT": {
+        "input_tokens": 239,
+        "output_tokens": 122,
+        "total_tokens": 361,
+        "cost_usd": 0.001805,
+        "model": "gpt-4o"
+      }
+    },
+    "by_agent_estimated": {
+      "DECK AGENT": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 4795,
+        "cost_usd": 0.023975,
+        "model": "gpt-4o",
+        "estimated": true
+      },
+      "TECHNICAL DD AGENT": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 5542,
+        "cost_usd": 0.02771,
+        "model": "gpt-4o",
+        "estimated": true
+      },
+      "MARKET SIZING AGENT": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 5542,
+        "cost_usd": 0.02771,
+        "model": "gpt-4o",
+        "estimated": true
+      },
+      "FINANCIAL ANALYSIS AGENT": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 5690,
+        "cost_usd": 0.028450000000000003,
+        "model": "gpt-4o",
+        "estimated": true
+      },
+      "COMPETITORS AGENT": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 5690,
+        "cost_usd": 0.028450000000000003,
+        "model": "gpt-4o",
+        "estimated": true
+      },
+      "TEAM AGENT": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 6126,
+        "cost_usd": 0.03063,
+        "model": "gpt-4o",
+        "estimated": true
+      },
+      "RISK ASSESSMENT AGENT": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 6176,
+        "cost_usd": 0.03088,
+        "model": "gpt-4o",
+        "estimated": true
+      },
+      "BUSINESS MODEL AGENT": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 749,
+        "cost_usd": 0.003745,
+        "model": "gpt-4o",
+        "estimated": true
+      },
+      "PRODUCT AGENT": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 379,
+        "cost_usd": 0.001895,
+        "model": "gpt-4o",
+        "estimated": true
+      },
+      "ESG AGENT": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 276,
+        "cost_usd": 0.0013800000000000002,
+        "model": "gpt-4o",
+        "estimated": true
+      },
+      "EXIT AGENT": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 311,
+        "cost_usd": 0.001555,
+        "model": "gpt-4o",
+        "estimated": true
+      },
+      "FOLLOW-UP AGENT": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 650,
+        "cost_usd": 0.0032500000000000003,
+        "model": "gpt-4o",
+        "estimated": true
+      }
+    },
+    "by_model": {
+      "gpt-4o": 5611
+    },
+    "agent_total_tokens": 5611,
+    "agent_total_tokens_estimated": 41926,
+    "model_total_tokens": 5611
+  },
+  "system_usage": {
+    "cpu_peak_percent": 17.8,
+    "memory_peak_mb": 5563.140625
+  },
+  "completeness": {
+    "all_sections_present": true,
+    "present_count": 17
+  },
+  "readability": {
+    "flesch_reading_ease_overall": 9.429563518457911,
+    "flesch_kincaid_grade_overall": 15.048968016648143,
+    "category_overall": "very difficult",
+    "details": {
+      "sentences": 263,
+      "words": 3287,
+      "syllables": 7177,
+      "words_per_sentence": 12.49809885931559,
+      "syllables_per_word": 2.183449954365683,
+      "formula_ease": 9.429563518457911,
+      "formula_grade": 15.048968016648143
+    }
+  },
+  "duplicates_unknowns": {
+    "duplicate_ratio": 0.0,
+    "duplicate_count": 0,
+    "unknown_count_outside_risks": 1,
+    "unknown_count_including_risks": 3
+  },
+  "visuals": {
+    "mermaid_present": true
+  },
+  "cost": {
+    "token_cost_usd": 0.028055,
+    "external_cost_usd": 0.0,
+    "external_service_costs": {}
+  },
+  "section_checks": {
+    "DETAILED SUMMARY": {
+      "pass": true
+    },
+    "COMPANY OVERVIEW": {
+      "sector": true,
+      "website": false,
+      "team": true,
+      "funding_stage": true,
+      "pass": false
+    },
+    "PROBLEM STATEMENT": {
+      "pass": true
+    },
+    "SOLUTION OVERVIEW": {
+      "pass": true
+    },
+    "PRODUCT/SERVICE DESCRIPTION": {
+      "pass": true
+    },
+    "TECHNICAL DUE DILIGENCE": {
+      "pass": true
+    },
+    "ESG CONSIDERATIONS": {
+      "pass": true
+    },
+    "RISKS": {
+      "pass": true
+    },
+    "INVESTMENT & EXIT STRATEGIES": {
+      "pass": true
+    },
+    "COUNTERFACTUAL ANALYSIS": {
+      "pass": true
+    },
+    "FOLLOW-UP QUESTIONS": {
+      "pass": true
+    },
+    "AI DISCUSSION AND COMMENTARY": {
+      "pass": true
+    },
+    "MARKET SIZE & ANALYSIS": {
+      "has_numeric": true,
+      "link_count": 2,
+      "pass": true
+    },
+    "COMPETITORS": {
+      "count": 7,
+      "pass": true
+    },
+    "BUSINESS MODEL": {
+      "has_content": true,
+      "diagram": true,
+      "pass": true
+    },
+    "FINANCIAL ANALYSIS": {
+      "has_numeric": true,
+      "link_count": 0,
+      "pass": false
+    },
+    "TEAM & MANAGEMENT": {
+      "executives": 2,
+      "has_linkedin": false,
+      "pass": false
+    }
+  },
+  "quality": {
+    "score": 8.22,
+    "score_without_readability": 9.38,
+    "score_without_readability_raw": 7.97,
+    "breakdown": [
+      "completeness: 2.00/2.00 (17/17)",
+      "readability: 0.25/1.50 (very difficult)",
+      "visuals: 1.00/1.00 (diagram present)",
+      "duplicates: 1.00/1.00 (0.0%)",
+      "section checks: 2.47/3.00 (14/17)",
+      "content depth: 1.00/1.00 (\u22652000 words)",
+      "content length: 0.50/0.50 (\u226515k chars)"
+    ]
+  }
+}

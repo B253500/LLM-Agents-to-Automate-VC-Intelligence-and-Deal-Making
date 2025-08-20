@@ -1,0 +1,113 @@
+{
+  "total": 10,
+  "accuracy": 1.0,
+  "macro_f1": 1.0,
+  "latency_s": {
+    "p50": 52.768,
+    "p90": 77.487
+  },
+  "error_count": 0,
+  "numeric_claims": {
+    "total": 10,
+    "with_citation": 10,
+    "rate": 1.0
+  },
+  "sources_presence_rate": 0.0,
+  "confusion_matrix": {
+    "person": {
+      "person": 10
+    }
+  },
+  "examples": [
+    {
+      "question": "Profile Marc Andreessen: current roles, partner affiliations, notable investments, education, prior companies, and recent news (past 12 months). Include a LinkedIn URL and inline citations.",
+      "gold_label": "person",
+      "pred_label": "person",
+      "latency_s": 42.473,
+      "has_numeric": true,
+      "citation_compliant": true,
+      "num_sources": 0
+    },
+    {
+      "question": "Profile Reid Hoffman: LinkedIn URL, founding/board roles, key investments, books/podcasts, education, and notable news (past 12 months). Provide inline citations.",
+      "gold_label": "person",
+      "pred_label": "person",
+      "latency_s": 54.567,
+      "has_numeric": true,
+      "citation_compliant": true,
+      "num_sources": 0
+    },
+    {
+      "question": "Profile Mary Meeker: LinkedIn URL, fund (Bond) overview, prior Kleiner Perkins role, Internet Trends reports, notable investments, education, and recent news (past 12 months) with citations.",
+      "gold_label": "person",
+      "pred_label": "person",
+      "latency_s": 49.447,
+      "has_numeric": true,
+      "citation_compliant": true,
+      "num_sources": 0
+    },
+    {
+      "question": "Profile Peter Thiel: LinkedIn URL, roles (e.g., Founders Fund), key investments, board history, education, notable public positions, and recent news (past 12 months). Cite sources inline.",
+      "gold_label": "person",
+      "pred_label": "person",
+      "latency_s": 51.071,
+      "has_numeric": true,
+      "citation_compliant": true,
+      "num_sources": 0
+    },
+    {
+      "question": "Profile Jensen Huang: LinkedIn URL, current role (NVIDIA), key milestones, prior roles, education, and notable news (past 12 months). Include inline citations.",
+      "gold_label": "person",
+      "pred_label": "person",
+      "latency_s": 71.281,
+      "has_numeric": true,
+      "citation_compliant": true,
+      "num_sources": 0
+    },
+    {
+      "question": "Profile Demis Hassabis: LinkedIn URL, current role (Google DeepMind), prior companies, major research/publications, education, and recent news (past 12 months). Cite sources inline.",
+      "gold_label": "person",
+      "pred_label": "person",
+      "latency_s": 61.519,
+      "has_numeric": true,
+      "citation_compliant": true,
+      "num_sources": 0
+    },
+    {
+      "question": "Profile Patrick Collison: LinkedIn URL, roles (Stripe), notable initiatives, investments, education, and recent news (past 12 months). Provide inline citations.",
+      "gold_label": "person",
+      "pred_label": "person",
+      "latency_s": 54.464,
+      "has_numeric": true,
+      "citation_compliant": true,
+      "num_sources": 0
+    },
+    {
+      "question": "Profile Javier Olivan: LinkedIn URL, roles (Meta), prior companies, education, notable projects, and recent news (past 12 months). Include citations.",
+      "gold_label": "person",
+      "pred_label": "person",
+      "latency_s": 45.049,
+      "has_numeric": true,
+      "citation_compliant": true,
+      "num_sources": 0
+    },
+    {
+      "question": "Profile Gavin Baker: LinkedIn URL, investment focus, prior roles, education, notable commentary, and recent news (past 12 months). Cite sources inline.",
+      "gold_label": "person",
+      "pred_label": "person",
+      "latency_s": 47.277,
+      "has_numeric": true,
+      "citation_compliant": true,
+      "num_sources": 0
+    },
+    {
+      "question": "Profile Satya Nadella: LinkedIn URL, current role (Microsoft), prior roles, acquisitions led, education, and recent news (past 12 months). Provide inline citations.",
+      "gold_label": "person",
+      "pred_label": "person",
+      "latency_s": 78.177,
+      "has_numeric": true,
+      "citation_compliant": true,
+      "num_sources": 0
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "complete_analysis_pipeline_s": {
+    "median": 490.6071504354477,
+    "iqr": 132.92736011743546
+  },
+  "total_agent_runtime_s": {
+    "median": 328.9878097772598,
+    "iqr": 98.79965144395828
+  },
+  "analysis_agent_runtime_s": {
+    "median": 307.57377767562866,
+    "iqr": 92.34456074237823
+  },
+  "synthesis_agent_runtime_s": {
+    "median": 21.06640076637268,
+    "iqr": 6.771151125431061
+  },
+  "other_processes_runtime_s": {
+    "median": 170.8921022415161,
+    "iqr": 55.35075557231903
+  },
+  "consistency_check": {
+    "median_total_minutes": 8.176785840590794,
+    "median_analysis_minutes": 5.126229627927144,
+    "median_synthesis_minutes": 0.35110667943954466,
+    "median_other_minutes": 2.8482017040252687,
+    "sum_of_components_minutes": 8.325538011391957
+  }
+}

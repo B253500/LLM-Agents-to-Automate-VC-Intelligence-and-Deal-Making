@@ -1,0 +1,10 @@
+{"qid":"c1","question":"Stripe company overview: website, products, customers, industries, founded, headquarters, leadership, latest news.","label":"company"}
+{"qid":"c2","question":"DataRobot company overview: official website first, then products, customers, industries, founded year, HQ, leadership, notable news (past 12 months). Provide inline citations.","label":"company"}
+{"qid":"c3","question":"Snowflake company overview: website, products, customers, industries, founded, HQ, leadership, latest news.","label":"company"}
+{"qid":"c4","question":"Databricks company overview: website, products, customers, industries, founded, HQ, leadership, latest news.","label":"company"}
+{"qid":"c5","question":"Revolut company overview: website, products, customers, industries, founded, HQ, leadership, latest news.","label":"company"}
+{"qid":"c6","question":"OpenAI company overview: website, products, customers, industries, founded, HQ, leadership, latest news (past 12 months).","label":"company"}
+{"qid":"c7","question":"Anthropic company overview: official website, products, customers, industries, founded, HQ, leadership, notable news (past 12 months).","label":"company"}
+{"qid":"c8","question":"NVIDIA company overview: website, business segments, customers/partners, founded, HQ, leadership, latest news.","label":"company"}
+{"qid":"c9","question":"Palantir company overview: website, products, customers, industries, founded, HQ, leadership, latest news.","label":"company"}
+{"qid":"c10","question":"UiPath company overview: official website, products, customers, industries, founded, HQ, leadership, notable news (past 12 months).","label":"company"}

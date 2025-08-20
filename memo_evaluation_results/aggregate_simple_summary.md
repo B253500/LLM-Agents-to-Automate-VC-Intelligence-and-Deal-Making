@@ -1,51 +1,51 @@
 # Aggregate Summary (simple metrics)
 
-Runs aggregated: 10
-- Timing (overall) — median: 580.8s, IQR: 85.2s
+Runs aggregated: 50
+- Timing (overall) — median: 490.6s, IQR: 132.9s
 - Timing by agent (median, IQR in seconds):
-  - COMPLETE ANALYSIS PIPELINE: 580.8s (IQR 85.2s)
-  - DECK AGENT: 65.4s (IQR 41.6s)
-  - TECHNICAL DD AGENT: 18.2s (IQR 3.0s)
-  - TEAM AGENT: 124.8s (IQR 34.6s)
-  - MARKET SIZING AGENT: 25.3s (IQR 7.2s)
-  - FINANCIAL ANALYSIS AGENT: 64.3s (IQR 11.4s)
-  - COMPETITORS AGENT: 28.9s (IQR 2.6s)
-  - RISK ASSESSMENT AGENT: 3.3s (IQR 1.1s)
-  - BUSINESS MODEL AGENT: 7.6s (IQR 1.4s)
-  - PRODUCT AGENT: 5.3s (IQR 2.4s)
-  - ESG AGENT: 4.1s (IQR 0.7s)
-  - EXIT AGENT: 4.7s (IQR 1.4s)
-  - FOLLOW-UP AGENT: 5.8s (IQR 1.7s)
+  - COMPLETE ANALYSIS PIPELINE: 490.6s (IQR 132.9s)
+  - DECK AGENT: 63.1s (IQR 30.1s)
+  - TECHNICAL DD AGENT: 12.0s (IQR 6.3s)
+  - TEAM AGENT: 111.7s (IQR 36.6s)
+  - MARKET SIZING AGENT: 22.0s (IQR 5.5s)
+  - FINANCIAL ANALYSIS AGENT: 46.2s (IQR 10.7s)
+  - COMPETITORS AGENT: 26.6s (IQR 6.2s)
+  - RISK ASSESSMENT AGENT: 2.5s (IQR 1.1s)
+  - BUSINESS MODEL AGENT: 5.4s (IQR 2.5s)
+  - PRODUCT AGENT: 3.4s (IQR 1.3s)
+  - ESG AGENT: 3.1s (IQR 1.1s)
+  - EXIT AGENT: 3.4s (IQR 1.1s)
+  - FOLLOW-UP AGENT: 4.7s (IQR 2.0s)
 - Derived runtimes (median, IQR in seconds):
-  - total_agent_runtime: 378.3s (IQR 61.7s)
-  - analysis_agent_runtime: 348.3s (IQR 62.6s)
-  - synthesis_agent_runtime: 29.3s (IQR 3.5s)
-  - extraction_runtime: 0.0s (IQR 0.0s)
-  - visuals_runtime: 0.0s (IQR 0.3s)
-  - document_creation_runtime: 4.8s (IQR 0.4s)
-  - other_processes_runtime: 204.8s (IQR 30.1s)
-- Words (total) — median: 3454, IQR: 258
-- Duplicate ratio — median: 0.000, IQR: 0.004
-- Duplicate count — median: 0, IQR: 1
-- Unknowns (outside risks) — median: 1, IQR: 2
-- Unknowns (including risks) — median: 2, IQR: 2
+  - total_agent_runtime: 329.0s (IQR 98.8s)
+  - analysis_agent_runtime: 307.6s (IQR 92.3s)
+  - synthesis_agent_runtime: 21.1s (IQR 6.8s)
+  - extraction_runtime: 0.0s (IQR 42.2s)
+  - visuals_runtime: 0.0s (IQR 0.4s)
+  - document_creation_runtime: 5.1s (IQR 1.4s)
+  - other_processes_runtime: 153.2s (IQR 77.3s)
+- Words (total) — median: 3376, IQR: 290
+- Duplicate ratio — median: 0.000, IQR: 0.000
+- Duplicate count — median: 0, IQR: 0
+- Unknowns (outside risks) — median: 1, IQR: 1
+- Unknowns (including risks) — median: 3, IQR: 1
 - Visuals (Mermaid) presence: 100.0% of runs
 - other_processes_runtime includes: orchestration overhead, context building, enrichment outside agent wrappers, and memo/post-processing.
 - Section checks pass rates:
   - AI DISCUSSION AND COMMENTARY: 100.0%
   - BUSINESS MODEL: 100.0%
-  - COMPANY OVERVIEW: 70.0%
+  - COMPANY OVERVIEW: 50.0%
   - COMPETITORS: 100.0%
   - COUNTERFACTUAL ANALYSIS: 100.0%
   - DETAILED SUMMARY: 100.0%
   - ESG CONSIDERATIONS: 100.0%
-  - FINANCIAL ANALYSIS: 60.0%
+  - FINANCIAL ANALYSIS: 54.0%
   - FOLLOW-UP QUESTIONS: 100.0%
   - INVESTMENT & EXIT STRATEGIES: 100.0%
-  - MARKET SIZE & ANALYSIS: 90.0%
+  - MARKET SIZE & ANALYSIS: 94.0%
   - PROBLEM STATEMENT: 100.0%
   - PRODUCT/SERVICE DESCRIPTION: 100.0%
   - RISKS: 100.0%
   - SOLUTION OVERVIEW: 100.0%
-  - TEAM & MANAGEMENT: 60.0%
+  - TEAM & MANAGEMENT: 48.0%
   - TECHNICAL DUE DILIGENCE: 100.0%

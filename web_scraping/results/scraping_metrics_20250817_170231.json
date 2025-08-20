@@ -1,0 +1,73 @@
+{
+  "sessions": [
+    {
+      "scraper_name": "Crunchbase",
+      "success_rate": 100.0,
+      "average_response_time": 0,
+      "total_requests": 4,
+      "successful_requests": 4,
+      "failed_requests": 0,
+      "rate_limit_hits": 0,
+      "parsing_errors": 0,
+      "data_quality_score": 0.8,
+      "session_duration": 60.58149695396423,
+      "cpu_avg_percent": 34.95289256198347,
+      "cpu_max_percent": 98.0,
+      "mem_avg_mb": 58.727530991735534,
+      "mem_max_mb": 479.296875,
+      "data_extracted": 1
+    },
+    {
+      "scraper_name": "Beauhurst",
+      "success_rate": 100.0,
+      "average_response_time": 0,
+      "total_requests": 52,
+      "successful_requests": 52,
+      "failed_requests": 0,
+      "rate_limit_hits": 0,
+      "parsing_errors": 0,
+      "data_quality_score": 0.9,
+      "session_duration": 2322.947765827179,
+      "cpu_avg_percent": 30.807246691256257,
+      "cpu_max_percent": 99.8,
+      "mem_avg_mb": 35.40145977977869,
+      "mem_max_mb": 536.6875,
+      "data_extracted": 1
+    },
+    {
+      "scraper_name": "PitchBook",
+      "success_rate": 100.0,
+      "average_response_time": 0,
+      "total_requests": 1,
+      "successful_requests": 1,
+      "failed_requests": 0,
+      "rate_limit_hits": 0,
+      "parsing_errors": 0,
+      "data_quality_score": 0.85,
+      "session_duration": 120.79583430290222,
+      "cpu_avg_percent": 27.514583333333334,
+      "cpu_max_percent": 97.0,
+      "mem_avg_mb": 23.307096354166667,
+      "mem_max_mb": 43.859375,
+      "data_extracted": 1
+    },
+    {
+      "scraper_name": "TechCrunch",
+      "success_rate": 100.0,
+      "average_response_time": 0,
+      "total_requests": 201,
+      "successful_requests": 201,
+      "failed_requests": 0,
+      "rate_limit_hits": 0,
+      "parsing_errors": 0,
+      "data_quality_score": 0.7,
+      "session_duration": 2919.2332830429077,
+      "cpu_avg_percent": 29.346756383712844,
+      "cpu_max_percent": 99.8,
+      "mem_avg_mb": 57.91406789164942,
+      "mem_max_mb": 389.484375,
+      "data_extracted": 1
+    }
+  ],
+  "generated_at": "2025-08-17T17:02:31.454979"
+}

@@ -1,0 +1,384 @@
+[
+  {
+    "qid": "f1",
+    "question": "Sequoia Capital AUM, fund sizes, vintage years, LPs; include strategy, sectors, stages, HQ/offices, partners, notable portfolio, recent deals (past 12 months).",
+    "answer": "Sequoia Capital is a leading venture capital firm with approximately **$56 billion in assets under management (AUM)** as of January 2025 (source: [1]). The firm is headquartered in **Menlo Park, California** (source: [5]).\n\n### Fund Structure and Strategy\nSequoia Capital has transitioned from traditional 10-year fund cycles to an open-ended, evergreen fund structure with the launch of the **Sequoia Capital Fund** in October 2021. This structure allows the firm to hold investments indefinitely, providing more flexibility in managing their portfolio (source: [1][4]).\n\n### Recent Fund Raises\n- **Sequoia Crypto Fund**: Raised $600 million in February 2022 (source: [1]).\n- **India and Southeast Asia Fund**: Raised $2.85 billion in June 2022 (source: [1]).\n\n### Investment Strategy, Sectors, and Stages\nSequoia Capital invests across various sectors, including technology, healthcare, and consumer services. The firm is known for its focus on early-stage, growth-stage, and late-stage investments, supporting companies from inception through to IPO and beyond.\n\n### Notable Portfolio Companies\nSequoia Capital has a history of investing in some of the most successful technology companies, including **Apple, Cisco, Google, Instagram, LinkedIn, PayPal, WhatsApp, and Zoom** (source: [5]).\n\n### Recent Deals (Past 12 Months)\nThe specific recent deals from August 2024 to August 2025 are not detailed in the available sources. Therefore, this information is missing.\n\n### Limited Partners (LPs) and Partners\nDetails about the limited partners (LPs) and specific partners at Sequoia Capital are not provided in the available sources. Therefore, this information is missing.\n\nIn summary, Sequoia Capital is a major player in the venture capital industry with a significant AUM and a flexible fund structure that supports a wide range of investments across various stages and sectors.",
+    "sources": [],
+    "latency_s": 73.66,
+    "classification": "fund"
+  },
+  {
+    "qid": "f2",
+    "question": "Andreessen Horowitz (a16z) AUM, fund sizes, vintages, LPs; include strategy, sectors, stages, partners, notable portfolio, recent deals.",
+    "answer": "Andreessen Horowitz (a16z) is a prominent venture capital firm with a significant presence in the industry. Here is a synthesized overview of the firm based on the available sources:\n\n**Assets Under Management (AUM):**\n- a16z manages between $42 billion and $46 billion in assets, with some discrepancy in the exact figure (source: Web).\n\n**Fund Sizes and Vintages:**\n- In January 2022, a16z raised $9 billion for various funds, including venture capital, growth-stage, and biotech-focused funds (source: Web).\n- In May 2022, they launched their largest fund at $4.5 billion, specifically focused on crypto and blockchain, with $1.5 billion allocated for seed investments and $3 billion for venture investments (source: Web).\n\n**Limited Partners (LPs):**\n- Specific information about the limited partners is not provided in the available sources.\n\n**Strategy:**\n- a16z is stage agnostic, investing from seed to venture to growth-stage companies (source: Web).\n- The firm focuses on sectors such as AI, bio and healthcare, consumer, crypto, enterprise, fintech, games, infrastructure, and companies building toward American dynamism (source: Web).\n\n**Sectors:**\n- Key focus areas include enterprise software, fintech, cybersecurity, biotech, consumer technology, and healthcare (source: Web).\n\n**Stages:**\n- a16z invests across all stages, from seed to growth-stage (source: Web).\n\n**Partners:**\n- The general partners at a16z are typically former founders, operators, CEOs, or CTOs, bringing a wealth of experience to the firm (source: Web).\n\n**Notable Portfolio Companies:**\n- Some of the notable investments by a16z include Facebook, Airbnb, Lyft, and Slack (source: Web).\n\n**Recent Deals:**\n- In March 2022, a16z participated in a $450 million round for Yuga Labs at a $4 billion valuation and a $27 million Series A for Rutter (source: Web).\n- They also invested $90 million in Hadrian Automation alongside Lux Capital in March 2022 and $12 million in a Series A for Bounce in April 2022 (source: Web).\n- In August 2022, a16z made a $350 million investment in Flow by Adam Neumann (source: Web).\n- They were involved in a $400 million equity investment in the Twitter acquisition by Elon Musk in October 2022, which resulted in a $288 million loss by September 2024 (source: Web).\n- Additionally, a16z invested in xAI, which acquired Twitter in April 2025 for $45 billion (source: Web).\n\nThis overview provides a comprehensive look at Andreessen Horowitz's operations, strategy, and recent activities in the venture capital landscape.",
+    "sources": [],
+    "latency_s": 73.18,
+    "classification": "fund"
+  },
+  {
+    "qid": "f3",
+    "question": "Insight Partners fund overview: AUM, fund sizes, vintages, strategy, sectors, stages, notable exits and recent fundraising announcements.",
+    "answer": "The provided snippets do not contain specific information about Insight Partners, including details on their assets under management (AUM), fund sizes, vintages, strategy, sectors, stages, notable exits, or recent fundraising announcements. Therefore, I cannot provide an overview of Insight Partners based on the given data.",
+    "sources": [
+      {
+        "source": "H1_2025_VC_Tech_Survey_Investor_Insights_on_AI_Dealmaking_and_Fundraising_19410.pdf",
+        "page": 1,
+        "temporal_valid": true
+      },
+      {
+        "source": "H1_2025_VC_Tech_Survey_Investor_Insights_on_AI_Dealmaking_and_Fundraising_19410.pdf",
+        "page": 2,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q2_2025_PitchBook_Analyst_Note_Recap_of_the_Healthcare_Capital_Markets_Innovation_Summit_19418.pdf",
+        "page": 4,
+        "temporal_valid": true
+      },
+      {
+        "source": "Tecscaler-annual-report-2024.pdf",
+        "page": 34,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q2_2025_PitchBook_Analyst_Note_Recap_of_the_Healthcare_Capital_Markets_Innovation_Summit_19418.pdf",
+        "page": 2,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q1_2025_Foodtech_VC_Trends_19411.pdf",
+        "page": 7,
+        "temporal_valid": true
+      },
+      {
+        "source": "Tecscaler-annual-report-2024.pdf",
+        "page": 48,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q2_2025_PitchBook_Analyst_Note_US_VC-Backed_MA_Outlook_19317.pdf",
+        "page": 11,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q1_2025_E-Commerce_VC_Trends_19312.pdf",
+        "page": 8,
+        "temporal_valid": true
+      },
+      {
+        "source": "Beauhurst-DASA-Growth-Impact-Report-2025.pdf",
+        "page": 7,
+        "temporal_valid": true
+      },
+      {
+        "source": "Beauhurst-DASA-Growth-Impact-Report-2025.pdf",
+        "page": 10,
+        "temporal_valid": true
+      },
+      {
+        "source": "Beauhurst_Royal-Academy-of-Engineering_Spotlight-on-Spinouts-2025.pdf",
+        "page": 2,
+        "temporal_valid": true
+      },
+      {
+        "source": "Beauhurst_Royal-Academy-of-Engineering_Spotlight-on-Spinouts-2025.pdf",
+        "page": 16,
+        "temporal_valid": true
+      },
+      {
+        "source": "H1_2025_VC_Tech_Survey_Investor_Insights_on_AI_Dealmaking_and_Fundraising_19410.pdf",
+        "page": 3,
+        "temporal_valid": true
+      },
+      {
+        "source": "H1_2025_VC_Tech_Survey_Investor_Insights_on_AI_Dealmaking_and_Fundraising_19410.pdf",
+        "page": 11,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q2_2025_PitchBook_Analyst_Note_Tariffs_and_Supply_Chain_Challenges_in_Clean_Energy_19416.pdf",
+        "page": 3,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q1_2025_Foodtech_VC_Trends_19411.pdf",
+        "page": 6,
+        "temporal_valid": true
+      },
+      {
+        "source": "Tecscaler-annual-report-2024.pdf",
+        "page": 22,
+        "temporal_valid": true
+      },
+      {
+        "source": "Tecscaler-annual-report-2024.pdf",
+        "page": 33,
+        "temporal_valid": true
+      },
+      {
+        "source": "Tecscaler-annual-report-2024.pdf",
+        "page": 40,
+        "temporal_valid": true
+      },
+      {
+        "source": "Tecscaler-annual-report-2024.pdf",
+        "page": 76,
+        "temporal_valid": true
+      },
+      {
+        "source": "Tecscaler-annual-report-2024.pdf",
+        "page": 85,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q1_2025_Pharma_Biotools_VC_Trends_19367.pdf",
+        "page": 7,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q2_2025_PitchBook_Analyst_Note_US_VC-Backed_MA_Outlook_19317.pdf",
+        "page": 5,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q2_2025_PitchBook_Analyst_Note_US_VC-Backed_MA_Outlook_19317.pdf",
+        "page": 12,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q1_2025_Gaming_VC_Trends_19414.pdf",
+        "page": 7,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q1_2025_Gaming_VC_Trends_19414.pdf",
+        "page": 8,
+        "temporal_valid": true
+      },
+      {
+        "source": "Beauhurst-DASA-Growth-Impact-Report-2025.pdf",
+        "page": 3,
+        "temporal_valid": true
+      },
+      {
+        "source": "Beauhurst-DASA-Growth-Impact-Report-2025.pdf",
+        "page": 4,
+        "temporal_valid": true
+      },
+      {
+        "source": "Beauhurst-DASA-Growth-Impact-Report-2025.pdf",
+        "page": 5,
+        "temporal_valid": true
+      }
+    ],
+    "latency_s": 4.44,
+    "classification": "market_deep_dive"
+  },
+  {
+    "qid": "f4",
+    "question": "Accel fund overview: AUM, fund sizes, vintages, strategy, sectors, stages, notable portfolio and recent deals.",
+    "answer": "Accel is a globally recognized venture capital firm with a strong focus on technology investments across various stages and sectors. Here's a comprehensive overview of Accel's funds and investment strategy:\n\n### Assets Under Management (AUM) and Fund Sizes\n- Accel has raised significant capital across multiple funds, although specific AUM figures are not provided in the sources. However, notable fund sizes include:\n  - Accel India III fund raised $155 million in 2011 (source: CoreSignal).\n  - Accel's eighth India fund raised $650 million in January 2025, following the seventh India fund in March 2022 (source: CoreSignal).\n  - Accel Growth Fund 7 raised $1.35 billion in December 2024, which was intentionally smaller than previous funds (source: CoreSignal).\n\n### Vintages\n- Accel has launched several funds over the years, with notable vintages including:\n  - Accel India III in 2011 (source: CoreSignal).\n  - The seventh India fund in March 2022 and the eighth in January 2025 (source: CoreSignal).\n\n### Investment Strategy\n- Accel focuses on early-stage investments and growth stages, particularly in technology startups (source: CoreSignal).\n- The firm is known for its company-building approach, supporting startups from seed rounds through to growth stages (source: CoreSignal).\n\n### Sectors\n- Accel invests across a wide range of sectors, including:\n  - Internet services\n  - Digital media\n  - Software as a service (SaaS)\n  - Enterprise technologies\n  - Mobile\n  - Healthcare\n  - Education (source: CoreSignal).\n\n### Stages\n- Accel is active in early seeding rounds and growth stages, providing support to startups as they scale (source: CoreSignal).\n\n### Notable Portfolio Companies\n- Accel has invested in several high-profile companies, including:\n  - Facebook\n  - Slack\n  - Dropbox\n  - Atlassian\n  - Flipkart (invested at $4 million post-money, now valued at over $36 billion)\n  - Swiggy (invested at $2 million pre-money, went public at an $11.3 billion valuation)\n  - Freshworks (source: CoreSignal).\n\n### Recent Deals\n- Recent investments include companies like Atlassian, CrowdStrike, Freshworks, Qualtrics, Slack, 1Password, BrowserStack, Cyera, Speak, and Vercel (source: CoreSignal).\n\nOverall, Accel's strategy is characterized by its focus on technology-driven sectors, early-stage investments, and a global reach, particularly in the US, Europe, and India.",
+    "sources": [],
+    "latency_s": 74.56,
+    "classification": "fund"
+  },
+  {
+    "qid": "f5",
+    "question": "Lightspeed Venture Partners fund overview: AUM, fund sizes, vintages, strategy, sectors, stages, partners, notable portfolio, recent deals/fundraising.",
+    "answer": "Lightspeed Venture Partners is a prominent venture capital firm with a comprehensive investment strategy and a significant global presence. Here's an overview based on the available sources:\n\n- **Assets Under Management (AUM):** As of 2023, Lightspeed Venture Partners manages approximately $25 billion in assets (source: Wikipedia).\n\n- **Fund Sizes and Vintages:** In 2022, Lightspeed raised over $7 billion across several funds, including Fund XIV ($1.98 billion), Select Fund V ($2.26 billion), Opportunity Fund II ($2.36 billion), and LSIP Fund IV (India) with $500 million (source: Business Wire). They are currently in the process of raising an additional $7 billion for new funds (source: Newcomer).\n\n- **Strategy:** Lightspeed employs a global and multi-stage investment strategy, focusing on seed, early-stage, and growth-stage investments (source: Wikipedia, Business Wire).\n\n- **Sectors:** The firm invests in a variety of sectors, including enterprise, fintech, consumer, and healthcare (source: Wikipedia, Dealroom).\n\n- **Stages:** Lightspeed invests across multiple stages, from Seed to Series F and beyond (source: Company website).\n\n- **Partners:** Specific partners are not detailed in the provided sources, so this information is missing.\n\n- **Notable Portfolio:** Lightspeed has backed over 500 companies since its founding, with notable investments in companies like Wiz, Grafana Labs, Navan, Glean, Anthropic, Anduril, and Stripe. Rubrik, one of their portfolio companies, recently went public (source: Newcomer).\n\n- **Recent Deals/Fundraising:** In the past five years, Lightspeed has returned $8 billion from current and active funds, with more than $3 billion returned in 2024 alone (source: Newcomer). They are actively raising new funds, aiming for an additional $7 billion (source: Newcomer).\n\nOverall, Lightspeed Venture Partners is a well-established firm with a robust investment portfolio and a strategic focus on high-growth sectors and stages.",
+    "sources": [],
+    "latency_s": 62.91,
+    "classification": "fund"
+  },
+  {
+    "qid": "f6",
+    "question": "General Catalyst fund overview: AUM, fund sizes, vintages, strategy, sectors, stages, notable portfolio and recent deals.",
+    "answer": "## General Catalyst Fund Overview\n\n### **Assets Under Management (AUM)**\nGeneral Catalyst has a substantial presence in the venture capital industry with assets under management (AUM) reaching approximately **$33 billion** as of the latest reports (source: CoreSignal). This positions the firm among the largest venture capital operations globally, often referred to as \"megafunds\" (source: <url>).\n\n### **Fund Sizes and Structure**\nThe latest fund, **Fund XII**, was announced in October 2024, with a total of **$8 billion** raised. This fund is structured as follows:\n- **$4.5 billion** for core venture capital funds\n- **$1.5 billion** for the Creation strategy\n- **$2 billion** for separately managed accounts (source: <url>)\n\n### **Vintages**\nGeneral Catalyst was founded in the year 2000, marking **25 years** of operation in the venture capital industry (source: <url>).\n\n### **Investment Strategy**\nGeneral Catalyst employs a diverse investment strategy that spans:\n- **Seed to growth stage** investments\n- **Creation strategy** which involves building companies from the ground up\n- **Venture buyouts** and **transformations** (source: <url>)\n\n### **Sectors of Focus**\nThe firm invests across a wide range of sectors, including:\n- Healthcare\n- Software & Technology\n- Consumer\n- Artificial Intelligence (AI)\n- Defense & Intelligence\n- Climate & Energy\n- Industrials\n- Fintech (source: <url>)\n\n### **Investment Stages**\nGeneral Catalyst is active across various stages of company development, including:\n- **Seed-stage**\n- **Early-stage**\n- **Later-stage** companies (source: <url>)\n\n### **Notable Portfolio Companies**\nGeneral Catalyst has an impressive portfolio with investments in several high-profile companies, such as:\n- Airbnb\n- Snapchat\n- Stripe\n- ClassPass\n- Kayak\n- Commure\n- Hippocratic\n- Homeward\n- Crescendo\n- Demandware\n- Livongo (source: <url>)\n\n### **Recent Deals**\nWhile the search results mention recent deals, specific details about these deals are not provided in the available sources. Therefore, further information would be required to elaborate on recent transactions (source: <url>).\n\nIn summary, General Catalyst is a prominent venture capital firm with a significant AUM, a diverse investment strategy, and a strong portfolio of notable companies across various sectors and stages.",
+    "sources": [],
+    "latency_s": 65.11,
+    "classification": "fund"
+  },
+  {
+    "qid": "f7",
+    "question": "Kleiner Perkins fund overview: AUM, vintage years, strategy, sectors, stages, notable portfolio and recent fundraising announcements.",
+    "answer": "Kleiner Perkins is a well-established American venture capital firm, originally founded in the 1970s by Tom Perkins and Eugene Kleiner, and was formerly known as Kleiner Perkins Caufield & Byers (KPCB) (source: [1], [2]). The firm is headquartered in Menlo Park, California, and has been a significant player in Silicon Valley's venture capital landscape.\n\n**Assets Under Management (AUM) and Vintage Years:**\nWhile the precise AUM is not explicitly mentioned in the available sources, Kleiner Perkins has managed several substantial funds over the years. Notable funds include the iFund, which started at $100 million in 2008 and was later doubled to $200 million, a $500 million clean-tech fund in 2008, the sFund at $250 million in 2010, and KP XVII and DGF III totaling $1.4 billion in 2016 (source: [1]).\n\n**Investment Strategy:**\nKleiner Perkins focuses on incubation and early-stage investing, with check sizes ranging from $500,000 to $50 million (source: [2]). The firm invests across various stages, including Seed, Series A, and Series B+ (source: [2]).\n\n**Sectors:**\nThe firm has a diverse sector focus, investing in areas such as Biotech, Cybersecurity, Deeptech, Consumer, Fintech, Enterprise, Health, and Hardware (source: [2]).\n\n**Geographic Reach:**\nKleiner Perkins has a broad geographic investment reach, including the USA, Asia-Pacific, India, Europe, Canada, Latin America, Israel, and Australia/New Zealand (source: [2]).\n\n**Notable Portfolio:**\nKleiner Perkins has been an early investor in over 900 companies, with notable investments in major tech giants such as Amazon, Google, and Netscape (source: [1]).\n\n**Recent Fundraising Announcements:**\nRecently, Kleiner Perkins announced a new $600 million fund, which includes KP21 (the twenty-first venture fund) and KP Select III (source: [5]). Recent investments have been made in companies like Allium, Huntress, Glean, and PermitFlow (source: [5]).\n\nIn summary, Kleiner Perkins is a versatile and influential venture capital firm with a long history of successful investments across various sectors and geographies, focusing on early-stage companies and maintaining a strong presence in the venture capital industry through continuous fundraising and strategic investments.",
+    "sources": [],
+    "latency_s": 68.29,
+    "classification": "fund"
+  },
+  {
+    "qid": "f8",
+    "question": "Index Ventures fund overview: AUM, fund sizes, vintages, strategy, sectors, stages, offices, partners, notable portfolio, recent deals.",
+    "answer": "Index Ventures is a prominent multi-stage global investment firm with a comprehensive approach to funding across various stages and sectors. Here's an overview based on the available sources:\n\n1. **Assets Under Management (AUM):** As of the latest information, Index Ventures has an AUM of approximately $13 billion, though this figure might be outdated given the recent $2.3 billion raised in 2024 (source: DealRoom, TechCrunch).\n\n2. **Fund Sizes and Vintages:**\n   - In 2024, Index Ventures raised $2.3 billion in new funds, with $800 million dedicated to venture investments and $1.5 billion for growth- and late-stage companies (source: TechCrunch, Ropes & Gray).\n   - In 2021, they raised $900 million for Index Ventures XI and $2 billion for Index Ventures Growth VI (source: TechCrunch).\n   - In 2022, they raised $300 million for their seed fund, Index Origin II (source: TechCrunch).\n\n3. **Strategy:** Index Ventures operates as a multi-stage global firm, investing in early stages and supporting companies through to IPO. They have a seed fund called Index Origin and focus on both AI and non-AI venture rounds, with AI funding rounds at seed and Series A being notably larger than average (source: Index Ventures website, TechCrunch).\n\n4. **Sectors:** The firm focuses on several key areas, including e-commerce, fintech, mobility, gaming, infrastructure, and security (source: DealRoom).\n\n5. **Stages:** Index Ventures invests across multiple stages, from seed to growth and late-stage companies (source: Index Ventures website, TechCrunch).\n\n6. **Offices:** They have a strong presence in both Europe and San Francisco, reflecting their global investment strategy (source: DealRoom).\n\n7. **Partners:** Notable partners include Nina Achadjian, who is based in San Francisco and focuses on B2B enterprise software, vertical SaaS, and AI (source: TechCrunch).\n\n8. **Notable Portfolio:** Index Ventures has backed several high-profile companies, including Betfair, MySQL, Facebook, and Zendesk. They have a track record of 108 companies reaching a $1 billion+ valuation, 23 surpassing $10 billion, and 57 becoming publicly traded (source: DealRoom, Ropes & Gray).\n\n9. **Recent Deals:** While specific recent deals are not detailed in the sources, the firm continues to invest actively in both AI and non-AI sectors, with a focus on larger funding rounds in AI at the seed and Series A stages (source: TechCrunch).\n\nOverall, Index Ventures is a well-established firm with a diverse investment portfolio and a strategic focus on technology and innovation across various sectors and stages.",
+    "sources": [],
+    "latency_s": 74.01,
+    "classification": "fund"
+  },
+  {
+    "qid": "f9",
+    "question": "Founders Fund overview: AUM, fund sizes, vintages, strategy, sectors, stages, notable exits and recent fundraising.",
+    "answer": "The provided snippets do not contain specific information about Founders Fund, including details on assets under management (AUM), fund sizes, vintages, strategy, sectors, stages, notable exits, or recent fundraising activities. Therefore, I cannot provide an overview of Founders Fund based on the given data.",
+    "sources": [
+      {
+        "source": "Q2_2025_PitchBook_Analyst_Note_US_VC-Backed_MA_Outlook_19317.pdf",
+        "page": 11,
+        "temporal_valid": true
+      },
+      {
+        "source": "Beauhurst_Royal-Academy-of-Engineering_Spotlight-on-Spinouts-2025.pdf",
+        "page": 2,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q1_2025_Foodtech_VC_Trends_19411.pdf",
+        "page": 7,
+        "temporal_valid": true
+      },
+      {
+        "source": "Tecscaler-annual-report-2024.pdf",
+        "page": 34,
+        "temporal_valid": true
+      },
+      {
+        "source": "Tecscaler-annual-report-2024.pdf",
+        "page": 48,
+        "temporal_valid": true
+      },
+      {
+        "source": "Beauhurst-DASA-Growth-Impact-Report-2025.pdf",
+        "page": 7,
+        "temporal_valid": true
+      },
+      {
+        "source": "Beauhurst-DASA-Growth-Impact-Report-2025.pdf",
+        "page": 10,
+        "temporal_valid": true
+      },
+      {
+        "source": "H1_2025_VC_Tech_Survey_Investor_Insights_on_AI_Dealmaking_and_Fundraising_19410.pdf",
+        "page": 1,
+        "temporal_valid": true
+      },
+      {
+        "source": "H1_2025_VC_Tech_Survey_Investor_Insights_on_AI_Dealmaking_and_Fundraising_19410.pdf",
+        "page": 2,
+        "temporal_valid": true
+      },
+      {
+        "source": "H1_2025_VC_Tech_Survey_Investor_Insights_on_AI_Dealmaking_and_Fundraising_19410.pdf",
+        "page": 3,
+        "temporal_valid": true
+      },
+      {
+        "source": "H1_2025_VC_Tech_Survey_Investor_Insights_on_AI_Dealmaking_and_Fundraising_19410.pdf",
+        "page": 11,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q2_2025_PitchBook_Analyst_Note_Recap_of_the_Healthcare_Capital_Markets_Innovation_Summit_19418.pdf",
+        "page": 2,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q2_2025_PitchBook_Analyst_Note_Recap_of_the_Healthcare_Capital_Markets_Innovation_Summit_19418.pdf",
+        "page": 4,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q1_2025_Foodtech_VC_Trends_19411.pdf",
+        "page": 6,
+        "temporal_valid": true
+      },
+      {
+        "source": "Tecscaler-annual-report-2024.pdf",
+        "page": 33,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q1_2025_Pharma_Biotools_VC_Trends_19367.pdf",
+        "page": 7,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q2_2025_PitchBook_Analyst_Note_US_VC-Backed_MA_Outlook_19317.pdf",
+        "page": 1,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q2_2025_PitchBook_Analyst_Note_US_VC-Backed_MA_Outlook_19317.pdf",
+        "page": 5,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q2_2025_PitchBook_Analyst_Note_US_VC-Backed_MA_Outlook_19317.pdf",
+        "page": 12,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q1_2025_Gaming_VC_Trends_19414.pdf",
+        "page": 7,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q1_2025_E-Commerce_VC_Trends_19312.pdf",
+        "page": 8,
+        "temporal_valid": true
+      },
+      {
+        "source": "Beauhurst-DASA-Growth-Impact-Report-2025.pdf",
+        "page": 3,
+        "temporal_valid": true
+      },
+      {
+        "source": "Beauhurst-DASA-Growth-Impact-Report-2025.pdf",
+        "page": 5,
+        "temporal_valid": true
+      },
+      {
+        "source": "Beauhurst-DASA-Growth-Impact-Report-2025.pdf",
+        "page": 6,
+        "temporal_valid": true
+      },
+      {
+        "source": "Beauhurst-DASA-Growth-Impact-Report-2025.pdf",
+        "page": 8,
+        "temporal_valid": true
+      },
+      {
+        "source": "Beauhurst-DASA-Growth-Impact-Report-2025.pdf",
+        "page": 3,
+        "temporal_valid": true
+      },
+      {
+        "source": "Beauhurst_Royal-Academy-of-Engineering_Spotlight-on-Spinouts-2025.pdf",
+        "page": 16,
+        "temporal_valid": true
+      },
+      {
+        "source": "NPL-Quantum-Ecosystem-Mapping-Report-2024_PDF.pdf",
+        "page": 2,
+        "temporal_valid": true
+      },
+      {
+        "source": "H1_2025_VC_Tech_Survey_Investor_Insights_on_AI_Dealmaking_and_Fundraising_19410.pdf",
+        "page": 6,
+        "temporal_valid": true
+      },
+      {
+        "source": "Tecscaler-annual-report-2024.pdf",
+        "page": 11,
+        "temporal_valid": true
+      }
+    ],
+    "latency_s": 6.41,
+    "classification": "market_deep_dive"
+  },
+  {
+    "qid": "f10",
+    "question": "Bessemer Venture Partners overview: AUM, fund sizes, vintages, strategy, sectors, stages, partners, notable portfolio, recent deals.",
+    "answer": "## Bessemer Venture Partners Overview\n\n### Firm Overview and History\nBessemer Venture Partners (BVP) is one of the oldest venture capital firms in the United States, founded in 1911. It originated from Henry Phipps Jr., co-founder of Carnegie Steel, who established the Bessemer Trust to manage his family's assets. The firm later evolved into Bessemer Securities, initially investing in publicly traded securities, venture capital deals, and real estate (source: <think>).\n\n### Assets Under Management (AUM)\nAs of March 28, 2023, Bessemer Venture Partners manages assets totaling $37.6 billion (source: <think>).\n\n### Fund Sizes and Vintages\nWhile specific fund sizes and vintages are not detailed in the available sources, BVP is known for its significant financial backing, allowing it to participate in a wide range of investment stages and sectors.\n\n### Investment Strategy\nBVP's investment strategy encompasses a broad spectrum of stages, including seed, early-stage, growth-stage, Series A, and Series B+ investments. The firm typically writes check sizes ranging from $500,000 to $50 million (source: <think>).\n\n### Sectors\nBVP invests across various sectors, including consumer, enterprise, healthcare, artificial intelligence (AI), cybersecurity, biotechnology, and fintech (source: <think>).\n\n### Geographic Focus\nThe firm primarily focuses on investments in the United States but also extends its reach to Latin America, Europe, Israel, India, Canada, and the Asia-Pacific region (source: <think>).\n\n### Notable Portfolio Companies\nBVP has an impressive portfolio, having backed transformative companies such as Shopify, Pinterest, LinkedIn, Yelp, Wix, Fiverr, Toast, Twilio, PagerDuty, and DocuSign. The firm has been involved in over 135 IPOs and has more than 200 portfolio companies (source: <think>).\n\n### Recent Deals\nSpecific recent deals are not detailed in the available sources. However, BVP's ongoing investment activities continue to focus on high-growth sectors and innovative companies.\n\n### Partners\nInformation about specific partners at BVP is not provided in the available sources. However, the firm is known for its experienced team of investors and partners who drive its investment strategy and portfolio management.\n\n### Additional Information\nBVP maintains an \"Anti-Portfolio,\" highlighting missed investment opportunities in companies like Coinbase, Apple, eBay, and Airbnb, showcasing the firm's transparency and reflective approach to investment decisions (source: <think>).\n\nIn summary, Bessemer Venture Partners is a venerable and influential player in the venture capital landscape, with a robust AUM, diverse sector focus, and a history of successful investments across various stages and geographies.",
+    "sources": [],
+    "latency_s": 64.65,
+    "classification": "fund"
+  }
+]

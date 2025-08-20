@@ -1,0 +1,113 @@
+{
+  "total": 10,
+  "accuracy": 1.0,
+  "macro_f1": 1.0,
+  "latency_s": {
+    "p50": 65.2,
+    "p90": 96.639
+  },
+  "error_count": 0,
+  "numeric_claims": {
+    "total": 10,
+    "with_citation": 10,
+    "rate": 1.0
+  },
+  "sources_presence_rate": 0.0,
+  "confusion_matrix": {
+    "fund": {
+      "fund": 10
+    }
+  },
+  "examples": [
+    {
+      "question": "Sequoia Capital AUM, fund sizes, vintage years, LPs; include strategy, sectors, stages, HQ/offices, partners, notable portfolio, recent deals (past 12 months).",
+      "gold_label": "fund",
+      "pred_label": "fund",
+      "latency_s": 64.869,
+      "has_numeric": true,
+      "citation_compliant": true,
+      "num_sources": 0
+    },
+    {
+      "question": "Andreessen Horowitz (a16z) AUM, fund sizes, vintages, LPs; include strategy, sectors, stages, partners, notable portfolio, recent deals.",
+      "gold_label": "fund",
+      "pred_label": "fund",
+      "latency_s": 72.12,
+      "has_numeric": true,
+      "citation_compliant": true,
+      "num_sources": 0
+    },
+    {
+      "question": "Insight Partners fund overview: AUM, fund sizes, vintages, strategy, sectors, stages, notable exits and recent fundraising announcements.",
+      "gold_label": "fund",
+      "pred_label": "fund",
+      "latency_s": 75.849,
+      "has_numeric": true,
+      "citation_compliant": true,
+      "num_sources": 0
+    },
+    {
+      "question": "Accel fund overview: AUM, fund sizes, vintages, strategy, sectors, stages, notable portfolio and recent deals.",
+      "gold_label": "fund",
+      "pred_label": "fund",
+      "latency_s": 65.532,
+      "has_numeric": true,
+      "citation_compliant": true,
+      "num_sources": 0
+    },
+    {
+      "question": "Lightspeed Venture Partners fund overview: AUM, fund sizes, vintages, strategy, sectors, stages, partners, notable portfolio, recent deals/fundraising.",
+      "gold_label": "fund",
+      "pred_label": "fund",
+      "latency_s": 57.109,
+      "has_numeric": true,
+      "citation_compliant": true,
+      "num_sources": 0
+    },
+    {
+      "question": "General Catalyst fund overview: AUM, fund sizes, vintages, strategy, sectors, stages, notable portfolio and recent deals.",
+      "gold_label": "fund",
+      "pred_label": "fund",
+      "latency_s": 75.881,
+      "has_numeric": true,
+      "citation_compliant": true,
+      "num_sources": 0
+    },
+    {
+      "question": "Kleiner Perkins fund overview: AUM, vintage years, strategy, sectors, stages, notable portfolio and recent fundraising announcements.",
+      "gold_label": "fund",
+      "pred_label": "fund",
+      "latency_s": 60.651,
+      "has_numeric": true,
+      "citation_compliant": true,
+      "num_sources": 0
+    },
+    {
+      "question": "Index Ventures fund overview: AUM, fund sizes, vintages, strategy, sectors, stages, offices, partners, notable portfolio, recent deals.",
+      "gold_label": "fund",
+      "pred_label": "fund",
+      "latency_s": 98.945,
+      "has_numeric": true,
+      "citation_compliant": true,
+      "num_sources": 0
+    },
+    {
+      "question": "Founders Fund overview: AUM, fund sizes, vintages, strategy, sectors, stages, notable exits and recent fundraising.",
+      "gold_label": "fund",
+      "pred_label": "fund",
+      "latency_s": 60.293,
+      "has_numeric": true,
+      "citation_compliant": true,
+      "num_sources": 0
+    },
+    {
+      "question": "Bessemer Venture Partners overview: AUM, fund sizes, vintages, strategy, sectors, stages, partners, notable portfolio, recent deals.",
+      "gold_label": "fund",
+      "pred_label": "fund",
+      "latency_s": 54.806,
+      "has_numeric": true,
+      "citation_compliant": true,
+      "num_sources": 0
+    }
+  ]
+}

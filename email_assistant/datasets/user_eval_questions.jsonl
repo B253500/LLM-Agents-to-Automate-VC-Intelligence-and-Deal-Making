@@ -1,0 +1,18 @@
+{"question": "What is the Foodtech VC deal activity in 2021?", "label": "market_deep_dive"}
+{"question": "What is gaming VC deal activity for 2021?", "label": "market_deep_dive"}
+{"question": "What\u2019s the top sub-sector of Quantum Computing by number of companies generated?", "label": "market_deep_dive"}
+{"question": "What is the total value of exits in the biotechnology/bio tools space in Q1 2025?", "label": "market_deep_dive"}
+{"question": "List key pharma/biotools early-stage VC deals in Q1 2025.", "label": "market_deep_dive"}
+{"question": "What is key e-commerce early-stage VC deals in Q1 2025?", "label": "market_deep_dive"}
+{"question": "What was Insurtech VC deal activity in Q4 2024?", "label": "market_deep_dive"}
+{"question": "What is the CAGR of median AI early-stage VC deal value from 2020 to 2025?", "label": "market_deep_dive"}
+{"question": "What are the top 3 academic institutions by spinout activity in the UK?", "label": "market_deep_dive"}
+{"question": "Stripe company overview: website, products, customers, industries, founded, headquarters, leadership, latest news.", "label": "company"}
+{"question": "DataRobot company overview: official website first, then products, customers, industries, founded year, HQ, leadership, notable news (past 12 months). Provide inline citations.", "label": "company"}
+{"question": "Snowflake company overview: website, products, customers, industries, founded, HQ, leadership, latest news.", "label": "company"}
+{"question": "Databricks company overview: website, products, customers, industries, founded, HQ, leadership, latest news.", "label": "company"}
+{"question": "Revolut company overview: website, products, customers, industries, founded, HQ, leadership, latest news.", "label": "company"}
+{"question": "Sequoia Capital AUM, fund sizes, vintage years, LPs; include strategy, sectors, stages, HQ/offices, partners, notable portfolio, recent deals (past 12 months).", "label": "fund"}
+{"question": "Andreessen Horowitz (a16z) AUM, fund sizes, vintages, LPs; include strategy, sectors, stages, partners, notable portfolio, recent deals.", "label": "fund"}
+{"question": "Insight Partners fund overview: AUM, fund sizes, vintages, strategy, sectors, stages, notable exits and recent fundraising announcements.", "label": "fund"}
+{"question": "Accel fund overview: AUM, fund sizes, vintages, strategy, sectors, stages, notable portfolio and recent deals.", "label": "fund"}

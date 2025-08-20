@@ -1,0 +1,113 @@
+{
+  "total": 10,
+  "accuracy": 1.0,
+  "macro_f1": 1.0,
+  "latency_s": {
+    "p50": 51.294,
+    "p90": 65.024
+  },
+  "error_count": 0,
+  "numeric_claims": {
+    "total": 10,
+    "with_citation": 10,
+    "rate": 1.0
+  },
+  "sources_presence_rate": 0.1,
+  "confusion_matrix": {
+    "company": {
+      "company": 10
+    }
+  },
+  "examples": [
+    {
+      "question": "Stripe company overview: website, products, customers, industries, founded, headquarters, leadership, latest news.",
+      "gold_label": "company",
+      "pred_label": "company",
+      "latency_s": 57.506,
+      "has_numeric": true,
+      "citation_compliant": true,
+      "num_sources": 0
+    },
+    {
+      "question": "DataRobot company overview: official website first, then products, customers, industries, founded year, HQ, leadership, notable news (past 12 months). Provide inline citations.",
+      "gold_label": "company",
+      "pred_label": "company",
+      "latency_s": 56.305,
+      "has_numeric": true,
+      "citation_compliant": true,
+      "num_sources": 0
+    },
+    {
+      "question": "Snowflake company overview: website, products, customers, industries, founded, HQ, leadership, latest news.",
+      "gold_label": "company",
+      "pred_label": "company",
+      "latency_s": 49.343,
+      "has_numeric": true,
+      "citation_compliant": true,
+      "num_sources": 0
+    },
+    {
+      "question": "Databricks company overview: website, products, customers, industries, founded, HQ, leadership, latest news.",
+      "gold_label": "company",
+      "pred_label": "company",
+      "latency_s": 49.63,
+      "has_numeric": true,
+      "citation_compliant": true,
+      "num_sources": 0
+    },
+    {
+      "question": "Revolut company overview: website, products, customers, industries, founded, HQ, leadership, latest news.",
+      "gold_label": "company",
+      "pred_label": "company",
+      "latency_s": 55.316,
+      "has_numeric": true,
+      "citation_compliant": true,
+      "num_sources": 1
+    },
+    {
+      "question": "OpenAI company overview: website, products, customers, industries, founded, HQ, leadership, latest news (past 12 months).",
+      "gold_label": "company",
+      "pred_label": "company",
+      "latency_s": 51.405,
+      "has_numeric": true,
+      "citation_compliant": true,
+      "num_sources": 0
+    },
+    {
+      "question": "Anthropic company overview: official website, products, customers, industries, founded, HQ, leadership, notable news (past 12 months).",
+      "gold_label": "company",
+      "pred_label": "company",
+      "latency_s": 48.592,
+      "has_numeric": true,
+      "citation_compliant": true,
+      "num_sources": 0
+    },
+    {
+      "question": "NVIDIA company overview: website, business segments, customers/partners, founded, HQ, leadership, latest news.",
+      "gold_label": "company",
+      "pred_label": "company",
+      "latency_s": 44.49,
+      "has_numeric": true,
+      "citation_compliant": true,
+      "num_sources": 0
+    },
+    {
+      "question": "Palantir company overview: website, products, customers, industries, founded, HQ, leadership, latest news.",
+      "gold_label": "company",
+      "pred_label": "company",
+      "latency_s": 65.859,
+      "has_numeric": true,
+      "citation_compliant": true,
+      "num_sources": 0
+    },
+    {
+      "question": "UiPath company overview: official website, products, customers, industries, founded, HQ, leadership, notable news (past 12 months).",
+      "gold_label": "company",
+      "pred_label": "company",
+      "latency_s": 51.182,
+      "has_numeric": true,
+      "citation_compliant": true,
+      "num_sources": 0
+    }
+  ]
+}

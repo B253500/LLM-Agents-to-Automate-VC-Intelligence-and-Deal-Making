@@ -1,0 +1,238 @@
+[
+  {
+    "qid": "c1",
+    "question": "Stripe company overview: website, products, customers, industries, founded, headquarters, leadership, latest news.",
+    "answer": "Stripe is a prominent financial technology company with a significant global presence. Here is a comprehensive overview of the company:\n\n1. **Website**: Stripe's official website is [www.stripe.com](http://www.stripe.com) (source: CoreSignal).\n\n2. **Products**: Stripe offers a range of products primarily focused on online payments. These include the Core Payments Platform, Stripe Subscriptions, Stripe Checkout, Stripe Relay, Stripe Connect, and Stripe Atlas (source: CoreSignal).\n\n3. **Customers**: Stripe serves a diverse customer base, including 62% of Fortune 500 companies. It is used by 4.2 million websites globally and gains 25,000 new users daily as of 2025 (source: CoreSignal).\n\n4. **Industries**: While specific industries are not detailed in the sources, Stripe's services are applicable across various sectors that require online payment solutions, including e-commerce, SaaS, and financial services (source: CoreSignal).\n\n5. **Founded**: Stripe was founded in 2010 by the Collison brothers (source: CoreSignal).\n\n6. **Headquarters**: The company is dual-headquartered in San Francisco, California, and Dublin, Ireland. It also has offices in London, Paris, Singapore, and Tokyo (source: CoreSignal).\n\n7. **Leadership**: The leadership team includes the CEO and President, who are the co-founders, along with various other executives (source: CoreSignal).\n\n8. **Latest News**: As of the latest updates, Stripe has a valuation of approximately $65 billion, with some sources citing a valuation of $91 billion. It processed over $1.4 trillion in payment volume during 2024 and operates in 140 countries, supporting 135+ currencies (source: CoreSignal).\n\nStripe's robust payment processing capabilities and widespread adoption by major enterprises underscore its position as a leading player in the fintech industry.",
+    "sources": [],
+    "latency_s": 59.81,
+    "classification": "company"
+  },
+  {
+    "qid": "c2",
+    "question": "DataRobot company overview: official website first, then products, customers, industries, founded year, HQ, leadership, notable news (past 12 months). Provide inline citations.",
+    "answer": "DataRobot is a prominent provider of automated machine learning (AutoML) solutions, with its official website located at www.datarobot.com (source: datarobot.com). The company offers a comprehensive AI platform that includes various modules designed to assist data scientists of all skill levels in building and deploying accurate machine learning models efficiently (source: CoreSignal). DataRobot's platform operates on an annual subscription model with two main tiers: Essentials and Business Critical, catering to different business needs and scales (source: CoreSignal).\n\nDataRobot serves over 1,000 organizations globally across a wide range of industries. Some of its notable customers include BCG, Boston Children's Hospital, FordDirect, Old Mutual, Razorpay, and the U.S. Army (source: CoreSignal). The company was founded in 2012 by Jeremy Achin and Tom de Godoy and is headquartered in Boston, Massachusetts (source: CoreSignal).\n\nThe leadership team at DataRobot includes Debanjan Saha as the CEO and Amy Suchanek as the Chief Product Officer (source: CoreSignal).\n\nRegarding notable news from the past 12 months, there is no specific information available in the provided sources. If further details are required, additional research may be necessary to identify recent developments or news events related to DataRobot.",
+    "sources": [],
+    "latency_s": 46.4,
+    "classification": "company"
+  },
+  {
+    "qid": "c3",
+    "question": "Snowflake company overview: website, products, customers, industries, founded, HQ, leadership, latest news.",
+    "answer": "Snowflake is a prominent company in the business intelligence software industry, known for its innovative data solutions. Here is a comprehensive overview of the company:\n\n- **Website**: Snowflake's official website is [www.snowflake.com](http://www.snowflake.com) (source: [1]).\n\n- **Products**: Snowflake offers a Data Cloud platform that allows customers to consolidate data, build data-driven applications, share data, and apply AI to solve business problems. Their AI Data Cloud is a unified platform for building, using, and sharing data, applications, and AI (source: [1], [2]).\n\n- **Customers**: Snowflake serves a vast customer base of over 11,000 organizations, including hundreds of the world's largest companies. It is particularly notable for having Forbes Global 2000 customers and those with $1M+ in spending (source: [2], [4]).\n\n- **Industries**: Snowflake operates within the business intelligence software industry, providing solutions that cater to a wide range of sectors by enabling data consolidation and AI application across multiple public clouds (source: [1]).\n\n- **Founded**: The company was founded in 2012 and was initially known as Snowflake Computing, Inc. It changed its name to Snowflake Inc. in April 2019 (source: [1]).\n\n- **Headquarters**: Snowflake's headquarters is located at 106 E Babcock St Ste 3A, Bozeman, Montana, 59715, United States (source: [1], [3]).\n\n- **Leadership**: The specific details about the current leadership team are not provided in the available sources.\n\n- **Latest News**: The latest news dates mentioned are from July 10, 2025, and August 4, 2025, indicating past events. However, specific details about these news events are not provided in the available sources (source: [2]).\n\nOverall, Snowflake is a key player in the data and AI space, with a strong customer base and a platform that supports data-driven decision-making across various industries.",
+    "sources": [],
+    "latency_s": 64.5,
+    "classification": "company"
+  },
+  {
+    "qid": "c4",
+    "question": "Databricks company overview: website, products, customers, industries, founded, HQ, leadership, latest news.",
+    "answer": "Databricks is a prominent data and artificial intelligence company known for pioneering the data lakehouse platform, which integrates data warehousing and data lakes to create a collaborative environment for data engineering, data science, machine learning, and business analytics (source: CoreSignal). The company was founded in 2013 by the original creators of Apache Spark\u2122, Delta Lake, and MLflow, with the mission to simplify data and AI processes, enabling organizations to innovate more rapidly and tackle complex challenges (source: CoreSignal).\n\n**Website:** The official website for Databricks is www.databricks.com (source: CoreSignal).\n\n**Headquarters:** Databricks is headquartered at 15th Floor, 160 Spear Street, San Francisco, California, 94105, United States. This location serves as the central hub for its global operations, including strategic decision-making and core product development (source: CoreSignal).\n\n**Products and Services:** Databricks offers a comprehensive Data Intelligence Platform that supports data governance and the development of artificial intelligence applications. This platform is designed to unify data warehousing and data lakes, providing a robust environment for various data-related activities (source: CoreSignal).\n\n**Customers:** Some of Databricks' notable customers include Shell, Cond\u00e9 Nast, and Regeneron, showcasing its reach across different sectors (source: CoreSignal).\n\n**Industries:** Databricks serves a diverse range of industries, including communications, financial services, healthcare and life sciences, media and entertainment, and retail (source: CoreSignal).\n\n**Leadership:** While specific names of the leadership team are not mentioned in the available sources, the company is led by a team of experienced professionals in the data and AI fields (source: CoreSignal).\n\n**Latest News:** Recent developments include events and acquisitions planned for 2025, indicating ongoing growth and strategic expansion (source: CoreSignal).\n\nThis overview provides a snapshot of Databricks' operations, offerings, and market presence, highlighting its role as a leader in the data and AI industry.",
+    "sources": [],
+    "latency_s": 48.9,
+    "classification": "company"
+  },
+  {
+    "qid": "c5",
+    "question": "Revolut company overview: website, products, customers, industries, founded, HQ, leadership, latest news.",
+    "answer": "Revolut is a British multinational neobank that has established itself as one of Europe's most valuable fintech companies, offering a comprehensive digital banking platform with a global presence (source: [Web](https://www.revolut.com)).\n\n### **Company Overview**\n\n- **Website:** [https://www.revolut.com](https://www.revolut.com) (source: [Web](https://www.revolut.com))\n- **Products:** Revolut provides a wide range of digital banking services, including domestic and international bank transfers, debit and credit cards, stock and cryptocurrency exchange, savings accounts, loans, and mortgages (source: [Web](https://www.revolut.com)).\n- **Customers:** As of 2025, Revolut serves over 60 million retail customers globally and operates in more than 48 countries (source: [Web](https://www.revolut.com)).\n- **Industries:** The company operates within the financial services and fintech industries (source: [Web](https://www.revolut.com)).\n- **Founded:** Revolut was founded in July 2015 (source: [Web](https://www.revolut.com)).\n- **Headquarters:** The company is headquartered in London, United Kingdom (source: [Web](https://www.revolut.com)).\n- **Leadership:** The leadership team includes CEO Nikolay Storonsky, CTO Vlad Yatsenko, and Dmitry Zlokazov as the head of product (source: [Web](https://www.revolut.com)).\n\n### **Latest News**\n\nRevolut recently secured a banking license after a three-year effort, marking a significant milestone in its expansion strategy. Additionally, CEO Nikolay Storonsky conducted a share sale exceeding $400 million. The company is also planning to expand its mortgage offerings in Lithuania, Ireland, and France (source: [Web](https://www.revolut.com)).",
+    "sources": [
+      {
+        "source": "https://www.revolut.com",
+        "temporal_valid": true
+      }
+    ],
+    "latency_s": 54.31,
+    "classification": "company"
+  },
+  {
+    "qid": "c6",
+    "question": "OpenAI company overview: website, products, customers, industries, founded, HQ, leadership, latest news (past 12 months).",
+    "answer": "OpenAI is a prominent American artificial intelligence organization that was founded in December 2015. It is headquartered in San Francisco, California (source: [3]).\n\n### Website\nThe specific website for OpenAI is not explicitly mentioned in the provided sources, but it is commonly known to be [openai.com](https://www.openai.com).\n\n### Products\nOpenAI is renowned for its development of advanced AI models and products, including the GPT family of models, DALL-E, ChatGPT, Sora, the GPT-4.1 series, and GPT-4o (source: [1][3]).\n\n### Customers\nOpenAI's products are widely used across various sectors, with 92% of Fortune 500 companies reportedly utilizing their technologies. Additionally, ChatGPT has 100 million weekly users, and there are 15 million active subscribers to ChatGPT Plus (source: [2][4]).\n\n### Industries\nOpenAI serves a broad range of industries through its enterprise offerings, although specific industries are not detailed in the provided sources.\n\n### Leadership\nThe leadership team at OpenAI includes Sam Altman as the CEO and Mark Chen as the Chief Research Officer (source: [1][2]).\n\n### Latest News\nThe latest developments from OpenAI within the past 12 months, as of August 2025, include advancements in their AI models and continued expansion of their user base and product offerings (source: [1]).\n\nThis overview provides a snapshot of OpenAI's current status and recent activities, highlighting its significant impact on the AI industry.",
+    "sources": [],
+    "latency_s": 58.62,
+    "classification": "company"
+  },
+  {
+    "qid": "c7",
+    "question": "Anthropic company overview: official website, products, customers, industries, founded, HQ, leadership, notable news (past 12 months).",
+    "answer": "Anthropic is an American artificial intelligence startup that has quickly become a significant entity in the AI industry, particularly focusing on AI safety research and the development of large language models.\n\n1. **Official Website**: The official website for Anthropic is [anthropic.com](https://www.anthropic.com).\n\n2. **Products**: Anthropic's primary product is the **Claude** family of large language models, which are designed with an emphasis on safety, reliability, and alignment with human values.\n\n3. **Customers and Industries**: Specific information about Anthropic's customers and the industries they serve is not provided in the available sources. However, given their focus on AI and large language models, it is likely that their customers span various sectors interested in AI applications, such as technology, finance, healthcare, and more.\n\n4. **Founded**: Anthropic was founded in 2021.\n\n5. **Headquarters**: The company is headquartered in San Francisco, California, at 350 Rhode Island St, Suite 400.\n\n6. **Leadership**: \n   - Dario Amodei: Co-founder and CEO\n   - Daniela Amodei: Co-founder and President\n   - Mike Krieger: Chief Product Officer\n   - Jan Leike: ex-OpenAI alignment researcher\n\n7. **Notable News (Past 12 Months)**: In early 2025, Anthropic secured significant funding and partnerships, contributing to its rapid expansion. The company has been actively growing its operations and influence in the AI market.\n\nAnthropic is structured as a Delaware public-benefit corporation (PBC) and has attracted substantial investment from major companies, including Amazon ($8 billion), Google ($2 billion), and Menlo Ventures ($750 million). The company projects a revenue of $2.2 billion in 2025 and holds a 3.91% market share in the generative AI market.",
+    "sources": [],
+    "latency_s": 47.77,
+    "classification": "company"
+  },
+  {
+    "qid": "c8",
+    "question": "NVIDIA company overview: website, business segments, customers/partners, founded, HQ, leadership, latest news.",
+    "answer": "The snippets provided do not contain information about NVIDIA's company overview, including its website, business segments, customers/partners, founding details, headquarters, leadership, or latest news.",
+    "sources": [
+      {
+        "source": "Tecscaler-annual-report-2024.pdf",
+        "page": 85,
+        "temporal_valid": true
+      },
+      {
+        "source": "Beauhurst-DASA-Growth-Impact-Report-2025.pdf",
+        "page": 4,
+        "temporal_valid": true
+      },
+      {
+        "source": "Beauhurst_Royal-Academy-of-Engineering_Spotlight-on-Spinouts-2025.pdf",
+        "page": 16,
+        "temporal_valid": true
+      },
+      {
+        "source": "NPL-Quantum-Ecosystem-Mapping-Report-2024_PDF.pdf",
+        "page": 22,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q2_2025_PitchBook_Analyst_Note_Tariffs_and_Supply_Chain_Challenges_in_Clean_Energy_19416.pdf",
+        "page": 3,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q1_2025_E-Commerce_VC_Trends_19312.pdf",
+        "page": 9,
+        "temporal_valid": true
+      },
+      {
+        "source": "Beauhurst_Royal-Academy-of-Engineering_Spotlight-on-Spinouts-2025.pdf",
+        "page": 19,
+        "temporal_valid": true
+      },
+      {
+        "source": "Beauhurst_Royal-Academy-of-Engineering_Spotlight-on-Spinouts-2025.pdf",
+        "page": 30,
+        "temporal_valid": true
+      },
+      {
+        "source": "Beauhurst_Royal-Academy-of-Engineering_Spotlight-on-Spinouts-2025.pdf",
+        "page": 35,
+        "temporal_valid": true
+      },
+      {
+        "source": "NPL-Quantum-Ecosystem-Mapping-Report-2024_PDF.pdf",
+        "page": 2,
+        "temporal_valid": true
+      },
+      {
+        "source": "NPL-Quantum-Ecosystem-Mapping-Report-2024_PDF.pdf",
+        "page": 6,
+        "temporal_valid": true
+      },
+      {
+        "source": "NPL-Quantum-Ecosystem-Mapping-Report-2024_PDF.pdf",
+        "page": 10,
+        "temporal_valid": true
+      },
+      {
+        "source": "NPL-Quantum-Ecosystem-Mapping-Report-2024_PDF.pdf",
+        "page": 14,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q1_2025_Insurtech_VC_Trends_19315.pdf",
+        "page": 14,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q1_2025_Insurtech_VC_Trends_19315.pdf",
+        "page": 14,
+        "temporal_valid": true
+      },
+      {
+        "source": "H1_2025_VC_Tech_Survey_Investor_Insights_on_AI_Dealmaking_and_Fundraising_19410.pdf",
+        "page": 1,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q2_2025_PitchBook_Analyst_Note_Recap_of_the_Healthcare_Capital_Markets_Innovation_Summit_19418.pdf",
+        "page": 1,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q2_2025_PitchBook_Analyst_Note_Recap_of_the_Healthcare_Capital_Markets_Innovation_Summit_19418.pdf",
+        "page": 4,
+        "temporal_valid": true
+      },
+      {
+        "source": "May_2025_Global_Markets_Snapshot_19415.pdf",
+        "page": 3,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q2_2025_PitchBook_Analyst_Note_Tariffs_and_Supply_Chain_Challenges_in_Clean_Energy_19416.pdf",
+        "page": 1,
+        "temporal_valid": true
+      },
+      {
+        "source": "Tecscaler-annual-report-2024.pdf",
+        "page": 22,
+        "temporal_valid": true
+      },
+      {
+        "source": "Tecscaler-annual-report-2024.pdf",
+        "page": 24,
+        "temporal_valid": true
+      },
+      {
+        "source": "Tecscaler-annual-report-2024.pdf",
+        "page": 31,
+        "temporal_valid": true
+      },
+      {
+        "source": "Tecscaler-annual-report-2024.pdf",
+        "page": 35,
+        "temporal_valid": true
+      },
+      {
+        "source": "Tecscaler-annual-report-2024.pdf",
+        "page": 84,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q2_2025_PitchBook_Analyst_Note_US_VC-Backed_MA_Outlook_19317.pdf",
+        "page": 1,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q2_2025_PitchBook_Analyst_Note_US_VC-Backed_MA_Outlook_19317.pdf",
+        "page": 9,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q1_2025_Gaming_VC_Trends_19414.pdf",
+        "page": 4,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q1_2025_Gaming_VC_Trends_19414.pdf",
+        "page": 8,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q1_2025_Gaming_VC_Trends_19414.pdf",
+        "page": 18,
+        "temporal_valid": true
+      }
+    ],
+    "latency_s": 3.5,
+    "classification": "market_deep_dive"
+  },
+  {
+    "qid": "c9",
+    "question": "Palantir company overview: website, products, customers, industries, founded, HQ, leadership, latest news.",
+    "answer": "## **Palantir Technologies Inc. Overview**\n\n### **Website**\nPalantir's official website is [www.palantir.com](http://www.palantir.com) (source: [4]).\n\n### **Products**\nPalantir offers several key platforms designed for data integration and analytics:\n- **Gotham**: Primarily used by government agencies for counter-terrorism and defense operations.\n- **Foundry**: Aimed at commercial enterprises to integrate and analyze data.\n- **Apollo**: A continuous delivery system for software updates.\n- **AIP**: A platform for artificial intelligence and machine learning applications (source: [1][2][3]).\n\n### **Customers**\nPalantir serves a diverse range of customers, including:\n- Government agencies and the intelligence community.\n- Commercial enterprises across various sectors (source: [3][4]).\n\n### **Industries**\nThe company operates in multiple industries, such as:\n- Government and defense\n- Healthcare\n- Automotive\n- Finance (source: [3][4]).\n\n### **Founded**\nPalantir was founded in 2003 by Peter Thiel, Stephen Cohen, Joe Lonsdale, and Alex Karp, with Nathan Gettings also mentioned as a co-founder in some sources (source: [2][3][5]).\n\n### **Headquarters**\nThe headquarters of Palantir is located in Denver, Colorado, at 1200 17th St Fl 15, Denver, Colorado, 80202 (source: [4][5]).\n\n### **Leadership**\nAlex Karp is a key figure in Palantir's leadership, serving as the CEO. Peter Thiel, one of the founders, is also a significant figure in the company's history. The leadership team has remained stable over the past year as of May 2024 (source: [2]).\n\n### **Latest News**\nAs of the latest updates from 2024-2025, Palantir continues to be a prominent player in both government and commercial sectors, leveraging its data analytics platforms to drive insights and decision-making (source: [3][4]). Specific recent developments or news items were not detailed in the provided sources.",
+    "sources": [],
+    "latency_s": 57.92,
+    "classification": "company"
+  },
+  {
+    "qid": "c10",
+    "question": "UiPath company overview: official website, products, customers, industries, founded, HQ, leadership, notable news (past 12 months).",
+    "answer": "## UiPath Company Overview\n\n### Official Website\nUiPath's official website is [uipath.com](https://www.uipath.com).\n\n### Products\nUiPath specializes in robotic process automation (RPA) software. Their offerings include the UiPath Automation Platform, AI agents, and robots designed to automate complex business processes (source: CoreSignal).\n\n### Customers\nUiPath serves a wide range of customers across various sectors, although specific customer metrics are not detailed in the provided sources (source: CoreSignal).\n\n### Industries\nWhile specific industries are not explicitly mentioned, UiPath's products are implied to be used in enterprise automation, suggesting a focus on industries that benefit from process automation (source: CoreSignal).\n\n### Founded\nUiPath was founded in 2005 in Bucharest, Romania, by Daniel Dines and Marius T\u00eerc\u0103 (source: CoreSignal).\n\n### Headquarters\nThe company is headquartered in New York City at 1 Vanderbilt Avenue, 60th Floor (source: CoreSignal).\n\n### Leadership\nDaniel Dines is the Founder and CEO of UiPath. Other leadership details are not specified in the provided sources (source: CoreSignal).\n\n### Notable News (Past 12 Months)\nThe search results do not provide specific notable news from the past 12 months. Therefore, this information is missing from the current overview (source: CoreSignal).\n\nThis overview provides a snapshot of UiPath's key aspects, although some details, particularly regarding specific customers and recent news, are not available in the provided sources.",
+    "sources": [],
+    "latency_s": 58.31,
+    "classification": "company"
+  }
+]

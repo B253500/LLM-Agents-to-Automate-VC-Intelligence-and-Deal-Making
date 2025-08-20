@@ -1,0 +1,55 @@
+🚀 Starting web scraping with metrics tracking...
+
+📊 Starting Crunchbase scraping with metrics (cap 100)...
+⏭️  Skipping Crunchbase (SKIP_CRUNCHBASE=1)
+
+📊 Starting Crunchbase News with metrics (cap 100)...
+⏭️  Skipping Crunchbase News (SKIP_CRUNCHBASENEWS=1)
+
+📊 Starting Beauhurst scraping with metrics (cap 100)...
+⏭️  Skipping Beauhurst (SKIP_BEAUHURST=1)
+
+📊 Starting TechCrunch scraping with metrics (cap ~100)...
+⏭️  Skipping TechCrunch (SKIP_TECHCRUNCH=1)
+
+📊 Starting PitchBook scraping with metrics (cap 100)...
+[Metrics] Started tracking session for PitchBook
+
+=== PitchBook Reports ===
+❌ PitchBook scraping failed: Expecting property name enclosed in double quotes: line 293 column 1 (char 39218)
+
+[Metrics] Session Summary for PitchBook:
+  ✅ Success Rate: 0.0%
+  ⏱️  Avg Response Time: 0.00s
+  📊 Data Quality Score: 0.00/1.0
+  🔄 Total Requests: 1
+  ❌ Failed Requests: 1
+  ⏰ Session Duration: 0.0s
+
+[Metrics] Reports saved:
+  📊 Detailed metrics: /Users/ak/Desktop/Final/Submission_VC_Agents/web_scraping/results/scraping_metrics_20250819_104717.json
+  📋 Summary report: /Users/ak/Desktop/Final/Submission_VC_Agents/web_scraping/results/scraping_summary_20250819_104717.txt
+
+📊 Starting PitchBook News categories with metrics (cap 100)...
+⏭️  Skipping PitchBook News (SKIP_PITCHBOOKNEWS=1)
+
+📊 Starting PitchBook News Search with metrics (cap 100)...
+⏭️  Skipping PitchBook News Search (SKIP_PITCHBOOKNEWSSEARCH=1)
+
+📈 Generating metrics reports...
+
+[Metrics] Reports saved:
+  📊 Detailed metrics: /Users/ak/Desktop/Final/Submission_VC_Agents/web_scraping/results/scraping_metrics_20250819_104717.json
+  📋 Summary report: /Users/ak/Desktop/Final/Submission_VC_Agents/web_scraping/results/scraping_summary_20250819_104717.txt
+
+🎯 OVERALL SCRAPING METRICS:
+  ✅ Success Rate: 0.0%
+  ⏱️  Avg Response Time: 0.00s
+  📊 Total Requests: 1
+  ❌ Failed Requests: 1
+  🔄 Rate Limit Hits: 0
+  📋 Data Quality Score: 0.00/1.0
+
+📊 Reports saved:
+  📈 Detailed metrics: /Users/ak/Desktop/Final/Submission_VC_Agents/web_scraping/results/scraping_metrics_20250819_104717.json
+  📋 Summary report: /Users/ak/Desktop/Final/Submission_VC_Agents/web_scraping/results/scraping_summary_20250819_104717.txt

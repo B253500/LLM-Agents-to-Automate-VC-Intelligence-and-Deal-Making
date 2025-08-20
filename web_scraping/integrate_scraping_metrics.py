@@ -11,7 +11,66 @@ from pathlib import Path
 # Add the parent directory to the path to import evaluation metrics
 sys.path.append(str(Path(__file__).parent.parent))
 
-from evaluation_metrics.core.web_scraping_metrics import WebScrapingMetrics
+# Prefer the shared metrics class if available; otherwise, provide a lightweight fallback
+try:
+    from evaluation_metrics.core.web_scraping_metrics import WebScrapingMetrics  # type: ignore
+except Exception:
+    class WebScrapingMetrics:  # minimal drop-in used by the scraper wrapper
+        def __init__(self):
+            self.sessions = []  # list of dicts produced in end_scraping_session
+
+        def add_scraper_metrics(self, metrics_dict: dict):
+            if isinstance(metrics_dict, dict):
+                self.sessions.append(metrics_dict)
+
+        def get_overall_metrics(self) -> dict:
+            total_requests = sum(s.get('total_requests', 0) for s in self.sessions)
+            total_failed = sum(s.get('failed_requests', 0) for s in self.sessions)
+            total_success = sum(s.get('successful_requests', 0) for s in self.sessions)
+            overall_success_rate = (total_success / total_requests * 100.0) if total_requests else 0.0
+            # Average over available averages to avoid request-weighting complexity here
+            avg_resp = 0.0
+            avgs = [s.get('average_response_time', 0.0) for s in self.sessions if 'average_response_time' in s]
+            if avgs:
+                avg_resp = sum(avgs) / len(avgs)
+            total_rate_limits = sum(s.get('rate_limit_hits', 0) for s in self.sessions)
+            avg_quality = 0.0
+            quals = [s.get('data_quality_score', 0.0) for s in self.sessions]
+            if quals:
+                avg_quality = sum(quals) / len(quals)
+            return {
+                'overall_success_rate': overall_success_rate,
+                'average_response_time': avg_resp,
+                'total_requests': total_requests,
+                'total_failed_requests': total_failed,
+                'total_rate_limit_hits': total_rate_limits,
+                'average_data_quality': avg_quality,
+            }
+
+        def save_detailed_metrics(self, output_file: str):
+            os.makedirs(os.path.dirname(output_file), exist_ok=True)
+            payload = {
+                'sessions': self.sessions,
+                'generated_at': datetime.now().isoformat(),
+            }
+            with open(output_file, 'w') as f:
+                import json
+                json.dump(payload, f, indent=2)
+
+        def generate_summary_report(self, output_file: str):
+            overall = self.get_overall_metrics()
+            lines = [
+                'SCRAPING SUMMARY',
+                f"Success Rate: {overall.get('overall_success_rate', 0.0):.1f}%",
+                f"Total Requests: {overall.get('total_requests', 0)}",
+                f"Failed Requests: {overall.get('total_failed_requests', 0)}",
+                f"Rate Limit Hits: {overall.get('total_rate_limit_hits', 0)}",
+                f"Avg Response Time: {overall.get('average_response_time', 0.0):.2f}s",
+                f"Avg Data Quality: {overall.get('average_data_quality', 0.0):.2f}",
+            ]
+            os.makedirs(os.path.dirname(output_file), exist_ok=True)
+            with open(output_file, 'w') as f:
+                f.write('\n'.join(lines) + '\n')
 
 class ScrapingMetricsIntegration:
     """Integrates evaluation metrics with existing web scraping system"""
@@ -19,6 +78,16 @@ class ScrapingMetricsIntegration:
     def __init__(self):
         self.metrics = WebScrapingMetrics()
         self.current_session = None
+        # system usage sampling
+        self._sampler_running = False
+        self._cpu_samples = []
+        self._mem_samples = []
+        self._sampler_thread = None
+        try:
+            import psutil  # noqa: F401
+            self._psutil_available = True
+        except Exception:
+            self._psutil_available = False
         
     def start_scraping_session(self, scraper_name: str):
         """Start tracking a new scraping session"""
@@ -30,9 +99,18 @@ class ScrapingMetricsIntegration:
             'failed_requests': 0,
             'rate_limit_hits': 0,
             'parsing_errors': 0,
-            'data_extracted': 0
+            'data_extracted': 0,
+            # fine-grained counters
+            'attempts': 0,
+            'direct_saved': 0,
+            'fallback_saved': 0,
+            'email_sent': 0,
+            'fail': 0,
+            'cf_hits': 0,
+            'timeouts': 0,
         }
         print(f"[Metrics] Started tracking session for {scraper_name}")
+        self._start_sampler()
         
     def log_request(self, success: bool, response_time: float = None, error_type: str = None):
         """Log a single request attempt"""
@@ -75,6 +153,18 @@ class ScrapingMetricsIntegration:
             return
             
         session_time = time.time() - self.current_session['start_time']
+        # stop sampler and compute system stats
+        cpu_avg = cpu_max = mem_avg = mem_max = 0.0
+        samples = self._stop_sampler()
+        if samples:
+            cpu_vals = [c for c, _ in samples]
+            mem_vals = [m for _, m in samples]
+            if cpu_vals:
+                cpu_avg = sum(cpu_vals) / len(cpu_vals)
+                cpu_max = max(cpu_vals)
+            if mem_vals:
+                mem_avg = sum(mem_vals) / len(mem_vals)
+                mem_max = max(mem_vals)
         
         # Calculate metrics
         success_rate = (self.current_session['successful_requests'] / 
@@ -100,7 +190,19 @@ class ScrapingMetricsIntegration:
             'parsing_errors': self.current_session['parsing_errors'],
             'data_quality_score': data_quality_score,
             'session_duration': session_time,
-            'data_extracted': self.current_session['data_extracted']
+            'cpu_avg_percent': cpu_avg,
+            'cpu_max_percent': cpu_max,
+            'mem_avg_mb': mem_avg,
+            'mem_max_mb': mem_max,
+            'data_extracted': self.current_session['data_extracted'],
+            # fine-grained counters
+            'attempts': self.current_session.get('attempts', 0),
+            'direct_saved': self.current_session.get('direct_saved', 0),
+            'fallback_saved': self.current_session.get('fallback_saved', 0),
+            'email_sent': self.current_session.get('email_sent', 0),
+            'fail': self.current_session.get('fail', 0),
+            'cf_hits': self.current_session.get('cf_hits', 0),
+            'timeouts': self.current_session.get('timeouts', 0),
         }
         
         # Save to metrics system
@@ -143,6 +245,80 @@ class ScrapingMetricsIntegration:
         print(f"  📋 Summary report: {summary_file}")
         
         return detailed_file, summary_file
+
+    # --- Fine-grained counters API (used by scraper) ---
+    def inc_attempt(self):
+        if self.current_session:
+            self.current_session['attempts'] += 1
+            # also count a request made
+            self.current_session['requests_made'] += 1
+
+    def inc_direct_saved(self):
+        if self.current_session:
+            self.current_session['direct_saved'] += 1
+            self.current_session['successful_requests'] += 1
+
+    def inc_fallback_saved(self):
+        if self.current_session:
+            self.current_session['fallback_saved'] += 1
+            self.current_session['successful_requests'] += 1
+
+    def inc_email_sent(self):
+        if self.current_session:
+            self.current_session['email_sent'] += 1
+            self.current_session['successful_requests'] += 1
+
+    def inc_fail(self, reason: str = None):
+        if self.current_session:
+            self.current_session['fail'] += 1
+            self.current_session['failed_requests'] += 1
+            if reason:
+                if 'cf' in reason.lower():
+                    self.current_session['cf_hits'] += 1
+                if 'timeout' in reason.lower():
+                    self.current_session['timeouts'] += 1
+
+    # ----- internal: system usage sampler -----
+    def _start_sampler(self):
+        if not self._psutil_available:
+            return
+        if self._sampler_running:
+            return
+        try:
+            import threading, psutil, os
+            proc = psutil.Process(os.getpid())
+            self._cpu_samples = []
+            self._mem_samples = []
+            self._sampler_running = True
+
+            def _sample_loop():
+                # prime cpu_percent
+                psutil.cpu_percent(interval=None)
+                while self._sampler_running:
+                    cpu = psutil.cpu_percent(interval=0.5)
+                    mem_mb = proc.memory_info().rss / (1024 * 1024)
+                    self._cpu_samples.append(cpu)
+                    self._mem_samples.append(mem_mb)
+
+            self._sampler_thread = threading.Thread(target=_sample_loop, daemon=True)
+            self._sampler_thread.start()
+        except Exception:
+            self._psutil_available = False
+
+    def _stop_sampler(self):
+        if not self._psutil_available:
+            return []
+        self._sampler_running = False
+        try:
+            if self._sampler_thread:
+                self._sampler_thread.join(timeout=2.0)
+        except Exception:
+            pass
+        samples = list(zip(self._cpu_samples, self._mem_samples)) if self._cpu_samples else []
+        self._cpu_samples = []
+        self._mem_samples = []
+        self._sampler_thread = None
+        return samples
 
 
 # Integration functions for existing scraping scripts

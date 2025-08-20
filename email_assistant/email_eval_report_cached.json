@@ -1,0 +1,87 @@
+{
+  "total": 7,
+  "accuracy": 0.8571,
+  "macro_f1": 0.4615,
+  "latency_s": {
+    "p50": 16.05,
+    "p90": 28.001
+  },
+  "error_count": 0,
+  "numeric_claims": {
+    "total": 6,
+    "with_citation": 0,
+    "rate": 0.0
+  },
+  "sources_presence_rate": 0.0,
+  "confusion_matrix": {
+    "market_deep_dive": {
+      "market_deep_dive": 6,
+      "person": 1
+    }
+  },
+  "examples": [
+    {
+      "question": "What\u2019s the current deal activity size for Insurtech in the most recent financial quarter?",
+      "gold_label": "market_deep_dive",
+      "pred_label": "market_deep_dive",
+      "latency_s": 19.341,
+      "has_numeric": true,
+      "citation_compliant": false,
+      "num_sources": 0
+    },
+    {
+      "question": "What\u2019s the total value of exits in the biotechnology/bio tools space in Q1 2025?",
+      "gold_label": "market_deep_dive",
+      "pred_label": "person",
+      "latency_s": 28.001,
+      "has_numeric": false,
+      "citation_compliant": false,
+      "num_sources": 0
+    },
+    {
+      "question": "What are the top 3 academic institutions by spin out activity in the UK?",
+      "gold_label": "market_deep_dive",
+      "pred_label": "market_deep_dive",
+      "latency_s": 16.05,
+      "has_numeric": true,
+      "citation_compliant": false,
+      "num_sources": 0
+    },
+    {
+      "question": "How many companies do they spin out on average individually?",
+      "gold_label": "market_deep_dive",
+      "pred_label": "market_deep_dive",
+      "latency_s": 17.367,
+      "has_numeric": true,
+      "citation_compliant": false,
+      "num_sources": 0
+    },
+    {
+      "question": "What is the top sector of UK academic spinouts?",
+      "gold_label": "market_deep_dive",
+      "pred_label": "market_deep_dive",
+      "latency_s": 12.747,
+      "has_numeric": true,
+      "citation_compliant": false,
+      "num_sources": 0
+    },
+    {
+      "question": "What\u2019s the top sub-sector of Quantum Computing by number of companies generated?",
+      "gold_label": "market_deep_dive",
+      "pred_label": "market_deep_dive",
+      "latency_s": 14.823,
+      "has_numeric": true,
+      "citation_compliant": false,
+      "num_sources": 0
+    },
+    {
+      "question": "What\u2019s the CAGR of median gaming early-stage VC deal value and pre-money valuation ($M) in the segment of development?",
+      "gold_label": "market_deep_dive",
+      "pred_label": "market_deep_dive",
+      "latency_s": 15.845,
+      "has_numeric": true,
+      "citation_compliant": false,
+      "num_sources": 0
+    }
+  ]
+}

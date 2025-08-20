@@ -1,0 +1,233 @@
+[
+  {
+    "qid": "p1",
+    "question": "Profile Marc Andreessen: current roles, partner affiliations, notable investments, education, prior companies, and recent news (past 12 months). Include a LinkedIn URL and inline citations.",
+    "answer": "Marc Andreessen is a prominent venture capitalist and co-founder of Andreessen Horowitz (a16z), a leading venture capital firm managing $45 billion in assets (source: [5]). He is well-known for co-creating the Mosaic web browser and co-founding Netscape, which was sold to AOL for $4.2 billion (source: [1]). Andreessen holds a Bachelor of Science in Computer Science from the University of Illinois at Urbana-Champaign (source: [1]). He has served on the boards of several major companies, including Meta, HP Enterprise, and LinkedIn (source: [2]). In recent news, during the first half of 2025, he donated $3 million to MAGA Inc., a super PAC supporting Donald Trump (source: [3]).\n\n- **Current Role**: Co-founder and General Partner at Andreessen Horowitz (source: [1]).\n- **Notable Investments**: Facebook, GitHub, Pinterest, Twitter (source: [2]).\n- **Education**: Bachelor of Science in Computer Science, University of Illinois at Urbana-Champaign (source: [1]).\n- **Prior Companies**: Co-founded Netscape, Loudcloud/Opsware; served as CTO at AOL (source: [1]).\n- **Recent News**: Donated $3 million to MAGA Inc. in 2025 (source: [3]).\n- **Board Memberships**: Meta, HP Enterprise, LinkedIn (source: [2]).\n\nUnfortunately, I do not have access to Marc Andreessen's LinkedIn profile or a LinkedIn URL from the provided sources.",
+    "sources": [],
+    "latency_s": 47.9,
+    "classification": "person"
+  },
+  {
+    "qid": "p2",
+    "question": "Profile Reid Hoffman: LinkedIn URL, founding/board roles, key investments, books/podcasts, education, and notable news (past 12 months). Provide inline citations.",
+    "answer": "Reid Hoffman is a prominent entrepreneur and investor, best known as the co-founder and former executive chairman of LinkedIn. He currently serves as the chairman of the venture capital firm Village Global and is a co-founder of Inflection AI and Manas AI (source: Wikipedia). Hoffman is also a partner at Greylock, where he has led investments in companies like Airbnb and was an early investor in Facebook (source: Business Insider). His educational background includes a Bachelor of Science in symbolic systems and cognitive science from Stanford University and a Master of Studies in philosophy from Oxford University, where he was a Marshall Scholar (source: Wikipedia). Hoffman is the author of six bestselling books, including \"Blitzscaling\" and \"The Start-up of You,\" and hosts the podcasts \"Masters of Scale\" and \"Possible\" (source: Greylock). He has received numerous awards, such as an honorary CBE from the Queen of England and the Salute to Greatness Award from the Martin Luther King Center (source: Greylock). Despite extensive research, a direct LinkedIn profile URL was not found in the provided sources.\n\n- **Current Role and Affiliation**: Chairman of Village Global, Co-founder of Inflection AI and Manas AI, Partner at Greylock (source: Wikipedia, Greylock).\n- **Past Roles**: Co-founder and former executive chairman of LinkedIn, founding director, EVP, and COO of PayPal (source: Wikipedia, Achievement.org).\n- **Education**: B.S. in symbolic systems and cognitive science from Stanford University, Master of Studies in philosophy from Oxford University (source: Wikipedia).\n- **Research Interests**: Technology innovation, venture capital, artificial intelligence (source: Wikipedia, Greylock).\n- **Notable Publications**: \"Blitzscaling,\" \"The Start-up of You,\" \"The Alliance,\" \"Masters of Scale,\" \"Impromptu,\" \"Superagency\" (source: Greylock).\n- **Awards**: Honorary CBE, Salute to Greatness Award, Nichols-Chancellor's Medal (source: Greylock, Achievement.org).\n- **Links**: No direct LinkedIn profile URL found in the provided sources.",
+    "sources": [],
+    "latency_s": 57.17,
+    "classification": "person"
+  },
+  {
+    "qid": "p3",
+    "question": "Profile Mary Meeker: LinkedIn URL, fund (Bond) overview, prior Kleiner Perkins role, Internet Trends reports, notable investments, education, and recent news (past 12 months) with citations.",
+    "answer": "The snippets provided do not contain any information about Mary Meeker, her LinkedIn URL, her fund (Bond), her prior role at Kleiner Perkins, her Internet Trends reports, notable investments, education, or any recent news related to her. Therefore, I cannot provide a profile based on the given data.",
+    "sources": [
+      {
+        "source": "Q1_2025_Gaming_VC_Trends_19414.pdf",
+        "page": 7,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q1_2025_Foodtech_VC_Trends_19411.pdf",
+        "page": 7,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q1_2025_Foodtech_VC_Trends_19411.pdf",
+        "page": 6,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q1_2025_Pharma_Biotools_VC_Trends_19367.pdf",
+        "page": 7,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q1_2025_E-Commerce_VC_Trends_19312.pdf",
+        "page": 9,
+        "temporal_valid": true
+      },
+      {
+        "source": "Tecscaler-annual-report-2024.pdf",
+        "page": 85,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q1_2025_Pharma_Biotools_VC_Trends_19367.pdf",
+        "page": 5,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q2_2025_PitchBook_Analyst_Note_US_VC-Backed_MA_Outlook_19317.pdf",
+        "page": 1,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q2_2025_PitchBook_Analyst_Note_US_VC-Backed_MA_Outlook_19317.pdf",
+        "page": 5,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q1_2025_Gaming_VC_Trends_19414.pdf",
+        "page": 5,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q1_2025_Gaming_VC_Trends_19414.pdf",
+        "page": 6,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q1_2025_E-Commerce_VC_Trends_19312.pdf",
+        "page": 8,
+        "temporal_valid": true
+      },
+      {
+        "source": "Beauhurst-DASA-Growth-Impact-Report-2025.pdf",
+        "page": 8,
+        "temporal_valid": true
+      },
+      {
+        "source": "Beauhurst_Royal-Academy-of-Engineering_Spotlight-on-Spinouts-2025.pdf",
+        "page": 3,
+        "temporal_valid": true
+      },
+      {
+        "source": "Beauhurst_Royal-Academy-of-Engineering_Spotlight-on-Spinouts-2025.pdf",
+        "page": 14,
+        "temporal_valid": true
+      },
+      {
+        "source": "Beauhurst_Royal-Academy-of-Engineering_Spotlight-on-Spinouts-2025.pdf",
+        "page": 16,
+        "temporal_valid": true
+      },
+      {
+        "source": "Beauhurst_Royal-Academy-of-Engineering_Spotlight-on-Spinouts-2025.pdf",
+        "page": 34,
+        "temporal_valid": true
+      },
+      {
+        "source": "Beauhurst_Royal-Academy-of-Engineering_Spotlight-on-Spinouts-2025.pdf",
+        "page": 3,
+        "temporal_valid": true
+      },
+      {
+        "source": "NPL-Quantum-Ecosystem-Mapping-Report-2024_PDF.pdf",
+        "page": 2,
+        "temporal_valid": true
+      },
+      {
+        "source": "H1_2025_VC_Tech_Survey_Investor_Insights_on_AI_Dealmaking_and_Fundraising_19410.pdf",
+        "page": 11,
+        "temporal_valid": true
+      },
+      {
+        "source": "May_2025_Global_Markets_Snapshot_19415.pdf",
+        "page": 10,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q2_2025_PitchBook_Analyst_Note_Tariffs_and_Supply_Chain_Challenges_in_Clean_Energy_19416.pdf",
+        "page": 9,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q2_2025_PitchBook_Analyst_Note_US_VC-Backed_MA_Outlook_19317.pdf",
+        "page": 12,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q1_2025_Gaming_VC_Trends_19414.pdf",
+        "page": 8,
+        "temporal_valid": true
+      },
+      {
+        "source": "Q1_2025_E-Commerce_VC_Trends_19312.pdf",
+        "page": 5,
+        "temporal_valid": true
+      },
+      {
+        "source": "Beauhurst-DASA-Growth-Impact-Report-2025.pdf",
+        "page": 4,
+        "temporal_valid": true
+      },
+      {
+        "source": "Beauhurst-DASA-Growth-Impact-Report-2025.pdf",
+        "page": 5,
+        "temporal_valid": true
+      },
+      {
+        "source": "Beauhurst-DASA-Growth-Impact-Report-2025.pdf",
+        "page": 7,
+        "temporal_valid": true
+      },
+      {
+        "source": "Beauhurst-DASA-Growth-Impact-Report-2025.pdf",
+        "page": 11,
+        "temporal_valid": true
+      },
+      {
+        "source": "Beauhurst-DASA-Growth-Impact-Report-2025.pdf",
+        "page": 11,
+        "temporal_valid": true
+      }
+    ],
+    "latency_s": 11.12,
+    "classification": "market_deep_dive"
+  },
+  {
+    "qid": "p4",
+    "question": "Profile Peter Thiel: LinkedIn URL, roles (e.g., Founders Fund), key investments, board history, education, notable public positions, and recent news (past 12 months). Cite sources inline.",
+    "answer": "Peter Thiel is a prominent entrepreneur and venture capitalist with a significant impact on the tech industry. Here is a comprehensive profile based on the available information:\n\n1. **LinkedIn URL**: The LinkedIn URL for Peter Thiel is not available in the provided sources.\n\n2. **Roles**:\n   - Co-founder and former CEO/Chairman of PayPal (source: CoreSignal).\n   - Partner at Founders Fund (source: CoreSignal).\n   - Chairman of Palantir Technologies (source: CoreSignal).\n   - Founder of Clarium Capital Management, a hedge fund (source: CoreSignal).\n   - Co-founder of Mithril Capital Management (source: CoreSignal).\n\n3. **Key Investments**:\n   - First outside investor in Facebook in 2004 (source: CoreSignal).\n   - Investments in LinkedIn and Yelp (source: CoreSignal).\n   - Investments in SpaceX and Airbnb through Founders Fund (source: CoreSignal).\n   - Investment in Lyft (source: CoreSignal).\n\n4. **Board History**:\n   - Chairman of Palantir Technologies, continuing as of 2022 (source: CoreSignal).\n\n5. **Education**:\n   - Bachelor of Arts in Philosophy from Stanford University, 1989 (source: CoreSignal).\n   - Graduated from Stanford Law School in 1992 (source: CoreSignal).\n   - Founded The Stanford Review newspaper during his college years (source: CoreSignal).\n   - Co-authored \"The Diversity Myth\" with David Sacks after graduating (source: CoreSignal).\n\n6. **Notable Public Positions**:\n   - Identified as a Libertarian (source: CoreSignal).\n   - Author of \"Zero to One: Notes on Startups, or How to Build the Future,\" which became a #1 New York Times bestseller (source: CoreSignal).\n   - Founder of the Thiel Fellowship and Thiel Foundation (source: CoreSignal).\n\n7. **Recent News (past 12 months)**: There is no recent news available from August 2024 onwards in the provided sources.\n\nThis profile provides a detailed overview of Peter Thiel's career, investments, and public positions, although some information, such as his LinkedIn URL and recent news, is missing from the available sources.",
+    "sources": [],
+    "latency_s": 69.66,
+    "classification": "fund"
+  },
+  {
+    "qid": "p5",
+    "question": "Profile Jensen Huang: LinkedIn URL, current role (NVIDIA), key milestones, prior roles, education, and notable news (past 12 months). Include inline citations.",
+    "answer": "Jensen Huang is the Co-founder, President, and Chief Executive Officer of NVIDIA Corporation, a role he has held since the company's inception in 1993. Under his leadership, NVIDIA has evolved from a graphics chip company to a leader in AI and accelerated computing. Huang's career began with roles at AMD as a microprocessor designer and at LSI Logic as Director of CoreWare. He holds a Bachelor of Science in Electrical Engineering from Oregon State University and a Master of Science in Electrical Engineering from Stanford University. In recent news, Huang was named one of TIME magazine's most influential people in 2024. Unfortunately, I cannot provide a direct LinkedIn URL as it was not included in the available sources (source: [1][2][3]).\n\n- **Current Role**: Co-founder, President, and CEO of NVIDIA (since 1993) (source: [1][2]).\n- **Past Roles**: Microprocessor designer at AMD; Director of CoreWare at LSI Logic (source: [3]).\n- **Education**: B.S. in Electrical Engineering from Oregon State University; M.S. in Electrical Engineering from Stanford University (source: [1]).\n- **Research Interests**: AI, accelerated computing, GPU technology (implied from career focus).\n- **Notable Publications**: Not specified in the sources.\n- **Awards**: Named one of TIME magazine's most influential people in 2024 (source: [2]).\n- **Links**: Direct LinkedIn URL not available in the sources.",
+    "sources": [],
+    "latency_s": 56.04,
+    "classification": "person"
+  },
+  {
+    "qid": "p6",
+    "question": "Profile Demis Hassabis: LinkedIn URL, current role (Google DeepMind), prior companies, major research/publications, education, and recent news (past 12 months). Cite sources inline.",
+    "answer": "Sir Demis Hassabis is a prominent figure in the field of artificial intelligence, currently serving as the chief executive officer and co-founder of Google DeepMind and Isomorphic Labs. He plays a crucial role in Google's AI initiatives, leading the Gemini AI project and overseeing a team of over 6,000 people within Google's AI division (source: [1]). His work has significantly influenced the development of AI technologies, including the renowned AlphaGo project (source: [4]).\n\n### Professional Background\n- **Current Role**: CEO and co-founder of Google DeepMind and Isomorphic Labs (source: [3]).\n- **Prior Companies**: Founded DeepMind in 2010, which was acquired by Google in 2014; previously involved with Elixir Studios (source: [1]).\n- **Education**: Earned a Double First in Computer Science from Cambridge University; completed a PhD in cognitive neuroscience at University College London; conducted postdoctoral research at MIT and Harvard (source: [4]).\n- **Research and Publications**: Authored over 200 peer-reviewed papers, including five in Nature; known for contributions to deep reinforcement learning and protein structure prediction (source: [4]).\n- **Recent Achievements**: Awarded the Nobel Prize in Chemistry in 2024 for AI research in protein structure prediction; knighted in 2024; featured in the Time 100 list in 2025 (source: [1]).\n\nUnfortunately, the specific LinkedIn URL for Demis Hassabis is not available in the provided search results.",
+    "sources": [],
+    "latency_s": 47.09,
+    "classification": "person"
+  },
+  {
+    "qid": "p7",
+    "question": "Profile Patrick Collison: LinkedIn URL, roles (Stripe), notable initiatives, investments, education, and recent news (past 12 months). Provide inline citations.",
+    "answer": "Patrick Collison is an Irish entrepreneur and the co-founder and CEO of Stripe, a leading global payments platform that he started with his brother John in 2010. Born on September 9, 1988, in County Tipperary, Ireland, Collison has played a pivotal role in transforming online commerce through Stripe's innovative solutions. He is also known for his contributions to scientific research funding and innovation.\n\n- **Current Role and Affiliation**: CEO of Stripe (source: [2]).\n- **Past Roles**: Co-founder of Auctomatic, a company he started while at MIT (source: [5]).\n- **Education**: Attended Gaelscoil Aonach Urmhumhan and Castletroy College in Ireland; took his first computer course at the University of Limerick at age 8 (source: [2]).\n- **Research Interests and Initiatives**: Co-founded Fast Grants in 2020 to accelerate COVID-19-related science and the Arc Institute in 2021, a nonprofit research organization (source: [2]).\n- **Notable Publications**: No specific publications are mentioned in the provided sources.\n- **Awards**: Won the 41st Young Scientist and Technology Exhibition in 2005 at age 16 (source: [2]).\n- **Recent News**: In July 2025, Collison discussed his use of AI tools like xAI's Grok for research purposes, expressing a preference for using AI for factual questions but not for writing tasks (source: [1]).\n- **Links**: No LinkedIn URL or other specific links are available in the provided sources.\n\nThis summary provides a snapshot of Patrick Collison's professional journey and contributions, highlighting his role in the fintech industry and his commitment to fostering scientific research and innovation.",
+    "sources": [],
+    "latency_s": 72.78,
+    "classification": "person"
+  },
+  {
+    "qid": "p8",
+    "question": "Profile Javier Olivan: LinkedIn URL, roles (Meta), prior companies, education, notable projects, and recent news (past 12 months). Include citations.",
+    "answer": "Javier Olivan is the Chief Operating Officer at Meta Platforms, where he oversees the company's business and partnerships teams, as well as central products and functions for Meta's apps (source: [Meta's official website](https://about.meta.com)). He has been with Meta for nearly two decades, previously serving as the Vice President of Growth before being promoted to COO in 2022 (source: [TheOrg.com](https://theorg.com)). Before joining Meta, Olivan worked as a product manager at Siemens Mobile and was involved with NTT Data (source: [Aspen Global Leadership Network](https://agln.aspeninstitute.org)). He holds a master's degree in electrical and industrial engineering from the University of Navarra and an MBA from Stanford University (source: [Aspen Global Leadership Network](https://agln.aspeninstitute.org)). Although specific notable publications or awards were not mentioned in the available sources, Olivan is known for his role in expanding Facebook's global reach. Unfortunately, the search results did not provide a LinkedIn URL or recent news from the past 12 months.\n\n- **Current Role and Affiliation**: Chief Operating Officer at Meta Platforms (source: [Meta's official website](https://about.meta.com))\n- **Past Roles**: Vice President of Growth at Meta; Product Manager at Siemens Mobile; involvement with NTT Data (source: [TheOrg.com](https://theorg.com), [Aspen Global Leadership Network](https://agln.aspeninstitute.org))\n- **Education**: MBA from Stanford University; Master's in Electrical and Industrial Engineering from the University of Navarra (source: [Aspen Global Leadership Network](https://agln.aspeninstitute.org))\n- **Research Interests**: Not explicitly mentioned\n- **Notable Publications**: Not mentioned\n- **Awards**: Not mentioned\n- **Links**: LinkedIn URL not provided in the available sources",
+    "sources": [],
+    "latency_s": 42.18,
+    "classification": "person"
+  },
+  {
+    "qid": "p9",
+    "question": "Profile Gavin Baker: LinkedIn URL, investment focus, prior roles, education, notable commentary, and recent news (past 12 months). Cite sources inline.",
+    "answer": "Gavin Baker is a distinguished investor known for his expertise in technology and consumer sectors. He is the Managing Partner and Chief Investment Officer of Atreides Management, LP, a crossover fund he founded in January 2019. At Atreides, he focuses on long-term investments in high-growth technology and consumer companies (source: [1][2]). Before founding Atreides, Baker spent 18 years at Fidelity Investments, where he managed multiple funds and honed his investment acumen (source: [1]). He holds an AB in Economics and History from Dartmouth College, obtained in 1999 (source: [1]). In addition to his investment career, there is another Gavin Baker who serves as an Adjunct Lecturer in Marketing at the Haslam College of Business (source: [5]).\n\n- **Current Role and Affiliation**: Managing Partner and Chief Investment Officer, Atreides Management, LP (source: [1][2])\n- **Past Roles**: Portfolio Manager at Fidelity Investments (1999-2017) (source: [1])\n- **Education**: AB in Economics and History, Dartmouth College (1999) (source: [1])\n- **Research Interests**: Technology and consumer investments (source: [1][3])\n- **Notable Publications**: Not specified in the sources\n- **Awards**: Not specified in the sources\n- **Links**: LinkedIn URL not provided in the sources\n\nFor more detailed and up-to-date information, including recent news and commentary, it is recommended to search directly on LinkedIn or professional databases.",
+    "sources": [],
+    "latency_s": 48.67,
+    "classification": "person"
+  },
+  {
+    "qid": "p10",
+    "question": "Profile Satya Nadella: LinkedIn URL, current role (Microsoft), prior roles, acquisitions led, education, and recent news (past 12 months). Provide inline citations.",
+    "answer": "Satya Nadella is the Chairman and Chief Executive Officer of Microsoft, a role he has held since 2014, with the additional title of Chairman since 2021 (source: [Wikipedia](https://en.wikipedia.org/wiki/Satya_Nadella)). Before becoming CEO, Nadella held several leadership positions within Microsoft, including Executive Vice President of Microsoft's Cloud and Enterprise Group, where he led the transformation to cloud infrastructure and services (source: [Wikipedia](https://en.wikipedia.org/wiki/Satya_Nadella)). He has been instrumental in major acquisitions such as LinkedIn and Nokia (source: [Wikipedia](https://en.wikipedia.org/wiki/Satya_Nadella)). Nadella holds a bachelor's degree in electrical engineering from Mangalore University, a master's degree in computer science from the University of Wisconsin-Milwaukee, and an MBA from the University of Chicago (source: [Wikipedia](https://en.wikipedia.org/wiki/Satya_Nadella)). His notable publication is the book \"Hit Refresh,\" published in 2017 (source: [Wikipedia](https://en.wikipedia.org/wiki/Satya_Nadella)). While specific recent news from the past 12 months is not available in the provided sources, Nadella continues to be recognized for his leadership in technology and innovation.\n\n- **Current Role**: Chairman and CEO of Microsoft\n- **Prior Roles**: Executive Vice President of Microsoft's Cloud and Enterprise Group, various other leadership roles within Microsoft\n- **Acquisitions Led**: LinkedIn, Nokia\n- **Education**: Bachelor's in Electrical Engineering (Mangalore University), Master's in Computer Science (University of Wisconsin-Milwaukee), MBA (University of Chicago)\n- **Research Interests**: Cloud computing, digital transformation, AI technologies\n- **Notable Publications**: \"Hit Refresh\" (2017)\n- **Awards**: Not specifically mentioned in the provided sources\n- **Links**: No LinkedIn URL provided in the sources\n\nPlease note that the LinkedIn URL and specific recent news from the past 12 months were not available in the provided sources.",
+    "sources": [],
+    "latency_s": 52.71,
+    "classification": "person"
+  }
+]

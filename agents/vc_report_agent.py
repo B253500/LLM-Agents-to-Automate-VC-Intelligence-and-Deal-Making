@@ -424,17 +424,22 @@ Answer:"""
 
     # ===== Enriched, Task-Aware Analysis (optional) =====
     def classify_task(self, question: str) -> str:
-        """Heuristic classifier with better person detection and broader market cues."""
+        """Heuristic classifier with safer person detection and prioritized market cues."""
         q = question.lower()
-        person_terms = ["person", "profile", "linkedin", "who is", "bio", "biography", "about"]
+        # Explicit person cues only; avoid ambiguous tokens like 'bio' which collides with 'bio tools'.
+        person_terms = [
+            "person", "profile", "linkedin", "linkedin.com", "who is", "biography",
+            "about", "resume", "cv", "education", "background"
+        ]
         fund_terms = ["fund", "vc fund", "venture fund", "capital", "investment firm"]
         company_terms = ["company", "website", "employees", "headcount", "revenue", "customers"]
 
         market_terms = [
             "deep dive", "market", "segment", "tam", "sam", "som", "market size", "industry",
-            "trend", "trends", "vc trends", "deal activity", "cagr", "exits", "exit", "valuation",
-            "median", "pre-money", "post-money", "survey", "snapshot", "analyst note", "benchmarks",
-            "benchmark", "outlook", "state of", "report", "sub-sector", "ecosystem"
+            "trend", "trends", "vc trends", "deal activity", "vc deals", "early-stage", "early stage",
+            "cagr", "exits", "exit", "valuation", "median", "pre-money", "post-money", "survey",
+            "snapshot", "analyst note", "benchmarks", "benchmark", "outlook", "state of", "report",
+            "sub-sector", "subsector", "ecosystem", "spinout", "spin-out", "spin out"
         ]
         sector_terms = [
             "biotech", "bio tools", "biotools", "gaming", "insurtech", "quantum", "e-commerce", "ecommerce",
@@ -443,21 +448,19 @@ Answer:"""
 
         has_quarter = bool(re.search(r"\bq\s*[1-4]\s*20\d{2}\b|\bq[1-4]_?20\d{2}\b", q))
 
-        # Person explicit cues
-        if any(t in q for t in person_terms):
-            return "person"
-
-        # Person implicit cue: name-like pattern (>=2 capitalized words)
-        caps = re.findall(r"\b[A-Z][a-z]+\b", question)
-        if len(caps) >= 2 and not any(t in q for t in (fund_terms + company_terms + market_terms)):
-            return "person"
+        # PRIORITIZE market cues before person to avoid false positives like 'bio tools'
+        if any(t in q for t in market_terms) or has_quarter or any(t in q for t in sector_terms):
+            return "market_deep_dive"
 
         if any(t in q for t in fund_terms):
             return "fund"
         if any(t in q for t in company_terms):
             return "company"
-        if any(t in q for t in market_terms) or has_quarter or any(t in q for t in sector_terms):
-            return "market_deep_dive"
+
+        # Person detection only on explicit cues (no capitalization heuristic)
+        if any(t in q for t in person_terms):
+            return "person"
+
         return "generic"
 
     def _extract_candidate_name_or_company(self, question: str) -> str:
