@@ -15,6 +15,94 @@ from core.perplexity_utils import search_perplexity
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 llm = ChatOpenAI(model="gpt-4o", temperature=0.1)
 
+
+# === Cached market data helpers ===
+def _collect_segment_terms(profile: StartupProfile) -> list[str]:
+    terms: list[str] = []
+    for attr in ["sector", "industry", "market_definition", "market_summary", "product_description"]:
+        val = getattr(profile, attr, None)
+        if isinstance(val, str) and val.strip():
+            terms.extend([t.strip() for t in re.split(r"[,/|]", val) if t.strip()])
+    # De-duplicate and keep non-trivial terms
+    seen = set()
+    out: list[str] = []
+    for t in terms:
+        low = t.lower()
+        if len(low) >= 3 and low not in seen:
+            seen.add(low)
+            out.append(low)
+    return out[:8]  # cap terms used to keep search efficient
+
+
+def _load_cached_market_context(profile: StartupProfile, max_total_chars: int = 8000) -> str:
+    try:
+        root = Path(__file__).resolve().parents[1]
+        cache_dir = root / "web_scraping" / "data" / "vc_reports" / "cached_market_data"
+        index_file = cache_dir / "index.json"
+        if not index_file.exists():
+            return ""
+
+        with open(index_file, "r") as f:
+            idx = json.load(f)
+        files = idx.get("files", [])
+
+        terms = _collect_segment_terms(profile)
+        if not terms:
+            # fallback: use sector words from profile.sector
+            sec = (getattr(profile, "sector", "") or "").lower()
+            terms = [w for w in re.split(r"\W+", sec) if len(w) >= 3][:5]
+
+        snippets: list[str] = []
+        total = 0
+        for item in files:
+            try:
+                jf = cache_dir / item.get("json")
+                if not jf.exists():
+                    continue
+                with open(jf, "r") as f:
+                    data = json.load(f)
+                rel = data.get("relative_path") or item.get("relative_path") or data.get("file")
+                # Search pages
+                for pg in data.get("pages", [])[:50]:
+                    txt = (pg.get("text") or "").strip()
+                    low = txt.lower()
+                    if terms and not any(term in low for term in terms):
+                        continue
+                    snippet = txt[:600]
+                    meta = f"[cache:{rel} p.{pg.get('page')}]"
+                    block = f"{meta}\n{snippet}"
+                    if total + len(block) > max_total_chars:
+                        snippets.append(block[: max_total_chars - total])
+                        total = max_total_chars
+                        break
+                    snippets.append(block)
+                    total += len(block)
+                if total >= max_total_chars:
+                    break
+                # Optionally scan simple table cells for terms
+                for tb in data.get("tables", [])[:10]:
+                    rows = tb.get("rows") or []
+                    flat = " \n ".join([" \t ".join([c for c in r if c]) for r in rows])
+                    low = flat.lower()
+                    if terms and not any(term in low for term in terms):
+                        continue
+                    snippet = flat[:400]
+                    meta = f"[cache:{rel} table p.{tb.get('page')}]"
+                    block = f"{meta}\n{snippet}"
+                    if total + len(block) > max_total_chars:
+                        snippets.append(block[: max_total_chars - total])
+                        total = max_total_chars
+                        break
+                    snippets.append(block)
+                    total += len(block)
+                if total >= max_total_chars:
+                    break
+            except Exception:
+                continue
+        return "\n\n".join(snippets)
+    except Exception:
+        return ""
+
 def get_smart_market_context(text):
     """Extract market-relevant sections from text and create a focused 10k summary"""
     
@@ -336,17 +424,20 @@ Your response MUST be in this exact JSON format:
 }
 
 CRITICAL INSTRUCTIONS:
-1.  **Prioritize Pitch Deck**: Use figures from the 'Pitch Deck Context' as the highest priority source.
-2.  **Web Search for Gaps**: Use the 'Web Search Context' to fill in gaps where the pitch deck is missing information and to provide the latest market data.
-3.  **Synthesize, Don't Copy**: Do NOT just copy-paste from the context. Synthesize the information into a professional analysis.
-4.  **Quantitative Analysis**: For `value_usd_billions`, provide ONLY a numeric value (e.g., 150.5). For `description`, provide the original string (e.g., "$150.5B").
-5.  **Realistic Estimates**: If you must estimate, ensure TAM > SAM > SOM. State that you are estimating in the `source_commentary`. A common heuristic is SAM as 10-30% of TAM, and SOM as 1-10% of SAM.
-6.  **No Hallucination**: If a value cannot be found or reasonably estimated from the provided context, use `null` for numeric fields and `unknown` for string fields.
-7.  **Professional Tone**: The `market_summary` must be well-written and suitable for a formal investment memo.
+1.  **Priority Order**: Use figures from the 'Pitch Deck Context' first, then the 'Cached Market Context' (pre-scraped VC reports cache), and finally the 'Web Search Context' for remaining gaps.
+2.  **Synthesize, Don't Copy**: Do NOT just copy-paste from any context. Synthesize into a professional analysis.
+3.  **Quantitative Analysis**: For `value_usd_billions`, provide ONLY a numeric value (e.g., 150.5). For `description`, provide the original string (e.g., "$150.5B").
+4.  **Realistic Estimates**: If you must estimate, ensure TAM > SAM > SOM. State that you are estimating in the `source_commentary`. A common heuristic is SAM as 10-30% of TAM, and SOM as 1-10% of SAM.
+5.  **No Hallucination**: If a value cannot be found or reasonably estimated from the provided contexts, use `null` for numeric fields and `unknown` for string fields.
+6.  **Professional Tone**: The `market_summary` must be well-written and suitable for a formal investment memo.
 """
 
 PROMPT = ChatPromptTemplate.from_messages([
-    ("system", SYSTEM), ("human", "Company & sector info:\n{context}\nWeb search context:\n{web_context}\n")
+    ("system", SYSTEM),
+    (
+        "human",
+        "Company & sector info:\n{context}\n\nCached market context (from local VC reports cache):\n{cache_context}\n\nWeb search context:\n{web_context}\n",
+    ),
 ])
 
 
@@ -366,7 +457,15 @@ def run_market_sizing_chain(profile: StartupProfile, evaluator: Optional[object]
         deck_context = get_smart_market_context(profile.deck_text)
         print(f"[Market Chain] Extracted {len(deck_context)} chars of market context from the deck.")
 
-    # Step 2: Always perform a web search for the latest market data
+    # Step 2a: Load cached market context built by the web scraper
+    print("[Market Chain] Loading cached market context (local VC reports cache)...")
+    cache_context = _load_cached_market_context(profile)
+    if cache_context:
+        print(f"[Market Chain] Cached market context length: {len(cache_context)}")
+    else:
+        print("[Market Chain] No cached market context found for segment/sector.")
+
+    # Step 2b: Perform a web search for the latest market data
     print("[Market Chain] Performing web search for market context...")
     web_context = web_search_market_context(profile.name, profile.sector)
     if web_context:
@@ -376,7 +475,7 @@ def run_market_sizing_chain(profile: StartupProfile, evaluator: Optional[object]
 
     # Step 3: Invoke the LLM with the new, robust prompt
     try:
-        prompt = PROMPT.format(context=deck_context, web_context=web_context)
+        prompt = PROMPT.format(context=deck_context, cache_context=cache_context, web_context=web_context)
         response = llm.invoke(prompt)
         log_usage_from_message(evaluator, "MARKET SIZING AGENT", response, model="gpt-4o")
         raw_json = response.content.strip()
@@ -1122,8 +1221,9 @@ AI-Detected Source Attribution: {ai_source_attribution}
 
 def run_market_sizing_chain_with_text(full_text: str, profile: StartupProfile) -> StartupProfile:
     context = full_text[:5000]
+    cache_context = _load_cached_market_context(profile)
     web_context = web_search_market_context(profile.name, profile.sector)
-    txt = llm.invoke(PROMPT.format(context=context, web_context=web_context)).content.strip()
+    txt = llm.invoke(PROMPT.format(context=context, cache_context=cache_context, web_context=web_context)).content.strip()
     first, last = txt.find("{"), txt.rfind("}")
     if first == -1 or last == -1:
         return profile
